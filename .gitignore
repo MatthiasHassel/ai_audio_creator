@@ -1,0 +1,22 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/suno_api/node_modules
+
+# next.js
+/suno_api/.next/
+
+# local .env files
+.env
+
+#suno .env file (temporary workaround)
+/suno_api/.env
+
+# typescript
+/suno_api/next-env.d.ts
+
+# pycaches
+/src/gui/__pycache__
+/src/services/__pycache__
+/src/utils/__pycache__
+/tests/__pycache__

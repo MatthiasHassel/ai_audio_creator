@@ -1,0 +1,49 @@
+# API Configuration
+api:
+  base_url: 'http://localhost:3000'
+  elevenlabs_api_key: ${ELEVENLABS_API_KEY}
+
+# Llama Configuration
+llama:
+  model: 'llama3:latest'
+
+# Music Generation Configuration
+music_gen:
+  output_dir: './output/music'
+  api_directory: './suno_api'
+
+# SFX Generation Configuration
+sfx_gen:
+  output_dir: './output/sfx'
+
+# Speech Generation Configuration
+speech_gen:
+  output_dir: './output/speech'
+
+# GUI Configuration
+gui:
+  window_title: 'AI Audio Creator'
+  window_size: '600x600'
+
+# Logging Configuration
+logging:
+  level: 'INFO'
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  file: './logs/ai_audio_creator.log'
+
+# Default voice IDs for speech generation
+default_voices:
+  - name: "Rachel"
+    id: "21m00Tcm4TlvDq8ikWAM"
+  - name: "Drew"
+    id: "29vD33N1CtxCmqQRPOHJ"
+  - name: "Clyde"
+    id: "2EiwWnXFnvU5JabPnv8n"
+  - name: "Domi"
+    id: "AZnzlk1XvdvUeBnXmlld"
+
+# Application-wide settings
+settings:
+  max_audio_length: 300  # Maximum audio length in seconds
+  default_sample_rate: 44100
+  default_bit_depth: 16
