@@ -9,7 +9,7 @@
 # local .env files
 .env
 
-#suno .env file (temporary workaround)
+# suno .env file (temporary workaround)
 /suno_api/.env
 
 # typescript
@@ -20,3 +20,9 @@
 /src/services/__pycache__
 /src/utils/__pycache__
 /tests/__pycache__
+
+# logs
+/logs
+
+# audio output
+/output

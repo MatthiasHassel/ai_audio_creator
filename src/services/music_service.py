@@ -43,10 +43,10 @@ class MusicService(BaseService):
 
     def create_song(self, text_prompt, make_instrumental):
         """Create a song based on the given text prompt."""
-        self.update_status("Generating song...")
+        self.update_status("Starting music generation process...")
         api_process = self.start_api()
         time.sleep(3)  # Wait for API to start
-        self.update_status("API started...")
+        self.update_status("API started. Generating song...")
 
         sanitized_text_prompt = re.sub(r'[\\/*?:"<>|]', "", text_prompt)[:30]
         output_filename = os.path.join(self.output_dir, f"suno_{sanitized_text_prompt}.mp3")
@@ -63,7 +63,8 @@ class MusicService(BaseService):
 
             ids = f"{data[0]['id']},{data[1]['id']}"
 
-            for _ in range(60):  # Wait up to 5 minutes
+            for i in range(60):  # Wait up to 5 minutes
+                self.update_status(f"Waiting for audio to be ready... (Attempt {i+1}/60)")
                 data = self.get_audio_information(ids)
                 if data[0]["status"] == 'streaming':
                     break
@@ -72,9 +73,10 @@ class MusicService(BaseService):
             if data[0]["status"] != 'streaming':
                 raise Exception("Timeout waiting for audio to be ready")
 
+            self.update_status("Audio ready. Downloading...")
             url = data[0]['audio_url']
             if self.download_audio(url, output_filename):
-                self.update_status(f"Audio saved to {output_filename}")
+                self.update_output(f"Music generated successfully. File saved to: {output_filename}")
                 return output_filename
             else:
                 raise Exception("Failed to download audio file")
@@ -84,6 +86,7 @@ class MusicService(BaseService):
             return None
         finally:
             api_process.terminate()
+            self.update_status("Music generation process completed.")
 
     def process_music_request(self, text_prompt: str, make_instrumental: bool):
         """Process a music generation request."""

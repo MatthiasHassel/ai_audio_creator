@@ -10,7 +10,12 @@ class BaseService:
         self.logger.info(message)
         self.app.update_status(message)
 
+    def update_output(self, message):
+        self.logger.info(message)
+        self.app.update_output(message)
+
     def handle_error(self, error):
         error_message = f"Error: {str(error)}"
         self.logger.error(error_message)
-        self.app.update_status(error_message)
+        self.app.update_output(error_message)
+        self.app.update_status("An error occurred")

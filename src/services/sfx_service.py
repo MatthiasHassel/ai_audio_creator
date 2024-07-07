@@ -10,34 +10,35 @@ class SFXService(BaseService):
         self.output_dir = self.config['sfx_gen']['output_dir']
 
     def generate_sound_effect(self, text_prompt: str, duration: float = None):
-        self.update_status("Generating sound effects...")
+        self.update_status("Initializing sound effect generation...")
 
-        # Remove invalid characters from the text prompt to create a valid filename
         sanitized_text_prompt = re.sub(r'[\\/*?:"<>|]', "", text_prompt)
-
-        # Set output file path
         output_filename = f"sfx_{sanitized_text_prompt[:30]}.mp3"
         output_path = os.path.join(self.output_dir, output_filename)
 
         try:
-            # Ensure output directory exists
+            self.update_status("Ensuring output directory exists...")
             os.makedirs(self.output_dir, exist_ok=True)
 
+            self.update_status("Sending request to ElevenLabs API...")
             result = self.elevenlabs.text_to_sound_effects.convert(
                 text=sanitized_text_prompt,
                 duration_seconds=duration,
                 prompt_influence=0.3,
             )
 
+            self.update_status("Receiving and writing audio data...")
             with open(output_path, "wb") as f:
                 for chunk in result:
                     f.write(chunk)
 
-            self.update_status(f"Audio saved to {output_path}")
+            self.update_output(f"SFX generated successfully. File saved to: {output_path}")
             return output_path
         except Exception as e:
             self.handle_error(e)
             return None
+
+    # ... (rest of the class remains the same)
 
     def validate_duration(self, duration: str) -> float:
         """Validate and convert duration input."""
