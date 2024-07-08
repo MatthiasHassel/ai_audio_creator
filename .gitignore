@@ -23,6 +23,7 @@
 
 # logs
 /logs
+/logs/ai_audio_creator.log
 
 # audio output
 /output

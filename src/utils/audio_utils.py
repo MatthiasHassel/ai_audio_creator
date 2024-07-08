@@ -13,16 +13,16 @@ class AudioPlayer:
 
     def create_audio_controls(self):
         audio_frame = ctk.CTkFrame(self.master)
-        audio_frame.pack(pady=10)
+        audio_frame.grid(row=6, column=0, pady=10, padx=10, sticky="ew")  # Adjust row as needed
 
         self.play_button = ctk.CTkButton(audio_frame, text="Play", command=self.play_audio, state="disabled")
-        self.play_button.pack(side="left", padx=5)
+        self.play_button.grid(row=0, column=0, padx=5)
 
         self.pause_button = ctk.CTkButton(audio_frame, text="Pause", command=self.pause_audio, state="disabled")
-        self.pause_button.pack(side="left", padx=5)
+        self.pause_button.grid(row=0, column=1, padx=5)
 
         self.stop_button = ctk.CTkButton(audio_frame, text="Stop", command=self.stop_audio, state="disabled")
-        self.stop_button.pack(side="left", padx=5)
+        self.stop_button.grid(row=0, column=2, padx=5)
 
     def play_audio(self):
         if self.current_audio_file:
