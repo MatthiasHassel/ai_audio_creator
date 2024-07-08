@@ -38,8 +38,6 @@ class SpeechService(BaseService):
                 for chunk in response:
                     if chunk:
                         f.write(chunk)
-
-            self.update_output(f"Speech generated successfully. File saved to: {save_file_path}")
             return save_file_path
         except Exception as e:
             self.handle_error(f"Failed to generate speech: {str(e)}")

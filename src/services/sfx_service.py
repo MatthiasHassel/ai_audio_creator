@@ -31,8 +31,6 @@ class SFXService(BaseService):
             with open(output_path, "wb") as f:
                 for chunk in result:
                     f.write(chunk)
-
-            self.update_output(f"SFX generated successfully. File saved to: {output_path}")
             return output_path
         except Exception as e:
             self.handle_error(e)

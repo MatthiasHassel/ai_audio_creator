@@ -76,7 +76,6 @@ class MusicService(BaseService):
             self.update_status("Audio ready. Downloading...")
             url = data[0]['audio_url']
             if self.download_audio(url, output_filename):
-                self.update_output(f"Music generated successfully. File saved to: {output_filename}")
                 return output_filename
             else:
                 raise Exception("Failed to download audio file")

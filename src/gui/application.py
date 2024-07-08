@@ -4,6 +4,7 @@ import logging
 import threading
 from services import LlamaService, MusicService, SFXService, SpeechService
 from utils.file_utils import open_file
+from utils.audio_utils import AudioPlayer
 
 class StatusHandler(logging.Handler):
     def __init__(self, status_bar):
@@ -34,11 +35,14 @@ class Application(tk.Tk):
         self.voices = []
         self.output_text = None
         self.status_bar = None
-        self.setup_logging()
-        self.create_widgets()
 
         self.status_queue = []
         self.is_processing = False
+
+        self.setup_logging()
+        self.create_widgets()
+
+        self.audio_player = AudioPlayer(self)
 
     def setup_logging(self):
         self.logger = logging.getLogger(__name__)
@@ -212,17 +216,29 @@ class Application(tk.Tk):
 
         self.logger.info(f"Processing {service_method.__self__.__class__.__name__} request...")
         self.generate_button.config(state=tk.DISABLED)
+        self.audio_player.clear()
         
         def process_thread():
             result = service_method(*args)
             if result:
                 self.logger.info(f"Audio generated successfully. File saved to: {result}")
+                self.after(0, lambda: self.update_output(f"Audio generated successfully. File saved to: {result}"))
                 self.after(0, lambda: self.update_status("Ready"))
+                self.after(0, lambda: self.audio_player.set_audio_file(result))
             else:
                 self.after(0, lambda: self.update_status("An error occurred"))
             self.after(0, lambda: self.generate_button.config(state=tk.NORMAL))
 
         threading.Thread(target=process_thread, daemon=True).start()
+
+    def clear_input(self):
+        self.user_input.delete("1.0", tk.END)
+        if self.output_text:
+            self.output_text.delete("1.0", tk.END)
+        self.duration_var.set("0")
+        self.logger.info("Input and output cleared.")
+        self.update_status("Ready")
+        self.audio_player.clear()
 
     def update_status(self, message):
         self.status_queue.append(message)
@@ -247,14 +263,6 @@ class Application(tk.Tk):
         if message.startswith("Error:"):
             messagebox.showerror("Error", message)
 
-    def clear_input(self):
-        self.user_input.delete("1.0", tk.END)
-        if self.output_text:
-            self.output_text.delete("1.0", tk.END)
-        self.duration_var.set("0")
-        self.logger.info("Input and output cleared.")
-        self.update_status("Ready")
-
     def open_audio_file(self, event):
         try:
             index = self.output_text.index(f"@{event.x},{event.y}")
@@ -267,9 +275,14 @@ class Application(tk.Tk):
             self.logger.error(f"Unable to open file: {str(e)}")
             messagebox.showerror("Error", f"Unable to open file: {str(e)}")
 
+    def on_closing(self):
+        self.audio_player.quit()
+        self.destroy()
+
 if __name__ == "__main__":
     import yaml
     with open('config/config.yaml', 'r') as file:
         config = yaml.safe_load(file)
     app = Application(config)
+    app.protocol("WM_DELETE_WINDOW", app.on_closing)
     app.mainloop()
