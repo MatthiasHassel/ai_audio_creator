@@ -1,5 +1,4 @@
-import tkinter as tk
-from tkinter import ttk
+import customtkinter as ctk
 import pygame
 
 class AudioPlayer:
@@ -13,17 +12,17 @@ class AudioPlayer:
         self.is_paused = False
 
     def create_audio_controls(self):
-        audio_frame = ttk.Frame(self.master)
+        audio_frame = ctk.CTkFrame(self.master)
         audio_frame.pack(pady=10)
 
-        self.play_button = ttk.Button(audio_frame, text="Play", command=self.play_audio, state=tk.DISABLED)
-        self.play_button.pack(side=tk.LEFT, padx=5)
+        self.play_button = ctk.CTkButton(audio_frame, text="Play", command=self.play_audio, state="disabled")
+        self.play_button.pack(side="left", padx=5)
 
-        self.pause_button = ttk.Button(audio_frame, text="Pause", command=self.pause_audio, state=tk.DISABLED)
-        self.pause_button.pack(side=tk.LEFT, padx=5)
+        self.pause_button = ctk.CTkButton(audio_frame, text="Pause", command=self.pause_audio, state="disabled")
+        self.pause_button.pack(side="left", padx=5)
 
-        self.stop_button = ttk.Button(audio_frame, text="Stop", command=self.stop_audio, state=tk.DISABLED)
-        self.stop_button.pack(side=tk.LEFT, padx=5)
+        self.stop_button = ctk.CTkButton(audio_frame, text="Stop", command=self.stop_audio, state="disabled")
+        self.stop_button.pack(side="left", padx=5)
 
     def play_audio(self):
         if self.current_audio_file:
@@ -48,15 +47,15 @@ class AudioPlayer:
 
     def set_audio_file(self, audio_file):
         self.current_audio_file = audio_file
-        self.play_button.config(state="normal")
-        self.pause_button.config(state="normal")
-        self.stop_button.config(state="normal")
+        self.play_button.configure(state="normal")
+        self.pause_button.configure(state="normal")
+        self.stop_button.configure(state="normal")
 
     def clear(self):
         self.current_audio_file = None
-        self.play_button.config(state="disabled")
-        self.pause_button.config(state="disabled")
-        self.stop_button.config(state="disabled")
+        self.play_button.configure(state="disabled")
+        self.pause_button.configure(state="disabled")
+        self.stop_button.configure(state="disabled")
         self.stop_audio()
 
     def quit(self):

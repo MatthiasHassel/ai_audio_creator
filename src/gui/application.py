@@ -1,21 +1,17 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
+import customtkinter as ctk
 import logging
 import threading
-from services import LlamaService, MusicService, SFXService, SpeechService
+from services.llama_service import LlamaService
+from services.music_service import MusicService
+from services.sfx_service import SFXService
+from services.speech_service import SpeechService
 from utils.file_utils import open_file
 from utils.audio_utils import AudioPlayer
 
-class StatusHandler(logging.Handler):
-    def __init__(self, status_bar):
-        super().__init__()
-        self.status_bar = status_bar
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("dark-blue")
 
-    def emit(self, record):
-        log_entry = self.format(record)
-        self.status_bar.config(text=log_entry)
-
-class Application(tk.Tk):
+class Application(ctk.CTk):
     def __init__(self, config):
         super().__init__()
         self.config = config
@@ -27,10 +23,10 @@ class Application(tk.Tk):
         self.sfx_service = SFXService(self, config)
         self.speech_service = SpeechService(self, config)
 
-        self.current_module = tk.StringVar(value="Music")
-        self.duration_var = tk.StringVar(value="0")
-        self.instrumental_var = tk.BooleanVar(value=False)
-        self.selected_voice = tk.StringVar()
+        self.current_module = ctk.StringVar(value="Music")
+        self.duration_var = ctk.StringVar(value="0")
+        self.instrumental_var = ctk.BooleanVar(value=False)
+        self.selected_voice = ctk.StringVar()
 
         self.voices = []
         self.output_text = None
@@ -63,39 +59,39 @@ class Application(tk.Tk):
         self.create_status_bar()
 
     def create_module_buttons(self):
-        module_frame = ttk.Frame(self)
+        module_frame = ctk.CTkFrame(self)
         module_frame.pack(pady=10)
 
         for module in ["Music", "SFX", "Speech"]:
-            ttk.Radiobutton(
+            ctk.CTkRadioButton(
                 module_frame, 
                 text=module, 
                 variable=self.current_module, 
                 value=module, 
                 command=self.update_action_buttons
-            ).pack(side=tk.LEFT, padx=5)
+            ).pack(side="left", padx=5)
 
     def create_input_field(self):
-        input_frame = ttk.Frame(self)
+        input_frame = ctk.CTkFrame(self)
         input_frame.pack(pady=10)
 
-        ttk.Label(input_frame, text="Enter your text:").pack()
-        self.user_input = tk.Text(input_frame, width=70, height=10)
+        ctk.CTkLabel(input_frame, text="Enter your text:").pack()
+        self.user_input = ctk.CTkTextbox(input_frame, width=400, height=150)  # Increased height
         self.user_input.pack(pady=5)
 
-        self.duration_label = ttk.Label(input_frame, text="Duration (0 = automatic, 0.5-22s):")
-        self.duration_entry = ttk.Entry(input_frame, textvariable=self.duration_var)
-        self.instrumental_checkbox = ttk.Checkbutton(input_frame, text="Instrumental", variable=self.instrumental_var)
-        self.voice_label = ttk.Label(input_frame, text="Select Voice:")
-        self.voice_dropdown = ttk.Combobox(input_frame, textvariable=self.selected_voice, state="readonly")
+        self.duration_label = ctk.CTkLabel(input_frame, text="Duration (0 = automatic, 0.5-22s):")
+        self.duration_entry = ctk.CTkEntry(input_frame, textvariable=self.duration_var)
+        self.instrumental_checkbox = ctk.CTkCheckBox(input_frame, text="Instrumental", variable=self.instrumental_var)
+        self.voice_label = ctk.CTkLabel(input_frame, text="Select Voice:")
+        self.voice_dropdown = ctk.CTkOptionMenu(input_frame, variable=self.selected_voice)
 
     def create_action_buttons(self):
-        self.action_frame = ttk.Frame(self)
+        self.action_frame = ctk.CTkFrame(self)
         self.action_frame.pack(pady=10)
 
-        self.llama_button = ttk.Button(self.action_frame, text="Input to Llama3", command=self.process_llama_input)
-        self.generate_button = ttk.Button(self.action_frame, text="Generate", command=self.process_input)
-        self.clear_button = ttk.Button(self.action_frame, text="Clear", command=self.clear_input)
+        self.llama_button = ctk.CTkButton(self.action_frame, text="Input to Llama3", command=self.process_llama_input)
+        self.generate_button = ctk.CTkButton(self.action_frame, text="Generate", command=self.process_input)
+        self.clear_button = ctk.CTkButton(self.action_frame, text="Clear", command=self.clear_input)
 
         self.update_action_buttons()
 
@@ -104,9 +100,9 @@ class Application(tk.Tk):
             widget.pack_forget()
 
         if self.current_module.get() in ["Music", "SFX"]:
-            self.llama_button.pack(side=tk.LEFT, padx=5)
-        self.generate_button.pack(side=tk.LEFT, padx=5)
-        self.clear_button.pack(side=tk.LEFT, padx=5)
+            self.llama_button.pack(side="left", padx=5)
+        self.generate_button.pack(side="left", padx=5)
+        self.clear_button.pack(side="left", padx=5)
 
         if self.current_module.get() == "Music":
             self.instrumental_checkbox.pack()
@@ -128,41 +124,42 @@ class Application(tk.Tk):
             self.duration_entry.pack_forget()
 
     def create_output_display(self):
-        output_frame = ttk.Frame(self)
+        output_frame = ctk.CTkFrame(self)
         output_frame.pack(pady=10)
 
-        ttk.Label(output_frame, text="Output:").pack()
-        self.output_text = tk.Text(output_frame, height=10, width=70)
+        ctk.CTkLabel(output_frame, text="Output:").pack()
+        self.output_text = ctk.CTkTextbox(output_frame, width=400, height=80, state="disabled")  # Decreased height and set state to "disabled"
         self.output_text.pack()
         self.output_text.bind("<Button-1>", self.open_audio_file)
 
     def create_status_bar(self):
-        self.status_var = tk.StringVar()
+        self.status_var = ctk.StringVar()
         self.status_var.set("Ready")
-        self.status_bar = ttk.Label(self, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
-        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var, anchor="w", padx=10)  # Added padx for padding
+        self.status_bar.pack(side="bottom", fill="x")
 
     def load_voices(self):
         try:
             self.logger.info("Loading available voices...")
             self.voices = self.speech_service.get_available_voices()
             if self.voices:
-                self.voice_dropdown['values'] = [voice[0] for voice in self.voices]
-                self.voice_dropdown.current(0)
+                voice_names = [voice[0] for voice in self.voices]
+                self.voice_dropdown.configure(values=voice_names)
+                self.voice_dropdown.set(voice_names[0])  # Set the first voice as default
                 self.logger.info(f"Loaded {len(self.voices)} voices.")
             else:
-                self.voice_dropdown['values'] = ["No voices available"]
-                self.logger.warning("No voices available.")
+                self.voice_dropdown.configure(values=["No voices available"])
+                self.update_output("Warning: No voices available.")
         except Exception as e:
-            self.logger.error(f"Failed to load voices: {str(e)}")
-            messagebox.showerror("Error", f"Failed to load voices: {str(e)}")
-            self.voice_dropdown['values'] = ["No voices available"]
+            error_message = f"Failed to load voices: {str(e)}"
+            self.logger.error(error_message)
+            self.update_output(f"Error: {error_message}")
+            self.voice_dropdown.configure(values=["No voices available"])
 
     def process_llama_input(self):
-        user_input = self.user_input.get("1.0", tk.END).strip()
+        user_input = self.user_input.get("1.0", "end-1c").strip()
         if not user_input:
-            self.logger.error("Please enter some text.")
-            messagebox.showerror("Error", "Please enter some text.")
+            self.update_output("Error: Please enter some text.")
             return
 
         self.logger.info(f"Processing Llama3 input for {self.current_module.get()} module...")
@@ -171,16 +168,15 @@ class Application(tk.Tk):
         elif self.current_module.get() == "SFX":
             result = self.llama_service.get_llama_sfx(user_input)
         else:
-            self.logger.error("Llama3 input is only available for Music and SFX modules.")
-            messagebox.showerror("Error", "Llama3 input is only available for Music and SFX modules.")
+            self.update_output("Error: Llama3 input is only available for Music and SFX modules.")
             return
 
         if result:
-            self.user_input.delete("1.0", tk.END)
-            self.user_input.insert(tk.END, result)
+            self.user_input.delete("1.0", "end")
+            self.user_input.insert("1.0", result)
             self.logger.info("Llama3 processing complete. Result inserted in the input field.")
         else:
-            self.logger.error("Failed to process input with Llama3.")
+            self.update_output("Error: Failed to process input with Llama3.")
 
     def process_input(self):
         if self.current_module.get() == "Music":
@@ -192,30 +188,28 @@ class Application(tk.Tk):
 
     def process_music_request(self):
         self._process_request(self.music_service.process_music_request, 
-                              [self.user_input.get("1.0", tk.END).strip(), self.instrumental_var.get()])
+                              [self.user_input.get("1.0", "end-1c").strip(), self.instrumental_var.get()])
 
     def process_sfx_request(self):
         self._process_request(self.sfx_service.process_sfx_request, 
-                              [self.user_input.get("1.0", tk.END).strip(), self.duration_var.get()])
+                              [self.user_input.get("1.0", "end-1c").strip(), self.duration_var.get()])
 
     def process_speech_request(self):
         selected_voice_name = self.selected_voice.get()
         voice_id = next((voice[1] for voice in self.voices if voice[0] == selected_voice_name), None)
         if voice_id:
             self._process_request(self.speech_service.process_speech_request, 
-                                  [self.user_input.get("1.0", tk.END).strip(), voice_id])
+                                  [self.user_input.get("1.0", "end-1c").strip(), voice_id])
         else:
-            self.logger.error("Invalid voice selected.")
-            messagebox.showerror("Error", "Invalid voice selected.")
+            self.update_output("Error: Invalid voice selected.")
 
     def _process_request(self, service_method, args):
         if not args[0]:  # Check if user input is empty
-            self.logger.error("Please enter some text.")
-            messagebox.showerror("Error", "Please enter some text.")
+            self.update_output("Error: Please enter some text.")
             return
 
         self.logger.info(f"Processing {service_method.__self__.__class__.__name__} request...")
-        self.generate_button.config(state=tk.DISABLED)
+        self.generate_button.configure(state="disabled")
         self.audio_player.clear()
         
         def process_thread():
@@ -226,19 +220,10 @@ class Application(tk.Tk):
                 self.after(0, lambda: self.update_status("Ready"))
                 self.after(0, lambda: self.audio_player.set_audio_file(result))
             else:
-                self.after(0, lambda: self.update_status("An error occurred"))
-            self.after(0, lambda: self.generate_button.config(state=tk.NORMAL))
+                self.after(0, lambda: self.update_output("Error: An error occurred during audio generation."))
+            self.after(0, lambda: self.generate_button.configure(state="normal"))
 
         threading.Thread(target=process_thread, daemon=True).start()
-
-    def clear_input(self):
-        self.user_input.delete("1.0", tk.END)
-        if self.output_text:
-            self.output_text.delete("1.0", tk.END)
-        self.duration_var.set("0")
-        self.logger.info("Input and output cleared.")
-        self.update_status("Ready")
-        self.audio_player.clear()
 
     def update_status(self, message):
         self.status_queue.append(message)
@@ -255,13 +240,19 @@ class Application(tk.Tk):
             self.is_processing = False
 
     def update_output(self, message):
-        self.output_text.insert(tk.END, message + "\n")
-        self.output_text.see(tk.END)  # Scroll to the end
+        self.output_text.configure(state="normal")  # Temporarily enable writing
+        self.output_text.insert("end", message + "\n")
+        self.output_text.see("end")  # Scroll to the end
+        self.output_text.configure(state="disabled")  # Disable writing again
         self.logger.info(message)
 
-        # If it's an error message, show it in a messagebox as well
-        if message.startswith("Error:"):
-            messagebox.showerror("Error", message)
+    def clear_input(self):
+        self.user_input.delete("1.0", "end")
+        self.output_text.delete("1.0", "end")
+        self.duration_var.set("0")
+        self.logger.info("Input and output cleared.")
+        self.update_status("Ready")
+        self.audio_player.clear()
 
     def open_audio_file(self, event):
         try:
@@ -272,8 +263,9 @@ class Application(tk.Tk):
                 self.logger.info(f"Opening audio file: {file_path}")
                 open_file(file_path)
         except Exception as e:
-            self.logger.error(f"Unable to open file: {str(e)}")
-            messagebox.showerror("Error", f"Unable to open file: {str(e)}")
+            error_message = f"Unable to open file: {str(e)}"
+            self.logger.error(error_message)
+            self.update_output(f"Error: {error_message}")
 
     def on_closing(self):
         self.audio_player.quit()
