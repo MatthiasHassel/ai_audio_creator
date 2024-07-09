@@ -8,6 +8,7 @@ from services.speech_service import SpeechService
 from utils.file_utils import open_file
 from utils.audio_utils import AudioPlayer
 from .tab_widgets import TabWidgets
+from utils.audio_visualizer import AudioVisualizer
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
@@ -21,7 +22,6 @@ class Application(ctk.CTk):
         self.setup_services()
         self.setup_logging()
         self.create_widgets()
-        self.audio_player = AudioPlayer(self)
 
     def setup_window(self):
         self.title(self.config['gui']['window_title'])
@@ -56,19 +56,14 @@ class Application(ctk.CTk):
         self.create_module_buttons()
         self.create_input_field()
         self.create_action_buttons()
-        self.create_output_display()
-        self.create_progress_bar()
+        self.create_tab_specific_options()
         self.create_status_bar()
-        
-        tab_config = {
-            'instrumental_var': self.instrumental_var,
-            'duration_var': self.duration_var,
-            'selected_voice': self.selected_voice
-        }
-        self.tab_widgets = TabWidgets(self.user_input.master, tab_config)
-        
+        self.create_separator()
+        self.create_output_display()
+        self.create_audio_visualizer()
+        self.create_audio_controls()
+        self.create_progress_bar()
         self.load_voices()
-        self.update_tab_widgets()
 
     def create_module_buttons(self):
         module_frame = ctk.CTkFrame(self)
@@ -87,72 +82,67 @@ class Application(ctk.CTk):
         input_frame.grid(row=1, column=0, pady=10, padx=10, sticky="ew")
         input_frame.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(input_frame, text="Enter your text:").grid(row=0, column=0, sticky="w")
-        self.user_input = ctk.CTkTextbox(input_frame, width=400, height=150)
-        self.user_input.grid(row=1, column=0, pady=5, sticky="ew", columnspan=3)
+        self.user_input = ctk.CTkTextbox(input_frame, height=150)
+        self.user_input.grid(row=1, column=0, sticky="ew")
 
     def create_action_buttons(self):
-        self.action_frame = ctk.CTkFrame(self)
-        self.action_frame.grid(row=2, column=0, pady=10, padx=10, sticky="ew")
-        self.llama_button = ctk.CTkButton(self.action_frame, text="Input to Llama3", command=self.process_llama_input)
-        self.generate_button = ctk.CTkButton(self.action_frame, text="Generate", command=self.process_input)
-        self.clear_button = ctk.CTkButton(self.action_frame, text="Clear", command=self.clear_input)
+        action_frame = ctk.CTkFrame(self)
+        action_frame.grid(row=2, column=0, pady=10, padx=10, sticky="w")
+        self.llama_button = ctk.CTkButton(action_frame, text="Input to Llama3", command=self.process_llama_input)
+        self.llama_button.pack(side="left", padx=(0, 5))
+        self.generate_button = ctk.CTkButton(action_frame, text="Generate", command=self.process_input)
+        self.generate_button.pack(side="left", padx=(0, 5))
+        self.clear_button = ctk.CTkButton(action_frame, text="Clear", command=self.clear_input)
+        self.clear_button.pack(side="left")
 
-    def create_output_display(self):
-        output_frame = ctk.CTkFrame(self)
-        output_frame.grid(row=3, column=0, pady=10, padx=10, sticky="ew")
-        ctk.CTkLabel(output_frame, text="Output:").grid(row=0, column=0, sticky="w")
-        self.output_text = ctk.CTkTextbox(output_frame, width=400, height=80, state="disabled")
-        self.output_text.grid(row=1, column=0, pady=5, sticky="ew")
-        self.output_text.bind("<Button-1>", self.open_audio_file)
-
-    def create_progress_bar(self):
-        self.progress_bar = ctk.CTkProgressBar(self, width=380)
-        self.progress_bar.grid(row=4, column=0, pady=10, padx=10, sticky="ew")
-        self.progress_bar.grid_remove()
+    def create_tab_specific_options(self):
+        tab_config = {
+            'instrumental_var': self.instrumental_var,
+            'duration_var': self.duration_var,
+            'selected_voice': self.selected_voice
+        }
+        self.tab_widgets = TabWidgets(self, tab_config)
+        self.tab_widgets.grid(row=3, column=0, pady=10, padx=10, sticky="w")
+        self.update_tab_widgets()
 
     def create_status_bar(self):
         self.status_var = ctk.StringVar()
         self.status_var.set("Ready")
         self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var, anchor="w", padx=10)
-        self.status_bar.grid(row=5, column=0, sticky="ew")
+        self.status_bar.grid(row=9, column=0, sticky="ew", padx=10, pady=(5, 0))
+
+    def create_separator(self):
+        separator = ctk.CTkFrame(self, height=2, fg_color="gray")
+        separator.grid(row=4, column=0, sticky="ew", padx=10, pady=(5, 5))
+
+    def create_output_display(self):
+        output_frame = ctk.CTkFrame(self)
+        output_frame.grid(row=5, column=0, pady=10, padx=10, sticky="ew")
+        output_frame.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(output_frame, text="Output:").grid(row=0, column=0, sticky="w")
+        self.output_text = ctk.CTkTextbox(output_frame, height=80, state="disabled")
+        self.output_text.grid(row=1, column=0, sticky="ew")
+        self.output_text.bind("<Button-1>", self.open_audio_file)
+
+    def create_audio_visualizer(self):
+        self.audio_visualizer = AudioVisualizer(self)
+        self.audio_visualizer.canvas_widget.grid(row=6, column=0, pady=(0, 10), padx=10, sticky="ew")
+
+    def create_audio_controls(self):
+        self.audio_player = AudioPlayer(self, self.audio_visualizer)
+        
+    def create_progress_bar(self):
+        self.progress_bar = ctk.CTkProgressBar(self, width=380)
+        self.progress_bar.grid(row=8, column=0, pady=10, padx=10, sticky="ew")
+        self.progress_bar.grid_remove()
 
     def update_tab_widgets(self):
-        self.update_action_buttons()
-        self.tab_widgets.hide_all_widgets()
-        self.tab_widgets.grid_widgets(self.current_module.get())
-
-    def update_action_buttons(self):
-        for widget in self.action_frame.winfo_children():
-            widget.grid_remove()
-        if self.current_module.get() in ["Music", "SFX"]:
-            self.llama_button.grid(row=0, column=0, padx=5)
-            self.generate_button.grid(row=0, column=1, padx=5)
-            self.clear_button.grid(row=0, column=2, padx=5)
+        current_tab = self.current_module.get()
+        self.tab_widgets.update_widgets(current_tab)
+        if current_tab in ["Music", "SFX"]:
+            self.llama_button.pack(side="left", padx=(0, 5))
         else:
-            self.generate_button.grid(row=0, column=0, padx=5)
-            self.clear_button.grid(row=0, column=1, padx=5)
-        self.status_var = ctk.StringVar()
-        self.status_var.set("Ready")
-        self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var, anchor="w", padx=10)
-        self.status_bar.grid(row=5, column=0, sticky="ew")
-
-    def load_voices(self):
-        try:
-            self.logger.info("Loading available voices...")
-            self.voices = self.speech_service.get_available_voices()
-            if self.voices:
-                voice_names = [voice[0] for voice in self.voices]
-                self.tab_widgets.configure_widget('Speech', 'voice_dropdown', values=voice_names)
-                self.selected_voice.set(voice_names[0])  # Set the first voice as default
-                self.logger.info(f"Loaded {len(self.voices)} voices.")
-            else:
-                self.tab_widgets.configure_widget('Speech', 'voice_dropdown', values=["No voices available"])
-                self.update_output("Warning: No voices available.")
-        except Exception as e:
-            error_message = f"Failed to load voices: {str(e)}"
-            self.logger.error(error_message)
-            self.update_output(f"Error: {error_message}")
-            self.tab_widgets.configure_widget('Speech', 'voice_dropdown', values=["No voices available"])
+            self.llama_button.pack_forget()
 
     def process_llama_input(self):
         user_input = self.user_input.get("1.0", "end-1c").strip()
@@ -160,7 +150,6 @@ class Application(ctk.CTk):
             self.update_output("Error: Please enter some text.")
             return
 
-        self.logger.info(f"Processing Llama3 input for {self.current_module.get()} module...")
         if self.current_module.get() == "Music":
             result = self.llama_service.get_llama_musicprompt(user_input)
         elif self.current_module.get() == "SFX":
@@ -172,7 +161,6 @@ class Application(ctk.CTk):
         if result:
             self.user_input.delete("1.0", "end")
             self.user_input.insert("1.0", result)
-            self.logger.info("Llama3 processing complete. Result inserted in the input field.")
         else:
             self.update_output("Error: Failed to process input with Llama3.")
 
@@ -201,22 +189,34 @@ class Application(ctk.CTk):
         else:
             self.update_output("Error: Invalid voice selected.")
 
+    def load_voices(self):
+        try:
+            self.voices = self.speech_service.get_available_voices()
+            if self.voices:
+                voice_names = [voice[0] for voice in self.voices]
+                self.selected_voice.set(voice_names[0])  # Set the first voice as default
+                # Update the voice dropdown if it exists
+                if self.current_module.get() == "Speech":
+                    self.tab_widgets.configure_widget("Speech", "voice_dropdown", values=voice_names)
+            else:
+                self.update_output("Warning: No voices available.")
+        except Exception as e:
+            error_message = f"Failed to load voices: {str(e)}"
+            self.update_output(f"Error: {error_message}")
+
     def _process_request(self, service_method, args):
         if not args[0]:  # Check if user input is empty
             self.update_output("Error: Please enter some text.")
             return
 
-        self.logger.info(f"Processing {service_method.__self__.__class__.__name__} request...")
         self.generate_button.configure(state="disabled")
         self.audio_player.clear()
         
-        # Show progress bar
         self.show_progress_bar(determinate=False)  # Use indeterminate mode for unknown duration
 
         def process_thread():
             result = service_method(*args)
             if result:
-                self.logger.info(f"Audio generated successfully. File saved to: {result}")
                 self.after(0, lambda: self.update_output(f"Audio generated successfully. File saved to: {result}"))
                 self.after(0, lambda: self.update_status("Ready"))
                 self.after(0, lambda: self.audio_player.set_audio_file(result))
@@ -241,25 +241,13 @@ class Application(ctk.CTk):
         self.progress_bar.grid_remove()
 
     def update_status(self, message):
-        self.status_queue.append(message)
-        if not self.is_processing:
-            self.process_status_queue()
-
-    def process_status_queue(self):
-        if self.status_queue:
-            message = self.status_queue.pop(0)
-            self.status_var.set(message)
-            self.is_processing = True
-            self.after(100, self.process_status_queue)
-        else:
-            self.is_processing = False
+        self.status_var.set(message)
 
     def update_output(self, message):
         self.output_text.configure(state="normal")
         self.output_text.insert("end", message + "\n")
         self.output_text.see("end")
         self.output_text.configure(state="disabled")
-        self.logger.info(message)
 
     def clear_input(self):
         self.user_input.delete("1.0", "end")
@@ -267,7 +255,6 @@ class Application(ctk.CTk):
         self.output_text.delete("1.0", "end")
         self.output_text.configure(state="disabled")
         self.duration_var.set("0")
-        self.logger.info("Input and output cleared.")
         self.update_status("Ready")
         self.audio_player.clear()
 
@@ -277,12 +264,9 @@ class Application(ctk.CTk):
             line = self.output_text.get(index + " linestart", index + " lineend")
             if "File saved to:" in line:
                 file_path = line.split("File saved to:")[-1].strip()
-                self.logger.info(f"Opening audio file: {file_path}")
                 open_file(file_path)
         except Exception as e:
-            error_message = f"Unable to open file: {str(e)}"
-            self.logger.error(error_message)
-            self.update_output(f"Error: {error_message}")
+            self.update_output(f"Error: Unable to open file: {str(e)}")
 
     def on_closing(self):
         self.audio_player.quit()

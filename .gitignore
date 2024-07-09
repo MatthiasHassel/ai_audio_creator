@@ -27,3 +27,6 @@
 
 # audio output
 /output
+/output/music
+/output/sfx
+/output/speech
