@@ -9,6 +9,7 @@ from utils.file_utils import open_file
 from utils.audio_utils import AudioPlayer
 from .tab_widgets import TabWidgets
 from utils.audio_visualizer import AudioVisualizer
+from utils.audio_file_selector import AudioFileSelector
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
@@ -60,10 +61,12 @@ class Application(ctk.CTk):
         self.create_status_bar()
         self.create_separator()
         self.create_output_display()
+        self.create_audio_file_selector() 
         self.create_audio_visualizer()
         self.create_audio_controls()
         self.create_progress_bar()
         self.load_voices()
+        self.update_tab_widgets()
 
     def create_module_buttons(self):
         module_frame = ctk.CTkFrame(self)
@@ -88,12 +91,12 @@ class Application(ctk.CTk):
     def create_action_buttons(self):
         action_frame = ctk.CTkFrame(self)
         action_frame.grid(row=2, column=0, pady=10, padx=10, sticky="w")
-        self.llama_button = ctk.CTkButton(action_frame, text="Input to Llama3", command=self.process_llama_input)
-        self.llama_button.pack(side="left", padx=(0, 5))
         self.generate_button = ctk.CTkButton(action_frame, text="Generate", command=self.process_input)
         self.generate_button.pack(side="left", padx=(0, 5))
         self.clear_button = ctk.CTkButton(action_frame, text="Clear", command=self.clear_input)
-        self.clear_button.pack(side="left")
+        self.clear_button.pack(side="left", padx=(0, 5))
+        self.llama_button = ctk.CTkButton(action_frame, text="Input to Llama3", command=self.process_llama_input)
+        self.llama_button.pack(side="left")
 
     def create_tab_specific_options(self):
         tab_config = {
@@ -103,13 +106,25 @@ class Application(ctk.CTk):
         }
         self.tab_widgets = TabWidgets(self, tab_config)
         self.tab_widgets.grid(row=3, column=0, pady=10, padx=10, sticky="w")
-        self.update_tab_widgets()
+
+    def create_audio_file_selector(self):
+        self.audio_file_selector = AudioFileSelector(
+            self, 
+            self.config, 
+            self.current_module, 
+            self.on_audio_file_select
+        )
+        self.audio_file_selector.grid(row=7, column=0, pady=10, padx=10, sticky="ew")
+
+    def on_audio_file_select(self, file_path):
+        if hasattr(self, 'audio_player'):
+            self.audio_player.set_audio_file(file_path)
 
     def create_status_bar(self):
         self.status_var = ctk.StringVar()
         self.status_var.set("Ready")
         self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var, anchor="w", padx=10)
-        self.status_bar.grid(row=9, column=0, sticky="ew", padx=10, pady=(5, 0))
+        self.status_bar.grid(row=10, column=0, sticky="ew", padx=10, pady=(5, 0))
 
     def create_separator(self):
         separator = ctk.CTkFrame(self, height=2, fg_color="gray")
@@ -133,7 +148,7 @@ class Application(ctk.CTk):
         
     def create_progress_bar(self):
         self.progress_bar = ctk.CTkProgressBar(self, width=380)
-        self.progress_bar.grid(row=8, column=0, pady=10, padx=10, sticky="ew")
+        self.progress_bar.grid(row=9, column=0, pady=10, padx=10, sticky="ew")
         self.progress_bar.grid_remove()
 
     def update_tab_widgets(self):
@@ -143,6 +158,11 @@ class Application(ctk.CTk):
             self.llama_button.pack(side="left", padx=(0, 5))
         else:
             self.llama_button.pack_forget()
+        if hasattr(self, 'audio_file_selector'):
+            self.audio_file_selector.refresh_files()
+        if self.audio_file_selector.initial_state:
+            self.audio_player.clear()
+            self.audio_visualizer.hide_playhead()
 
     def process_llama_input(self):
         user_input = self.user_input.get("1.0", "end-1c").strip()
@@ -171,6 +191,7 @@ class Application(ctk.CTk):
             self.process_sfx_request()
         elif self.current_module.get() == "Speech":
             self.process_speech_request()
+        self.audio_file_selector.initial_state = False
 
     def process_music_request(self):
         self._process_request(self.music_service.process_music_request, 
@@ -219,7 +240,9 @@ class Application(ctk.CTk):
             if result:
                 self.after(0, lambda: self.update_output(f"Audio generated successfully. File saved to: {result}"))
                 self.after(0, lambda: self.update_status("Ready"))
+                self.after(0, lambda: self.audio_file_selector.set_latest_file())
                 self.after(0, lambda: self.audio_player.set_audio_file(result))
+                self.after(0, lambda: setattr(self.audio_file_selector, 'initial_state', False))
             else:
                 self.after(0, lambda: self.update_output("Error: An error occurred during audio generation."))
             self.after(0, lambda: self.generate_button.configure(state="normal"))
@@ -257,6 +280,8 @@ class Application(ctk.CTk):
         self.duration_var.set("0")
         self.update_status("Ready")
         self.audio_player.clear()
+        self.audio_file_selector.reset_to_initial_state()
+        self.audio_visualizer.hide_playhead()
 
     def open_audio_file(self, event):
         try:

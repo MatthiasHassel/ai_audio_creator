@@ -9,6 +9,8 @@ def sanitize_filename(filename):
     """
     # Remove invalid characters
     sanitized = re.sub(r'[\\/*?:"<>|]', "", filename)
+    # Replace spaces with underscores
+    sanitized = sanitized.replace(' ', '_')
     # Truncate to a reasonable length
     return sanitized[:255]  # 255 is a common maximum filename length
 

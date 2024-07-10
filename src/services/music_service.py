@@ -49,7 +49,7 @@ class MusicService(BaseService):
         self.update_status("API started. Generating song...")
 
         sanitized_text_prompt = re.sub(r'[\\/*?:"<>|]', "", text_prompt)[:30]
-        output_filename = os.path.join(self.output_dir, f"suno_{sanitized_text_prompt}.mp3")
+        output_filename = os.path.join(self.output_dir, f"music_{sanitized_text_prompt}.mp3")
 
         try:
             # Ensure output directory exists

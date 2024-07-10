@@ -22,7 +22,6 @@
 /tests/__pycache__
 
 # logs
-/logs
 /logs/ai_audio_creator.log
 
 # audio output
@@ -30,3 +29,5 @@
 /output/music
 /output/sfx
 /output/speech
+
+project_structure.txt

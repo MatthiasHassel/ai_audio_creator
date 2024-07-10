@@ -14,14 +14,10 @@ class AudioVisualizer:
         self.audio_duration = 0
 
     def setup_plot(self):
-        # Use a dark gray color that matches CustomTkinter's dark theme
         bg_color = '#2b2b2b'
-        
         self.ax.set_facecolor(bg_color)
         self.figure.patch.set_facecolor(bg_color)
         self.ax.axis('off')
-        
-        # Update the canvas widget background
         self.canvas_widget.configure(bg=bg_color)
 
     def update_waveform(self, audio_file):
@@ -49,29 +45,21 @@ class AudioVisualizer:
             print(f"Error updating waveform: {str(e)}")
 
     def update_playhead(self, position):
-        if self.playhead:
-            self.playhead.remove()
+        self.hide_playhead()  # Remove existing playhead if any
         self.playhead = self.ax.axvline(x=position, color='r', linewidth=0.5)
         self.canvas.draw()
 
-    def clear(self):
+    def clear(self, hide_playhead=False):
         self.ax.clear()
         self.setup_plot()
-        if self.playhead:
-            self.playhead.remove()
-        self.playhead = self.ax.axvline(x=0, color='r', linewidth=0.5)  # Always show playhead at start
+        self.hide_playhead()
+        if not hide_playhead:
+            self.update_playhead(0)
         self.canvas.draw()
         self.audio_duration = 0
 
-
-#If theme-switching is implemented call this method:
-
-# def update_background_color(self):
-#     bg_color = ctk.ThemeManager.theme["CTk"]["fg_color"]
-#     if isinstance(bg_color, tuple):
-#         bg_color = bg_color[0]
-    
-#     self.ax.set_facecolor(bg_color)
-#     self.figure.patch.set_facecolor(bg_color)
-#     self.canvas_widget.configure(bg=bg_color)
-#     self.canvas.draw()
+    def hide_playhead(self):
+        if self.playhead:
+            self.playhead.remove()
+            self.playhead = None
+            self.canvas.draw()
