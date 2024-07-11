@@ -1,15 +1,15 @@
 import customtkinter as ctk
+import os
 import logging
 import threading
+from utils.audio_model import AudioModel
+from utils.audio_view import AudioView
+from utils.audio_controller import AudioController
 from services.llama_service import LlamaService
 from services.music_service import MusicService
 from services.sfx_service import SFXService
 from services.speech_service import SpeechService
-from utils.file_utils import open_file
-from utils.audio_utils import AudioPlayer
 from .tab_widgets import TabWidgets
-from utils.audio_visualizer import AudioVisualizer
-from utils.audio_file_selector import AudioFileSelector
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
@@ -35,8 +35,6 @@ class Application(ctk.CTk):
         self.instrumental_var = ctk.BooleanVar(value=False)
         self.selected_voice = ctk.StringVar()
         self.voices = []
-        self.status_queue = []
-        self.is_processing = False
 
     def setup_services(self):
         self.llama_service = LlamaService(self, self.config)
@@ -61,9 +59,7 @@ class Application(ctk.CTk):
         self.create_status_bar()
         self.create_separator()
         self.create_output_display()
-        self.create_audio_file_selector() 
-        self.create_audio_visualizer()
-        self.create_audio_controls()
+        self.create_audio_components()
         self.create_progress_bar()
         self.load_voices()
         self.update_tab_widgets()
@@ -107,19 +103,6 @@ class Application(ctk.CTk):
         self.tab_widgets = TabWidgets(self, tab_config)
         self.tab_widgets.grid(row=3, column=0, pady=10, padx=10, sticky="w")
 
-    def create_audio_file_selector(self):
-        self.audio_file_selector = AudioFileSelector(
-            self, 
-            self.config, 
-            self.current_module, 
-            self.on_audio_file_select
-        )
-        self.audio_file_selector.grid(row=7, column=0, pady=10, padx=10, sticky="ew")
-
-    def on_audio_file_select(self, file_path):
-        if hasattr(self, 'audio_player'):
-            self.audio_player.set_audio_file(file_path)
-
     def create_status_bar(self):
         self.status_var = ctk.StringVar()
         self.status_var.set("Ready")
@@ -137,19 +120,40 @@ class Application(ctk.CTk):
         ctk.CTkLabel(output_frame, text="Output:").grid(row=0, column=0, sticky="w")
         self.output_text = ctk.CTkTextbox(output_frame, height=80, state="disabled")
         self.output_text.grid(row=1, column=0, sticky="ew")
-        self.output_text.bind("<Button-1>", self.open_audio_file)
 
-    def create_audio_visualizer(self):
-        self.audio_visualizer = AudioVisualizer(self)
-        self.audio_visualizer.canvas_widget.grid(row=6, column=0, pady=(0, 10), padx=10, sticky="ew")
+    def create_audio_components(self):
+        self.audio_model = AudioModel()
+        self.audio_view = AudioView(self, self.config)
+        self.audio_controller = AudioController(self.audio_model, self.audio_view)
+        self.audio_view.set_file_select_command(self.on_audio_file_select)
+        self.audio_view.refresh_file_list(self.current_module.get().lower())
+        self.start_playhead_update()
 
-    def create_audio_controls(self):
-        self.audio_player = AudioPlayer(self, self.audio_visualizer)
-        
+    def start_playhead_update(self):
+        def update_playhead():
+            if self.audio_controller.update_playhead():
+                self.after(50, update_playhead)  # Update every 50ms
+            else:
+                self.after(500, self.start_playhead_update)  # Check again in 500ms if playback has stopped
+
+        self.after(50, update_playhead)
+
     def create_progress_bar(self):
         self.progress_bar = ctk.CTkProgressBar(self, width=380)
         self.progress_bar.grid(row=9, column=0, pady=10, padx=10, sticky="ew")
         self.progress_bar.grid_remove()
+
+    def load_voices(self):
+        try:
+            self.voices = self.speech_service.get_available_voices()
+            if self.voices:
+                voice_names = [voice[0] for voice in self.voices]
+                self.selected_voice.set(voice_names[0])
+                self.tab_widgets.configure_widget("Speech", "voice_dropdown", values=voice_names)
+            else:
+                self.update_output("Warning: No voices available.")
+        except Exception as e:
+            self.update_output(f"Error: Failed to load voices: {str(e)}")
 
     def update_tab_widgets(self):
         current_tab = self.current_module.get()
@@ -158,11 +162,21 @@ class Application(ctk.CTk):
             self.llama_button.pack(side="left", padx=(0, 5))
         else:
             self.llama_button.pack_forget()
-        if hasattr(self, 'audio_file_selector'):
-            self.audio_file_selector.refresh_files()
-        if self.audio_file_selector.initial_state:
-            self.audio_player.clear()
-            self.audio_visualizer.hide_playhead()
+        self.audio_view.refresh_file_list(current_tab.lower())
+
+    def on_audio_file_select(self, choice):
+        file_path = self.audio_view.get_selected_file()
+        if file_path and os.path.exists(file_path):
+            self.audio_controller.load_audio(file_path)
+            self.audio_view.update_waveform(file_path)
+
+    def process_input(self):
+        if self.current_module.get() == "Music":
+            self.process_music_request()
+        elif self.current_module.get() == "SFX":
+            self.process_sfx_request()
+        elif self.current_module.get() == "Speech":
+            self.process_speech_request()
 
     def process_llama_input(self):
         user_input = self.user_input.get("1.0", "end-1c").strip()
@@ -184,15 +198,6 @@ class Application(ctk.CTk):
         else:
             self.update_output("Error: Failed to process input with Llama3.")
 
-    def process_input(self):
-        if self.current_module.get() == "Music":
-            self.process_music_request()
-        elif self.current_module.get() == "SFX":
-            self.process_sfx_request()
-        elif self.current_module.get() == "Speech":
-            self.process_speech_request()
-        self.audio_file_selector.initial_state = False
-
     def process_music_request(self):
         self._process_request(self.music_service.process_music_request, 
                               [self.user_input.get("1.0", "end-1c").strip(), self.instrumental_var.get()])
@@ -210,28 +215,13 @@ class Application(ctk.CTk):
         else:
             self.update_output("Error: Invalid voice selected.")
 
-    def load_voices(self):
-        try:
-            self.voices = self.speech_service.get_available_voices()
-            if self.voices:
-                voice_names = [voice[0] for voice in self.voices]
-                self.selected_voice.set(voice_names[0])  # Set the first voice as default
-                # Update the voice dropdown if it exists
-                if self.current_module.get() == "Speech":
-                    self.tab_widgets.configure_widget("Speech", "voice_dropdown", values=voice_names)
-            else:
-                self.update_output("Warning: No voices available.")
-        except Exception as e:
-            error_message = f"Failed to load voices: {str(e)}"
-            self.update_output(f"Error: {error_message}")
-
     def _process_request(self, service_method, args):
         if not args[0]:  # Check if user input is empty
             self.update_output("Error: Please enter some text.")
             return
 
         self.generate_button.configure(state="disabled")
-        self.audio_player.clear()
+        self.audio_controller.clear()  # Changed from self.audio_player to self.audio_controller
         
         self.show_progress_bar(determinate=False)  # Use indeterminate mode for unknown duration
 
@@ -240,9 +230,9 @@ class Application(ctk.CTk):
             if result:
                 self.after(0, lambda: self.update_output(f"Audio generated successfully. File saved to: {result}"))
                 self.after(0, lambda: self.update_status("Ready"))
-                self.after(0, lambda: self.audio_file_selector.set_latest_file())
-                self.after(0, lambda: self.audio_player.set_audio_file(result))
-                self.after(0, lambda: setattr(self.audio_file_selector, 'initial_state', False))
+                self.after(0, lambda: self.audio_view.refresh_file_list(self.current_module.get().lower()))
+                self.after(0, lambda: self.audio_controller.load_audio(result))
+                self.after(0, lambda: self.audio_view.update_waveform(result))
             else:
                 self.after(0, lambda: self.update_output("Error: An error occurred during audio generation."))
             self.after(0, lambda: self.generate_button.configure(state="normal"))
@@ -279,22 +269,12 @@ class Application(ctk.CTk):
         self.output_text.configure(state="disabled")
         self.duration_var.set("0")
         self.update_status("Ready")
-        self.audio_player.clear()
-        self.audio_file_selector.reset_to_initial_state()
-        self.audio_visualizer.hide_playhead()
-
-    def open_audio_file(self, event):
-        try:
-            index = self.output_text.index(f"@{event.x},{event.y}")
-            line = self.output_text.get(index + " linestart", index + " lineend")
-            if "File saved to:" in line:
-                file_path = line.split("File saved to:")[-1].strip()
-                open_file(file_path)
-        except Exception as e:
-            self.update_output(f"Error: Unable to open file: {str(e)}")
+        self.audio_controller.clear()
+        self.audio_view.clear()
+        self.audio_view.refresh_file_list(self.current_module.get().lower())
 
     def on_closing(self):
-        self.audio_player.quit()
+        self.audio_controller.quit()
         self.destroy()
 
 if __name__ == "__main__":
