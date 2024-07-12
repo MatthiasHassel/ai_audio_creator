@@ -8,6 +8,7 @@ class AudioController:
         self.view.set_play_command(self.play_audio)
         self.view.set_pause_resume_command(self.pause_resume_audio)
         self.view.set_stop_command(self.stop_audio)
+        self.view.set_seek_command(self.seek_audio)
 
     def load_audio(self, file_path):
         self.model.load_audio(file_path)
@@ -35,6 +36,12 @@ class AudioController:
             self.view.update_playhead(current_time)
         return self.model.is_playing
 
+    def seek_audio(self, position):
+        if self.model.seek(position):
+            self.view.update_playhead(position)
+            if not self.model.is_playing:
+                self.play_audio()
+                
     def clear(self):
         self.model.stop()
         self.view.clear()

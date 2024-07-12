@@ -16,7 +16,7 @@ class AudioFileSelector:
         self.file_dropdown = ctk.CTkOptionMenu(
             selector_frame, 
             variable=self.file_var,
-            width=300,
+            width=290,
             command=self.on_file_select
         )
         self.file_dropdown.pack(side="left", padx=(0, 10))

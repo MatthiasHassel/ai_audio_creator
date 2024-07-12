@@ -7,8 +7,9 @@ import threading
 import queue
 
 class AudioVisualizer:
-    def __init__(self, master):
+    def __init__(self, master, on_click_seek):
         self.master = master
+        self.on_click_seek = on_click_seek
         self.figure, self.ax = plt.subplots(figsize=(6, 0.75))
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.master)
         self.canvas_widget = self.canvas.get_tk_widget()
@@ -21,6 +22,7 @@ class AudioVisualizer:
         self.render_queue = queue.Queue()
         self.render_thread = threading.Thread(target=self.render_worker, daemon=True)
         self.render_thread.start()
+        self.canvas.mpl_connect('button_press_event', self.on_click)
 
     def setup_plot(self):
         bg_color = '#2b2b2b'
@@ -86,6 +88,12 @@ class AudioVisualizer:
         self.playhead = self.ax.axvline(x=position, color='r', linewidth=1, ymin=0, ymax=1)
         self.canvas.draw()
 
+    def on_click(self, event):
+        if event.xdata is not None and self.audio_duration > 0:
+            click_time = event.xdata
+            if 0 <= click_time <= self.audio_duration:
+                self.on_click_seek(click_time)
+                
     def clear(self):
         self.ax.clear()
         self.setup_plot()

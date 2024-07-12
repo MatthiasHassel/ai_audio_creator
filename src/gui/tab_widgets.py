@@ -15,9 +15,9 @@ class TabWidgets(ctk.CTkFrame):
 
     def create_music_widgets(self):
         frame = ctk.CTkFrame(self)
-        label = ctk.CTkLabel(frame, text="Instrumental:")
-        checkbox = ctk.CTkCheckBox(frame, text="", variable=self.config['instrumental_var'])
-        label.pack(side="left", padx=(0, 5))
+        #label = ctk.CTkLabel(frame, text="Instrumental:")
+        checkbox = ctk.CTkCheckBox(frame, text="Instrumental ", variable=self.config['instrumental_var'])
+        #label.pack(side="left", padx=5)
         checkbox.pack(side="left")
         return frame
 
@@ -32,7 +32,7 @@ class TabWidgets(ctk.CTkFrame):
     def create_speech_widgets(self):
         frame = ctk.CTkFrame(self)
         label = ctk.CTkLabel(frame, text="Select Voice:")
-        dropdown = ctk.CTkOptionMenu(frame, variable=self.config['selected_voice'], width=200)
+        dropdown = ctk.CTkOptionMenu(frame, variable=self.config['selected_voice'], width=120)
         label.pack(side="left", padx=(0, 5))
         dropdown.pack(side="left")
         return frame

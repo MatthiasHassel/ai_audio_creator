@@ -44,6 +44,13 @@ class AudioModel:
         self.start_time = 0
         self.pause_time = 0
 
+    def seek(self, position):
+        if self.current_audio_file:
+            pygame.mixer.music.set_pos(position)
+            self.start_time = time.time() - position
+            return True
+        return False
+    
     def get_current_position(self):
         if self.is_playing:
             if self.is_paused:

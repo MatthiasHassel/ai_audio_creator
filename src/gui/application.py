@@ -10,6 +10,7 @@ from services.music_service import MusicService
 from services.sfx_service import SFXService
 from services.speech_service import SpeechService
 from .tab_widgets import TabWidgets
+from utils.script_editor import ScriptEditor
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
@@ -23,11 +24,15 @@ class Application(ctk.CTk):
         self.setup_services()
         self.setup_logging()
         self.create_widgets()
+        self.create_script_editor()
 
     def setup_window(self):
         self.title(self.config['gui']['window_title'])
         self.geometry(self.config['gui']['window_size'])
         self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=0)  # Script editor column
+        self.grid_rowconfigure(10, weight=1)
+
 
     def setup_variables(self):
         self.current_module = ctk.StringVar(value="Music")
@@ -56,13 +61,27 @@ class Application(ctk.CTk):
         self.create_input_field()
         self.create_action_buttons()
         self.create_tab_specific_options()
-        self.create_status_bar()
-        self.create_separator()
+        self.create_separator_and_toggle()
         self.create_output_display()
         self.create_audio_components()
         self.create_progress_bar()
+        self.create_status_bar()
         self.load_voices()
         self.update_tab_widgets()
+
+    def create_separator_and_toggle(self):
+        separator_frame = ctk.CTkFrame(self)
+        separator_frame.grid(row=4, column=0, sticky="ew", padx=10, pady=(5, 5))
+        separator_frame.grid_columnconfigure(0, weight=1)
+        
+        separator = ctk.CTkFrame(separator_frame, height=2, fg_color="gray")
+        separator.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+        
+        self.toggle_script_editor_button = ctk.CTkButton(
+            separator_frame, text="Toggle Script Editor", command=self.toggle_script_editor,
+            width=150  # Adjust width as needed
+        )
+        self.toggle_script_editor_button.grid(row=0, column=1, pady=5)
 
     def create_module_buttons(self):
         module_frame = ctk.CTkFrame(self)
@@ -101,17 +120,13 @@ class Application(ctk.CTk):
             'selected_voice': self.selected_voice
         }
         self.tab_widgets = TabWidgets(self, tab_config)
-        self.tab_widgets.grid(row=3, column=0, pady=10, padx=10, sticky="w")
+        self.tab_widgets.grid(row=3, column=0, pady=10, padx=11, sticky="w")
 
     def create_status_bar(self):
         self.status_var = ctk.StringVar()
         self.status_var.set("Ready")
         self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var, anchor="w", padx=10)
-        self.status_bar.grid(row=10, column=0, sticky="ew", padx=10, pady=(5, 0))
-
-    def create_separator(self):
-        separator = ctk.CTkFrame(self, height=2, fg_color="gray")
-        separator.grid(row=4, column=0, sticky="ew", padx=10, pady=(5, 5))
+        self.status_bar.grid(row=11, column=0, sticky="ew")
 
     def create_output_display(self):
         output_frame = ctk.CTkFrame(self)
@@ -277,6 +292,27 @@ class Application(ctk.CTk):
         self.audio_controller.quit()
         self.destroy()
 
+    def create_script_editor(self):
+        self.script_editor = ScriptEditor(self)
+        self.script_editor.grid(row=0, column=1, rowspan=12, sticky="nsew")
+        self.script_editor.grid_remove()  # Initially hidden
+
+    def toggle_script_editor(self):
+        self.script_editor.toggle_visibility()
+        self.update_script_editor()
+
+    def update_script_editor(self):
+        if self.script_editor.is_visible:
+            self.script_editor.grid()
+            new_width = self.winfo_width() + self.script_editor.width
+            self.geometry(f"{new_width}x{self.winfo_height()}")
+        else:
+            current_width = self.winfo_width()
+            self.script_editor.grid_remove()
+            new_width = current_width - self.script_editor.width
+            self.geometry(f"{new_width}x{self.winfo_height()}")
+        self.update_idletasks()  # Ensure the window updates immediately
+            
 if __name__ == "__main__":
     import yaml
     with open('config/config.yaml', 'r') as file:
