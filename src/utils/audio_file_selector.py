@@ -6,12 +6,13 @@ class AudioFileSelector:
         self.master = master
         self.config = config
         self.file_var = ctk.StringVar(value="Select audio file")
-        self.create_widgets()
         self.current_directory = None
+        self.file_select_command = None
+        self.create_widgets()
 
     def create_widgets(self):
         selector_frame = ctk.CTkFrame(self.master)
-        selector_frame.grid(row=7, column=0, pady=10, padx=10, sticky="ew")
+        selector_frame.grid(row=9, column=0, pady=10, padx=10, sticky="ew")
 
         self.file_dropdown = ctk.CTkOptionMenu(
             selector_frame, 
@@ -53,8 +54,8 @@ class AudioFileSelector:
         if choice != "No files available" and self.current_directory:
             file_path = os.path.join(self.current_directory, choice)
             if os.path.exists(file_path):
-                if hasattr(self.master, 'on_audio_file_select'):
-                    self.master.on_audio_file_select(file_path)
+                if self.file_select_command:
+                    self.file_select_command(file_path)
 
     def get_selected_file(self):
         if self.current_directory and self.file_var.get() not in ["Select audio file", "No files available"]:
@@ -64,3 +65,6 @@ class AudioFileSelector:
     def clear(self):
         self.file_var.set("Select audio file")
         self.file_dropdown.configure(values=[])
+
+    def set_file_select_command(self, command):
+        self.file_select_command = command

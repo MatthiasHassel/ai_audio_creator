@@ -3,35 +3,38 @@ import time
 import requests
 import re
 import subprocess
-from services.base_service import BaseService
+import logging
 
-class MusicService(BaseService):
-    def __init__(self, app, config):
-        super().__init__(app, config)
+class MusicService:
+    def __init__(self, config, status_update_callback):
+        self.config = config
         self.base_url = self.config['api']['base_url']
         self.output_dir = self.config['music_gen']['output_dir']
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.status_update_callback = status_update_callback
+
+    def update_status(self, message):
+        if self.status_update_callback:
+            self.status_update_callback(message)
 
     def start_api(self):
         """Start the API server."""
+        self.logger.info("Starting API server...")
         self.update_status("Starting API server...")
         api_process = subprocess.Popen(['npm', 'run', 'dev'], cwd=self.config['music_gen']['api_directory'])
         
         if self.wait_for_api_start():
+            self.logger.info("API started successfully.")
             self.update_status("API started successfully.")
             return api_process
         else:
+            self.logger.error("Failed to start API server.")
             self.update_status("Failed to start API server.")
             api_process.terminate()
             return None
 
     def wait_for_api_start(self, timeout=30, interval=0.5):
-        """
-        Wait for the API to start and become responsive.
-        
-        :param timeout: Maximum time to wait in seconds
-        :param interval: Time between checks in seconds
-        :return: True if API is responsive, False otherwise
-        """
+        """Wait for the API to start and become responsive."""
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
@@ -51,11 +54,14 @@ class MusicService(BaseService):
             response.raise_for_status()
             return response.json()
         except requests.RequestException as e:
-            self.handle_error(f"Failed to generate audio: {str(e)}")
+            error_msg = f"Failed to generate audio: {str(e)}"
+            self.logger.error(error_msg)
+            self.update_status(error_msg)
             return None
 
     def get_audio_information(self, audio_ids):
         """Get information about generated audio."""
+        self.logger.info("Fetching audio information...")
         self.update_status("Fetching audio information...")
         url = f"{self.base_url}/api/get"
         try:
@@ -63,12 +69,15 @@ class MusicService(BaseService):
             response.raise_for_status()
             return response.json()
         except requests.RequestException as e:
-            self.handle_error(f"Failed to get audio information: {str(e)}")
+            error_msg = f"Failed to get audio information: {str(e)}"
+            self.logger.error(error_msg)
+            self.update_status(error_msg)
             return None
 
     def download_audio(self, url, output_path):
         """Download the audio file."""
-        self.update_status(f"Downloading audio...")
+        self.logger.info("Downloading audio...")
+        self.update_status("Downloading audio...")
         try:
             response = requests.get(url, stream=True)
             response.raise_for_status()
@@ -77,17 +86,22 @@ class MusicService(BaseService):
                     file.write(chunk)
             return True
         except requests.RequestException as e:
-            self.handle_error(f"Failed to download audio: {str(e)}")
+            error_msg = f"Failed to download audio: {str(e)}"
+            self.logger.error(error_msg)
+            self.update_status(error_msg)
             return False
 
     def create_song(self, text_prompt, make_instrumental):
         """Create a song based on the text prompt."""
+        self.logger.info("Starting music generation process...")
         self.update_status("Starting music generation process...")
         api_process = self.start_api()
         if api_process is None:
-            self.handle_error("Failed to start API server.")
+            self.logger.error("Failed to start API server.")
+            self.update_status("Failed to start API server.")
             return None
 
+        self.logger.info("API started. Generating song...")
         self.update_status("API started. Generating song...")
 
         try:
@@ -108,7 +122,9 @@ class MusicService(BaseService):
             max_attempts = 30
             base_wait_time = 2
             for attempt in range(max_attempts):
-                self.update_status(f"Waiting for audio to be ready... (Attempt {attempt+1}/{max_attempts})")
+                status_msg = f"Waiting for audio to be ready... (Attempt {attempt+1}/{max_attempts})"
+                self.logger.info(status_msg)
+                self.update_status(status_msg)
                 data = self.get_audio_information(ids)
                 if data is None:
                     raise Exception("Failed to get audio information")
@@ -124,6 +140,7 @@ class MusicService(BaseService):
             sanitized_title = re.sub(r'[\\/*?:"<>|]', "", song_title)
             output_filename = os.path.join(self.output_dir, f"music_{sanitized_title}.mp3")
 
+            self.logger.info("Audio ready. Downloading...")
             self.update_status("Audio ready. Downloading...")
             url = data[0]['audio_url']
             if self.download_audio(url, output_filename):
@@ -132,10 +149,12 @@ class MusicService(BaseService):
                 raise Exception("Failed to download audio file")
 
         except Exception as e:
-            self.handle_error(str(e))
+            self.logger.error(str(e))
+            self.update_status(str(e))
             return None
         finally:
             api_process.terminate()
+            self.logger.info("Music generation process completed.")
             self.update_status("Music generation process completed.")
         
     def process_music_request(self, text_prompt: str, make_instrumental: bool):
