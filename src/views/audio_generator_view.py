@@ -61,7 +61,9 @@ class AudioGeneratorView(ctk.CTkFrame):
     def create_music_widgets(self):
         frame = ctk.CTkFrame(self)
         self.instrumental_var = ctk.BooleanVar(value=False)
+        label = ctk.CTkLabel(frame, text="")    # workaround to ensure same row height with other tabs
         checkbox = ctk.CTkCheckBox(frame, text="Instrumental", variable=self.instrumental_var)
+        label.pack(side="right", padx=(0,5))    # workaround to ensure same row height with other tabs
         checkbox.pack()
         return frame
 
@@ -114,7 +116,7 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.progress_bar.grid_remove()  # Initially hidden
 
         self.status_var = ctk.StringVar()
-        self.status_var.set("Ready")
+        self.status_var.set(" ")
         self.status_bar = ctk.CTkLabel(progress_status_frame, textvariable=self.status_var, anchor="w", padx=10)
         self.status_bar.grid(row=1, column=0, sticky="ew")
 
@@ -183,7 +185,7 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.output_text.delete("1.0", "end")
         self.output_text.configure(state="disabled")
         self.duration_var.set("0")
-        self.update_status("Ready")
+        self.update_status("")
         self.audio_visualizer.clear()
         self.audio_file_selector.clear()
 

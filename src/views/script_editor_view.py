@@ -43,7 +43,7 @@ class ScriptEditorView(ctk.CTkFrame):
 
     def create_status_bar(self):
         self.status_var = tk.StringVar()
-        self.status_var.set("Ready")
+        self.status_var.set("")
         self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var, anchor="w")
         self.status_bar.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
 
