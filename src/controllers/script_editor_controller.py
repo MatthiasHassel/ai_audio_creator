@@ -7,6 +7,7 @@ class ScriptEditorController:
         self.model = model
         self.view = view
         self.config = config
+        self.analysis_callback = None
         self.setup_view_commands()
 
     def setup_view_commands(self):
@@ -15,21 +16,24 @@ class ScriptEditorController:
         self.view.underline_button.configure(command=lambda: self.format_text('underline'))
         self.view.save_button.configure(command=self.save_script)
         self.view.load_button.configure(command=self.load_script)
+        self.view.on_text_changed = self.on_text_changed
+
+        # Bind the text change event to trigger analysis
+        self.view.text_area.bind('<<Modified>>', self.on_text_changed)
+
+    def set_analysis_callback(self, callback):
+        self.analysis_callback = callback
+
+    def on_text_changed(self, event):
+        self.view.text_area.edit_modified(False)  # Reset the modified flag
+        if self.analysis_callback:
+            self.analysis_callback()
 
     def format_text(self, style):
-        try:
-            current_tags = self.view.text_area.tag_names("sel.first")
-            if style in current_tags:
-                self.view.text_area.tag_remove(style, "sel.first", "sel.last")
-            else:
-                self.view.text_area.tag_add(style, "sel.first", "sel.last")
+        self.view.format_text(style)
 
-            self.view.text_area.tag_configure('bold', font=('TkDefaultFont', 10, 'bold'))
-            self.view.text_area.tag_configure('italic', font=('TkDefaultFont', 10, 'italic'))
-            self.view.text_area.tag_configure('underline', underline=1)
-        except tk.TclError:
-            # No text selected
-            pass
+    def insert_scene_break(self):
+        self.view.insert_scene_break()
 
     def save_script(self):
         file_path = filedialog.asksaveasfilename(defaultextension=".txt",
@@ -46,6 +50,9 @@ class ScriptEditorController:
                 self.view.set_text(file.read())
             self.view.update_status(f"Script loaded from {file_path}")
 
+    def get_script_text(self):
+        return self.view.get_text()
+
     def analyze_script(self):
-        # This method will be implemented later for script analysis
-        pass
+        if self.analysis_callback:
+            self.analysis_callback()

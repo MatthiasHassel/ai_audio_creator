@@ -17,19 +17,15 @@ class MainView(ctk.CTk):
         self.grid_columnconfigure(0, weight=1)
 
     def create_components(self):
-        # Create a PanedWindow
-        self.paned_window = tk.PanedWindow(self, orient=tk.HORIZONTAL)
+        self.paned_window = tk.PanedWindow(self, orient=tk.HORIZONTAL, sashwidth=10, sashrelief=tk.RAISED, bg='#3E3E3E')
         self.paned_window.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
-        # Create Script Editor View
         self.script_editor_view = ScriptEditorView(self.paned_window, self.config)
         self.paned_window.add(self.script_editor_view, stretch="always")
 
-        # Create Audio Generator View
         self.audio_generator_view = AudioGeneratorView(self.paned_window, self.config)
         self.paned_window.add(self.audio_generator_view, stretch="always")
 
-        # Set initial position to 50%
         self.paned_window.after(10, self.set_initial_sash_position)
 
     def set_initial_sash_position(self):
@@ -41,6 +37,18 @@ class MainView(ctk.CTk):
 
     def get_script_editor_view(self):
         return self.script_editor_view
+
+    def set_save_analysis_callback(self, callback):
+        self.script_editor_view.set_save_analysis_callback(callback)
+
+    def set_load_analysis_callback(self, callback):
+        self.script_editor_view.set_load_analysis_callback(callback)
+
+    def update_analysis_results(self, analyzed_script, suggested_voices, element_counts, estimated_duration):
+        self.script_editor_view.update_analysis_results(analyzed_script, suggested_voices, element_counts, estimated_duration)
+
+    def update_status(self, message):
+        self.script_editor_view.update_status(message)
 
     def run(self):
         self.mainloop()

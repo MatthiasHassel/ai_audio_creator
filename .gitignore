@@ -16,7 +16,9 @@
 /suno_api/next-env.d.ts
 
 # pycaches
-/src/gui/__pycache__
+/src/controllers/__pycache__
+/src/models/__pycache__
+/src/views/__pycache__
 /src/services/__pycache__
 /src/utils/__pycache__
 /tests/__pycache__
