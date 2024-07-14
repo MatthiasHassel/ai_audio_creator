@@ -8,7 +8,7 @@ import queue
 class AudioVisualizer:
     def __init__(self, master):
         self.master = master
-        self.figure, self.ax = plt.subplots(figsize=(6, 0.75))
+        self.figure, self.ax = plt.subplots(figsize=(5, 0.75))
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.master)
         self.canvas_widget = self.canvas.get_tk_widget()
         self.playhead_line = None
@@ -19,6 +19,8 @@ class AudioVisualizer:
         self.render_thread.start()
         self.on_click_seek = None
         self.setup_plot()
+        self.canvas_widget.bind("<Configure>", self.on_resize)
+        self.hide_playhead()  # Hide playhead at startup
 
     def setup_plot(self):
         bg_color = '#2b2b2b'
@@ -26,9 +28,14 @@ class AudioVisualizer:
         self.figure.patch.set_facecolor(bg_color)
         self.ax.axis('off')
         self.canvas_widget.configure(bg=bg_color)
-        self.figure.subplots_adjust(left=0.01, right=1, top=1, bottom=0)
+        self.figure.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
         self.playhead_line, = self.ax.plot([0, 0], [-1, 1], color='r', linewidth=1)
         self.canvas.mpl_connect('button_press_event', self._on_click)
+
+    def on_resize(self, event):
+        w, h = event.width, event.height
+        self.figure.set_size_inches(w/self.figure.dpi, h/self.figure.dpi)
+        self.canvas.draw()
 
     def update_waveform(self, audio_file):
         def process_audio():
@@ -76,11 +83,21 @@ class AudioVisualizer:
             
             self.master.after(0, self.canvas.draw)
 
+    def hide_playhead(self):
+        if self.playhead_line:
+            self.playhead_line.set_visible(False)
+            self.canvas.draw_idle()
+
+    def show_playhead(self):
+        if self.playhead_line:
+            self.playhead_line.set_visible(True)
+            self.canvas.draw_idle()
+
     def update_playhead(self, position):
         if self.playhead_line:
             self.playhead_line.set_xdata([position, position])
+            self.playhead_line.set_visible(True)
             self.canvas.draw_idle()
-
     def set_on_click_seek(self, callback):
         self.on_click_seek = callback
 
@@ -95,6 +112,7 @@ class AudioVisualizer:
         self.setup_plot()
         self.waveform_data = None
         self.audio_duration = 0
+        self.hide_playhead()
         self.canvas.draw()
 
     def quit(self):

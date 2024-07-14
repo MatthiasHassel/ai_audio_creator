@@ -9,14 +9,15 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.create_widgets()
 
     def create_widgets(self):
+        self.grid_columnconfigure(0, weight=1)
         self.create_module_buttons()
         self.create_input_field()
         self.create_action_buttons()
         self.create_tab_specific_options()
-        self.create_audio_components()
         self.create_progress_and_status_bar()
         self.create_separator()
         self.create_output_display()
+        self.create_audio_components()
 
     def create_module_buttons(self):
         self.current_module = ctk.StringVar(value="Music")
@@ -56,14 +57,12 @@ class AudioGeneratorView(ctk.CTkFrame):
             'Speech': self.create_speech_widgets()
         }
         self.current_tab_widget = self.tab_widgets['Music']
-        self.current_tab_widget.grid(row=3, column=0, pady=10, padx=11, sticky="w")
+        self.current_tab_widget.grid(row=3, column=0, pady=5, padx=10, sticky="w")
 
     def create_music_widgets(self):
         frame = ctk.CTkFrame(self)
         self.instrumental_var = ctk.BooleanVar(value=False)
-        label = ctk.CTkLabel(frame, text="")    # workaround to ensure same row height with other tabs
         checkbox = ctk.CTkCheckBox(frame, text="Instrumental", variable=self.instrumental_var)
-        label.pack(side="right", padx=(0,5))    # workaround to ensure same row height with other tabs
         checkbox.pack()
         return frame
 
@@ -85,32 +84,12 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.voice_dropdown.pack(side="left")
         return frame
 
-    def create_audio_components(self):
-        self.audio_visualizer = AudioVisualizer(self)
-        self.audio_visualizer.canvas_widget.grid(row=8, column=0, pady=(0, 10), padx=10, sticky="ew")
-        self.audio_file_selector = AudioFileSelector(self, self.config)
-        self.audio_file_selector.refresh_files(self.current_module.get().lower())
-        self.create_audio_controls()
-
-    def create_audio_controls(self):
-        audio_frame = ctk.CTkFrame(self)
-        audio_frame.grid(row=7, column=0, pady=10, padx=10, sticky="ew")
-
-        self.play_button = ctk.CTkButton(audio_frame, text="Play", state="disabled")
-        self.play_button.grid(row=0, column=0)
-
-        self.pause_resume_button = ctk.CTkButton(audio_frame, text="Pause", state="disabled")
-        self.pause_resume_button.grid(row=0, column=1, padx=10)
-
-        self.stop_button = ctk.CTkButton(audio_frame, text="Stop", state="disabled")
-        self.stop_button.grid(row=0, column=2)
-
     def create_progress_and_status_bar(self):
         progress_status_frame = ctk.CTkFrame(self)
-        progress_status_frame.grid(row=4, column=0, pady=(10, 0), padx=10, sticky="ew")
+        progress_status_frame.grid(row=4, column=0, pady=(5, 0), padx=10, sticky="ew")
         progress_status_frame.grid_columnconfigure(0, weight=1)
 
-        self.progress_bar = ctk.CTkProgressBar(progress_status_frame, width=380)
+        self.progress_bar = ctk.CTkProgressBar(progress_status_frame)
         self.progress_bar.grid(row=0, column=0, pady=(0, 5), sticky="ew")
         self.progress_bar.set(0)
         self.progress_bar.grid_remove()  # Initially hidden
@@ -126,17 +105,37 @@ class AudioGeneratorView(ctk.CTkFrame):
 
     def create_output_display(self):
         output_frame = ctk.CTkFrame(self)
-        output_frame.grid(row=6, column=0, pady=(10, 10), padx=10, sticky="ew")
+        output_frame.grid(row=6, column=0, pady=(5, 5), padx=10, sticky="ew")
         output_frame.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(output_frame, text="Output:").grid(row=0, column=0, sticky="w")
-        self.output_text = ctk.CTkTextbox(output_frame, height=80, state="disabled")
+        self.output_text = ctk.CTkTextbox(output_frame, height=60, state="disabled")
         self.output_text.grid(row=1, column=0, sticky="ew")
+
+    def create_audio_components(self):
+        self.audio_visualizer = AudioVisualizer(self)
+        self.audio_visualizer.canvas_widget.grid(row=7, column=0, pady=(0, 5), padx=10, sticky="ew")
+        self.audio_file_selector = AudioFileSelector(self, self.config)
+        self.audio_file_selector.refresh_files(self.current_module.get().lower())
+        self.create_audio_controls()
+
+    def create_audio_controls(self):
+        audio_frame = ctk.CTkFrame(self)
+        audio_frame.grid(row=8, column=0, pady=5, padx=10, sticky="ew")
+
+        self.play_button = ctk.CTkButton(audio_frame, text="Play", state="disabled", width=60)
+        self.play_button.pack(side="left", padx=(0, 5))
+
+        self.pause_resume_button = ctk.CTkButton(audio_frame, text="Pause", state="disabled", width=60)
+        self.pause_resume_button.pack(side="left", padx=(0, 5))
+
+        self.stop_button = ctk.CTkButton(audio_frame, text="Stop", state="disabled", width=60)
+        self.stop_button.pack(side="left")
 
     def update_tab_widgets(self):
         current_tab = self.current_module.get()
         self.current_tab_widget.grid_remove()
         self.current_tab_widget = self.tab_widgets[current_tab]
-        self.current_tab_widget.grid(row=3, column=0, pady=10, padx=11, sticky="w")
+        self.current_tab_widget.grid(row=3, column=0, pady=5, padx=10, sticky="w")
         
         if current_tab in ["Music", "SFX"]:
             self.llama_button.pack(side="left", padx=(0, 5))
@@ -188,6 +187,7 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.update_status("")
         self.audio_visualizer.clear()
         self.audio_file_selector.clear()
+        self.audio_visualizer.hide_playhead()  # Hide playhead when clearing
 
     def set_generate_command(self, command):
         self.generate_button.configure(command=command)

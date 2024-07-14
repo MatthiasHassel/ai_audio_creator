@@ -15,7 +15,6 @@ class AudioModel:
         self.current_audio_file = file_path
         pygame.mixer.music.load(self.current_audio_file)
         self.seek_position = 0
-        print(f"Loaded audio file in model: {file_path}")  # For debugging
 
     def play(self):
         if self.current_audio_file:
@@ -27,21 +26,18 @@ class AudioModel:
                 self.start_time = time.time() - self.seek_position
             self.is_playing = True
             self.is_paused = False
-            print(f"Playing audio from position: {self.seek_position}")  # For debugging
 
     def pause(self):
         if self.is_playing and not self.is_paused:
             pygame.mixer.music.pause()
             self.is_paused = True
             self.pause_time = time.time() - self.start_time
-            print("Paused audio")  # For debugging
 
     def resume(self):
         if self.is_paused:
             pygame.mixer.music.unpause()
             self.is_paused = False
             self.start_time = time.time() - self.pause_time
-            print("Resumed audio")  # For debugging
 
     def stop(self):
         pygame.mixer.music.stop()
@@ -50,7 +46,6 @@ class AudioModel:
         self.start_time = 0
         self.pause_time = 0
         self.seek_position = 0
-        print("Stopped audio")  # For debugging
 
     def seek(self, position):
         if self.current_audio_file:

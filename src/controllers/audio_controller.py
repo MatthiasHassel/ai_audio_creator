@@ -160,7 +160,6 @@ class AudioController:
             self.model.load_audio(file_path)
             self.view.audio_visualizer.update_waveform(file_path)
             self.view.update_button_states(False, False)  # Enable play button
-            print(f"Loaded audio file: {file_path}")  # For debugging
         else:
             print(f"Invalid file path: {file_path}")  # For debugging
 
@@ -169,6 +168,8 @@ class AudioController:
         self.model.stop()
         self.view.audio_visualizer.clear()
         self.view.audio_file_selector.refresh_files(self.view.current_module.get().lower())
+        self.view.audio_visualizer.hide_playhead()  # Hide playhead when clearing
+
 
     def load_voices(self):
         try:
