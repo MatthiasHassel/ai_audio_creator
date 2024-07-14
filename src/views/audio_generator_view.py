@@ -6,10 +6,11 @@ class AudioGeneratorView(ctk.CTkFrame):
     def __init__(self, master, config):
         super().__init__(master)
         self.config = config
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
         self.create_widgets()
 
     def create_widgets(self):
-        self.grid_columnconfigure(0, weight=1)
         self.create_module_buttons()
         self.create_input_field()
         self.create_action_buttons()
@@ -22,7 +23,7 @@ class AudioGeneratorView(ctk.CTkFrame):
     def create_module_buttons(self):
         self.current_module = ctk.StringVar(value="Music")
         module_frame = ctk.CTkFrame(self)
-        module_frame.grid(row=0, column=0, pady=10, padx=10, sticky="ew")
+        module_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=(5, 2))
         for i, module in enumerate(["Music", "SFX", "Speech"]):
             ctk.CTkRadioButton(
                 module_frame, 
@@ -34,11 +35,13 @@ class AudioGeneratorView(ctk.CTkFrame):
 
     def create_input_field(self):
         input_frame = ctk.CTkFrame(self)
-        input_frame.grid(row=1, column=0, pady=10, padx=10, sticky="ew")
+        input_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=2)
+        input_frame.grid_rowconfigure(1, weight=1)
         input_frame.grid_columnconfigure(0, weight=1)
+        
         ctk.CTkLabel(input_frame, text="Enter your text:").grid(row=0, column=0, sticky="w")
-        self.user_input = ctk.CTkTextbox(input_frame, height=150)
-        self.user_input.grid(row=1, column=0, sticky="ew")
+        self.user_input = ctk.CTkTextbox(input_frame)
+        self.user_input.grid(row=1, column=0, sticky="nsew")
 
     def create_action_buttons(self):
         action_frame = ctk.CTkFrame(self)
@@ -120,16 +123,16 @@ class AudioGeneratorView(ctk.CTkFrame):
 
     def create_audio_controls(self):
         audio_frame = ctk.CTkFrame(self)
-        audio_frame.grid(row=8, column=0, pady=5, padx=10, sticky="ew")
+        audio_frame.grid(row=8, column=0, sticky="ew", padx=5, pady=2)
 
         self.play_button = ctk.CTkButton(audio_frame, text="Play", state="disabled", width=60)
-        self.play_button.pack(side="left", padx=(0, 5))
+        self.play_button.grid(row=0, column=0, padx=(0, 2))
 
         self.pause_resume_button = ctk.CTkButton(audio_frame, text="Pause", state="disabled", width=60)
-        self.pause_resume_button.pack(side="left", padx=(0, 5))
+        self.pause_resume_button.grid(row=0, column=1, padx=2)
 
         self.stop_button = ctk.CTkButton(audio_frame, text="Stop", state="disabled", width=60)
-        self.stop_button.pack(side="left")
+        self.stop_button.grid(row=0, column=2, padx=2)
 
     def update_tab_widgets(self):
         current_tab = self.current_module.get()

@@ -23,7 +23,7 @@ speech_gen:
 # GUI Configuration
 gui:
   window_title: 'AI Audio Creator'
-  window_size: '600x850'
+  window_size: '1200x850'
 
 # Logging Configuration
 logging:
