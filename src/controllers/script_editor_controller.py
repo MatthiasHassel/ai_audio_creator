@@ -16,7 +16,6 @@ class ScriptEditorController:
         self.view.underline_button.configure(command=lambda: self.format_text('underline'))
         self.view.save_button.configure(command=self.save_script)
         self.view.load_button.configure(command=self.load_script)
-        self.view.on_text_changed = self.on_text_changed
 
         # Bind the text change event to trigger analysis
         self.view.text_area.bind('<<Modified>>', self.on_text_changed)
@@ -32,26 +31,29 @@ class ScriptEditorController:
     def format_text(self, style):
         self.view.format_text(style)
 
-    def insert_scene_break(self):
-        self.view.insert_scene_break()
-
     def save_script(self):
         file_path = filedialog.asksaveasfilename(defaultextension=".txt",
                                                  filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
         if file_path:
             with open(file_path, 'w') as file:
-                file.write(self.view.get_text())
+                file.write(self.get_script_text())
             self.view.update_status(f"Script saved to {file_path}")
 
     def load_script(self):
         file_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
         if file_path:
             with open(file_path, 'r') as file:
-                self.view.set_text(file.read())
+                self.set_script_text(file.read())
             self.view.update_status(f"Script loaded from {file_path}")
 
     def get_script_text(self):
         return self.view.get_text()
+
+    def set_script_text(self, text):
+        self.model.set_content(text)  # Update the model
+        self.view.set_text(text)  # Update the view
+        if self.analysis_callback:
+            self.analysis_callback()  # Trigger analysis for the new text
 
     def analyze_script(self):
         if self.analysis_callback:

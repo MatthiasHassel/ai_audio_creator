@@ -181,7 +181,7 @@ class ScriptEditorView(ctk.CTkFrame):
     def set_load_analysis_callback(self, callback):
         self.load_analysis_button.configure(command=callback)
 
-    def update_analysis_results(self, analyzed_script, suggested_voices, element_counts, estimated_duration):
+    def update_analysis_results(self, analyzed_script, suggested_voices, element_counts, estimated_duration, categorized_sentences):
         self.analysis_text.configure(state="normal")
         self.analysis_text.delete("1.0", tk.END)
         
@@ -208,8 +208,42 @@ class ScriptEditorView(ctk.CTkFrame):
         
         if len(analyzed_script) > 10:
             self.analysis_text.insert(tk.END, "...\n")
+
+        self.analysis_text.insert(tk.END, "\nCategorized Sentences:\n")
+        self.display_categorized_sentences(categorized_sentences)
         
         self.analysis_text.configure(state="disabled")
+
+    def display_categorized_sentences(self, categorized_sentences):
+        # Display Speech sentences
+        self.analysis_text.insert(tk.END, "\nSpeech:\n")
+        for speaker, sentences in categorized_sentences['speech'].items():
+            self.analysis_text.insert(tk.END, f"  {speaker}:\n")
+            for sentence in sentences[:3]:  # Show first 3 sentences for each speaker
+                self.analysis_text.insert(tk.END, f"    - {sentence[:50]}...\n")
+            if len(sentences) > 3:
+                self.analysis_text.insert(tk.END, f"    ... and {len(sentences) - 3} more\n")
+
+        # Display SFX descriptions
+        self.analysis_text.insert(tk.END, "\nSFX:\n")
+        for sfx in categorized_sentences['sfx'][:5]:  # Show first 5 SFX
+            self.analysis_text.insert(tk.END, f"  - {sfx[:50]}...\n")
+        if len(categorized_sentences['sfx']) > 5:
+            self.analysis_text.insert(tk.END, f"  ... and {len(categorized_sentences['sfx']) - 5} more\n")
+
+        # Display Music descriptions
+        self.analysis_text.insert(tk.END, "\nMusic:\n")
+        for music in categorized_sentences['music'][:5]:  # Show first 5 Music descriptions
+            self.analysis_text.insert(tk.END, f"  - {music[:50]}...\n")
+        if len(categorized_sentences['music']) > 5:
+            self.analysis_text.insert(tk.END, f"  ... and {len(categorized_sentences['music']) - 5} more\n")
+
+        # Display Narration sentences
+        self.analysis_text.insert(tk.END, "\nNarration:\n")
+        for narration in categorized_sentences['narration'][:5]:  # Show first 5 Narration sentences
+            self.analysis_text.insert(tk.END, f"  - {narration[:50]}...\n")
+        if len(categorized_sentences['narration']) > 5:
+            self.analysis_text.insert(tk.END, f"  ... and {len(categorized_sentences['narration']) - 5} more\n")
 
     def create_tags(self):
         bold_font = tkfont.Font(self.text_area, self.text_area.cget("font"))

@@ -32,12 +32,14 @@ class MainController:
 
     def analyze_script(self):
         script_text = self.script_editor_controller.get_script_text()
-        analyzed_script = self.script_analyzer.analyze_script(script_text)
+        analysis_result = self.script_analyzer.analyze_script(script_text)
+        analyzed_script = analysis_result['analyzed_script']
+        categorized_sentences = analysis_result['categorized_sentences']
         suggested_voices = self.script_analyzer.suggest_voices(analyzed_script)
-        element_counts = self.script_analyzer.count_elements(analyzed_script)
-        estimated_duration = self.script_analyzer.estimate_duration(analyzed_script)
+        element_counts = self.script_analyzer.count_elements(analysis_result)
+        estimated_duration = self.script_analyzer.estimate_duration(analysis_result)
         
-        self.view.update_analysis_results(analyzed_script, suggested_voices, element_counts, estimated_duration)
+        self.view.update_analysis_results(analyzed_script, suggested_voices, element_counts, estimated_duration, categorized_sentences)
 
     def save_analysis(self):
         script_text = self.script_editor_controller.get_script_text()
@@ -76,16 +78,25 @@ class MainController:
             except Exception as e:
                 self.view.update_status(f"Error loading analysis: {str(e)}")
 
-    def generate_audio(self, analyzed_script):
-        for element in analyzed_script:
-            if element['type'] == 'speech':
-                self.audio_controller.process_speech_request(element['text'], element['speaker'])
-            elif element['type'] == 'sfx':
-                self.audio_controller.process_sfx_request(element['description'], "0")  # Assuming default duration
-            elif element['type'] == 'music':
-                self.audio_controller.process_music_request(element['description'], False)  # Assuming not instrumental by default
-            elif element['type'] == 'narration':
-                self.audio_controller.process_speech_request(element['text'], "Narrator")  # Assuming a default narrator voice
+    def generate_audio(self, analysis_result):
+        categorized_sentences = analysis_result['categorized_sentences']
+        
+        # Generate speech for each speaker
+        for speaker, sentences in categorized_sentences['speech'].items():
+            for sentence in sentences:
+                self.audio_controller.process_speech_request(sentence, speaker)
+        
+        # Generate narration
+        for sentence in categorized_sentences['narration']:
+            self.audio_controller.process_speech_request(sentence, "Narrator")
+        
+        # Generate SFX
+        for sfx_description in categorized_sentences['sfx']:
+            self.audio_controller.process_sfx_request(sfx_description, "0")  # Assuming default duration
+        
+        # Generate music
+        for music_description in categorized_sentences['music']:
+            self.audio_controller.process_music_request(music_description, False)  # Assuming not instrumental by default
         
         self.view.update_status("Audio generation complete")
 

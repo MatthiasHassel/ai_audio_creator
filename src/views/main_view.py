@@ -44,8 +44,10 @@ class MainView(ctk.CTk):
     def set_load_analysis_callback(self, callback):
         self.script_editor_view.set_load_analysis_callback(callback)
 
-    def update_analysis_results(self, analyzed_script, suggested_voices, element_counts, estimated_duration):
-        self.script_editor_view.update_analysis_results(analyzed_script, suggested_voices, element_counts, estimated_duration)
+    def update_analysis_results(self, analyzed_script, suggested_voices, element_counts, estimated_duration, categorized_sentences):
+        self.script_editor_view.update_analysis_results(
+            analyzed_script, suggested_voices, element_counts, estimated_duration, categorized_sentences
+        )
 
     def update_status(self, message):
         self.script_editor_view.update_status(message)
