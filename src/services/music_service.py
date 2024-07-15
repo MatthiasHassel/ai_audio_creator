@@ -13,6 +13,10 @@ class MusicService:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.status_update_callback = status_update_callback
 
+    def update_output_directory(self, new_output_dir):
+        self.output_dir = new_output_dir
+        os.makedirs(self.output_dir, exist_ok=True)
+
     def update_status(self, message):
         if self.status_update_callback:
             self.status_update_callback(message)

@@ -3,16 +3,18 @@ from controllers.script_editor_controller import ScriptEditorController
 from models.audio_model import AudioModel
 from models.script_model import ScriptModel
 from utils.script_analyzer import ScriptAnalyzer
-from tkinter import filedialog
-import json
+from tkinter import simpledialog, messagebox
+import os
 
 class MainController:
-    def __init__(self, model, view, config):
+    def __init__(self, model, view, config, project_model):
         self.model = model
         self.view = view
         self.config = config
+        self.project_model = project_model
         self.script_analyzer = ScriptAnalyzer()
         self.setup_controllers()
+        self.setup_callbacks()
 
     def setup_controllers(self):
         audio_model = self.model.get_audio_model()
@@ -21,17 +23,76 @@ class MainController:
 
         script_model = self.model.get_script_model()
         script_view = self.view.get_script_editor_view()
-        self.script_editor_controller = ScriptEditorController(script_model, script_view, self.config)
+        self.script_editor_controller = ScriptEditorController(script_model, script_view, self.config, self.project_model)
 
-        # Connect script analysis to the script editor
         self.script_editor_controller.set_analysis_callback(self.analyze_script)
 
-        # Set up save and load callbacks
-        self.view.set_save_analysis_callback(self.save_analysis)
-        self.view.set_load_analysis_callback(self.load_analysis)
+    def setup_callbacks(self):
+        self.view.set_new_project_callback(self.new_project)
+        self.view.set_open_project_callback(self.open_project)
+        self.view.set_save_project_callback(self.save_project)
 
-        # Ensure the audio file selector is initialized with the correct module
-        audio_view.audio_file_selector.update_module('music')
+    def new_project(self):
+        project_name = simpledialog.askstring("New Project", "Enter project name:")
+        if project_name:
+            try:
+                self.project_model.create_project(project_name)
+                self.view.update_current_project(project_name)
+                self.update_output_directories()
+                self.clear_input_fields()
+                self.view.update_status(f"Project '{project_name}' created successfully.")
+                messagebox.showinfo("Success", f"Project '{project_name}' created successfully.")
+            except ValueError as e:
+                error_message = str(e)
+                self.view.update_status(f"Error: {error_message}")
+                messagebox.showerror("Error", error_message)
+
+    def open_project(self, project_name):
+        try:
+            self.project_model.load_project(project_name)
+            self.view.update_current_project(project_name)
+            self.update_output_directories()
+            self.clear_input_fields()
+            last_script = self.project_model.get_last_opened_script()
+            if last_script:
+                full_path = os.path.join(self.project_model.get_scripts_dir(), last_script)
+                if os.path.exists(full_path):
+                    self.script_editor_controller.load_script(full_path)
+                else:
+                    self.view.update_status(f"Last opened script not found: {last_script}")
+            self.view.update_status(f"Project '{project_name}' opened successfully.")
+            messagebox.showinfo("Success", f"Project '{project_name}' opened successfully.")
+        except ValueError as e:
+            error_message = str(e)
+            self.view.update_status(f"Error: {error_message}")
+            messagebox.showerror("Error", error_message)
+
+    def save_project(self):
+        if not self.project_model.current_project:
+            messagebox.showwarning("No Project", "No project is currently open.")
+            return
+        try:
+            self.project_model.save_project_metadata()
+            self.view.update_status("Project metadata saved successfully.")
+            messagebox.showinfo("Success", "Project metadata saved successfully.")
+        except Exception as e:
+            error_message = f"Failed to save project metadata: {str(e)}"
+            self.view.update_status(error_message)
+            messagebox.showerror("Error", error_message)
+
+    def clear_input_fields(self):
+        self.script_editor_controller.clear_text()
+        self.audio_controller.clear_input()
+
+    def update_output_directories(self):
+        self.audio_controller.update_output_directories(
+            music_dir=self.project_model.get_output_dir('music'),
+            sfx_dir=self.project_model.get_output_dir('sfx'),
+            speech_dir=self.project_model.get_output_dir('speech')
+        )
+        self.script_editor_controller.update_scripts_directory(
+            self.project_model.get_scripts_dir()
+        )
 
     def analyze_script(self):
         script_text = self.script_editor_controller.get_script_text()
@@ -43,83 +104,6 @@ class MainController:
         estimated_duration = self.script_analyzer.estimate_duration(analysis_result)
         
         self.view.update_analysis_results(analyzed_script, suggested_voices, element_counts, estimated_duration, categorized_sentences)
-
-    def save_analysis(self):
-        script_text = self.script_editor_controller.get_script_text()
-        analyzed_script = self.script_analyzer.analyze_script(script_text)
-        
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".json",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
-        )
-        if file_path:
-            try:
-                self.script_analyzer.save_analysis(analyzed_script, file_path)
-                self.view.update_status(f"Analysis saved to {file_path}")
-            except Exception as e:
-                self.view.update_status(f"Error saving analysis: {str(e)}")
-
-    def load_analysis(self):
-        file_path = filedialog.askopenfilename(
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
-        )
-        if file_path:
-            try:
-                analyzed_script = self.script_analyzer.load_analysis(file_path)
-                reconstructed_script = self.script_analyzer.reconstruct_script(analyzed_script)
-                
-                # Update the script editor with the reconstructed script
-                self.script_editor_controller.set_script_text(reconstructed_script)
-                
-                # Update the view with the loaded analysis
-                suggested_voices = self.script_analyzer.suggest_voices(analyzed_script)
-                element_counts = self.script_analyzer.count_elements(analyzed_script)
-                estimated_duration = self.script_analyzer.estimate_duration(analyzed_script)
-                self.view.update_analysis_results(analyzed_script, suggested_voices, element_counts, estimated_duration)
-                
-                self.view.update_status(f"Analysis loaded from {file_path}")
-            except Exception as e:
-                self.view.update_status(f"Error loading analysis: {str(e)}")
-
-    def generate_audio(self, analysis_result):
-        categorized_sentences = analysis_result['categorized_sentences']
-        
-        # Generate speech for each speaker
-        for speaker, sentences in categorized_sentences['speech'].items():
-            for sentence in sentences:
-                self.audio_controller.process_speech_request(sentence, speaker)
-        
-        # Generate narration
-        for sentence in categorized_sentences['narration']:
-            self.audio_controller.process_speech_request(sentence, "Narrator")
-        
-        # Generate SFX
-        for sfx_description in categorized_sentences['sfx']:
-            self.audio_controller.process_sfx_request(sfx_description, "0")  # Assuming default duration
-        
-        # Generate music
-        for music_description in categorized_sentences['music']:
-            self.audio_controller.process_music_request(music_description, False)  # Assuming not instrumental by default
-        
-        self.view.update_status("Audio generation complete")
-
-    def search_script(self, search_term):
-        script_text = self.script_editor_controller.get_script_text()
-        analyzed_script = self.script_analyzer.analyze_script(script_text)
-        search_results = self.script_analyzer.find_element(analyzed_script, search_term)
-        self.view.display_search_results(search_results)
-
-    def get_script_statistics(self):
-        script_text = self.script_editor_controller.get_script_text()
-        analyzed_script = self.script_analyzer.analyze_script(script_text)
-        statistics = {
-            "element_counts": self.script_analyzer.count_elements(analyzed_script),
-            "estimated_duration": self.script_analyzer.estimate_duration(analyzed_script),
-            "unique_speakers": len(self.script_analyzer.get_speakers(analyzed_script)),
-            "unique_sfx": len(self.script_analyzer.get_sfx(analyzed_script)),
-            "unique_music": len(self.script_analyzer.get_music(analyzed_script))
-        }
-        self.view.display_script_statistics(statistics)
 
     def run(self):
         self.audio_controller.load_voices()

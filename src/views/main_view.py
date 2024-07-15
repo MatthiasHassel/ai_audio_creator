@@ -1,29 +1,58 @@
 import customtkinter as ctk
 import tkinter as tk
+from tkinter import filedialog
+import os
 from views.audio_generator_view import AudioGeneratorView
 from views.script_editor_view import ScriptEditorView
 
 class MainView(ctk.CTk):
-    def __init__(self, config):
+    def __init__(self, config, project_model):
         super().__init__()
-        self.config = config
+        self.config_data = config
+        self.project_model = project_model
         self.setup_window()
         self.create_components()
 
     def setup_window(self):
-        self.title(self.config['gui']['window_title'])
-        self.geometry(self.config['gui']['window_size'])
-        self.grid_rowconfigure(0, weight=1)
+        self.title(self.config_data['gui']['window_title'])
+        self.geometry(self.config_data['gui']['window_size'])
+        self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
     def create_components(self):
-        self.paned_window = tk.PanedWindow(self, orient=tk.HORIZONTAL, sashwidth=10, sashrelief=tk.RAISED, bg='#3E3E3E')
-        self.paned_window.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        self.create_menu()
+        self.create_project_frame()
+        self.create_main_content()
+        self.create_status_bar()
 
-        self.script_editor_view = ScriptEditorView(self.paned_window, self.config)
+    def create_menu(self):
+        self.menu = tk.Menu(self)
+        self.configure(menu=self.menu)
+
+        file_menu = tk.Menu(self.menu, tearoff=0)
+        self.menu.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="New Project", command=self.new_project)
+        file_menu.add_command(label="Open Project", command=self.open_project)
+        file_menu.add_command(label="Save Project", command=self.save_project)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.quit)
+
+    def create_project_frame(self):
+        project_frame = ctk.CTkFrame(self)
+        project_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=5)
+        
+        ctk.CTkLabel(project_frame, text="Current Project:").pack(side="left", padx=(0, 5))
+        self.current_project_var = ctk.StringVar(value="No project open")
+        ctk.CTkLabel(project_frame, textvariable=self.current_project_var).pack(side="left")
+
+    def create_main_content(self):
+        self.paned_window = tk.PanedWindow(self, orient=tk.HORIZONTAL, sashwidth=10, sashrelief=tk.RAISED, bg='#3E3E3E')
+        self.paned_window.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+
+        self.script_editor_view = ScriptEditorView(self.paned_window, self.config_data)
         self.paned_window.add(self.script_editor_view, stretch="always")
 
-        self.audio_generator_view = AudioGeneratorView(self.paned_window, self.config)
+        self.audio_generator_view = AudioGeneratorView(self.paned_window, self.config_data, self.project_model)
         self.paned_window.add(self.audio_generator_view, stretch="always")
 
         self.paned_window.after(10, self.set_initial_sash_position)
@@ -38,19 +67,49 @@ class MainView(ctk.CTk):
     def get_script_editor_view(self):
         return self.script_editor_view
 
-    def set_save_analysis_callback(self, callback):
-        self.script_editor_view.set_save_analysis_callback(callback)
+    def set_new_project_callback(self, callback):
+        self.new_project_callback = callback
 
-    def set_load_analysis_callback(self, callback):
-        self.script_editor_view.set_load_analysis_callback(callback)
+    def set_open_project_callback(self, callback):
+        self.open_project_callback = callback
+
+    def set_save_project_callback(self, callback):
+        self.save_project_callback = callback
+
+    def new_project(self):
+        if hasattr(self, 'new_project_callback'):
+            self.new_project_callback()
+
+    def create_status_bar(self):
+        self.status_var = tk.StringVar()
+        self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var, anchor="w")
+        self.status_bar.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
+
+    def update_status(self, message):
+        self.status_var.set(message)
+
+    def open_project(self):
+        if hasattr(self, 'open_project_callback'):
+            initial_dir = self.config_data['projects']['base_dir']
+            project_dir = filedialog.askdirectory(
+                title="Select Project Directory",
+                initialdir=initial_dir
+            )
+            if project_dir:
+                project_name = os.path.basename(project_dir)
+                self.open_project_callback(project_name)  # Pass project_name to the callback
+
+    def save_project(self):
+        if hasattr(self, 'save_project_callback'):
+            self.save_project_callback()
+
+    def update_current_project(self, project_name):
+        self.current_project_var.set(project_name)
 
     def update_analysis_results(self, analyzed_script, suggested_voices, element_counts, estimated_duration, categorized_sentences):
         self.script_editor_view.update_analysis_results(
             analyzed_script, suggested_voices, element_counts, estimated_duration, categorized_sentences
         )
-
-    def update_status(self, message):
-        self.script_editor_view.update_status(message)
 
     def run(self):
         self.mainloop()

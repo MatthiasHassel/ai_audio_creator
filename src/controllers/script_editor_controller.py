@@ -1,24 +1,19 @@
-import tkinter as tk
-from tkinter import filedialog
 import os
+import hashlib
+from tkinter import filedialog
 
 class ScriptEditorController:
-    def __init__(self, model, view, config):
+    def __init__(self, model, view, config, project_model):
         self.model = model
         self.view = view
         self.config = config
-        self.analysis_callback = None
+        self.project_model = project_model
+        self.current_script_path = None
         self.setup_view_commands()
 
     def setup_view_commands(self):
-        self.view.bold_button.configure(command=lambda: self.format_text('bold'))
-        self.view.italic_button.configure(command=lambda: self.format_text('italic'))
-        self.view.underline_button.configure(command=lambda: self.format_text('underline'))
         self.view.save_button.configure(command=self.save_script)
         self.view.load_button.configure(command=self.load_script)
-
-        # Bind the text change event to trigger analysis
-        self.view.text_area.bind('<<Modified>>', self.on_text_changed)
 
     def set_analysis_callback(self, callback):
         self.analysis_callback = callback
@@ -31,29 +26,68 @@ class ScriptEditorController:
     def format_text(self, style):
         self.view.format_text(style)
 
+    def get_script_hash(self):
+        return hashlib.md5(self.get_script_text().encode()).hexdigest()
+
+    def is_script_modified(self):
+        return self.last_saved_hash != self.get_script_hash()
+
     def save_script(self):
-        file_path = filedialog.asksaveasfilename(defaultextension=".txt",
-                                                 filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
+        if not self.project_model.current_project:
+            self.view.update_status("No active project. Please open or create a project first.")
+            return
+
+        initial_dir = self.project_model.get_scripts_dir()
+        initial_file = os.path.basename(self.current_script_path) if self.current_script_path else ""
+        
+        file_path = filedialog.asksaveasfilename(
+            initialdir=initial_dir,
+            initialfile=initial_file,
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
+
         if file_path:
             with open(file_path, 'w') as file:
                 file.write(self.get_script_text())
+            self.current_script_path = file_path
+            relative_path = os.path.relpath(file_path, self.project_model.get_scripts_dir())
+            self.project_model.set_last_opened_script(relative_path)
             self.view.update_status(f"Script saved to {file_path}")
 
-    def load_script(self):
-        file_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
+    def load_script(self, file_path=None):
+        if not self.project_model.current_project:
+            self.view.update_status("No active project. Please open or create a project first.")
+            return
+
+        if not file_path:
+            file_path = filedialog.askopenfilename(
+                initialdir=self.project_model.get_scripts_dir(),
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+            )
+        
         if file_path:
             with open(file_path, 'r') as file:
                 self.set_script_text(file.read())
+            self.current_script_path = file_path
+            relative_path = os.path.relpath(file_path, self.project_model.get_scripts_dir())
+            self.project_model.set_last_opened_script(relative_path)
             self.view.update_status(f"Script loaded from {file_path}")
 
     def get_script_text(self):
         return self.view.get_text()
 
     def set_script_text(self, text):
-        self.model.set_content(text)  # Update the model
-        self.view.set_text(text)  # Update the view
-        if self.analysis_callback:
-            self.analysis_callback()  # Trigger analysis for the new text
+        self.model.set_content(text)
+        self.view.set_text(text)
+
+    def clear_text(self):
+        self.set_script_text("")
+        self.current_script_path = None
+
+    def update_scripts_directory(self, directory):
+        # This method might not be necessary anymore, but keep it for potential future use
+        pass
 
     def analyze_script(self):
         if self.analysis_callback:

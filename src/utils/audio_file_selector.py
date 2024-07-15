@@ -2,9 +2,10 @@ import os
 import customtkinter as ctk
 
 class AudioFileSelector:
-    def __init__(self, master, config):
+    def __init__(self, master, config, project_model):
         self.master = master
         self.config = config
+        self.project_model = project_model
         self.file_var = ctk.StringVar(value="Select audio file")
         self.current_directory = None
         self.file_select_command = None
@@ -30,14 +31,18 @@ class AudioFileSelector:
         self.refresh_button.pack(side="left")
 
     def get_output_dir(self, module):
-        if module == 'music':
-            return self.config['music_gen']['output_dir']
-        elif module == 'sfx':
-            return self.config['sfx_gen']['output_dir']
-        elif module == 'speech':
-            return self.config['speech_gen']['output_dir']
+        if self.project_model.current_project:
+            return self.project_model.get_output_dir(module)
         else:
-            raise ValueError(f"Unknown module: {module}")
+            # Fallback to default directories if no project is open
+            if module == 'music':
+                return self.config['music_gen']['output_dir']
+            elif module == 'sfx':
+                return self.config['sfx_gen']['output_dir']
+            elif module == 'speech':
+                return self.config['speech_gen']['output_dir']
+            else:
+                raise ValueError(f"Unknown module: {module}")
 
     def refresh_files(self, module=None):
         if module is not None:

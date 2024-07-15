@@ -35,6 +35,12 @@ class AudioController:
         self.view.set_file_select_command(self.on_audio_file_select)
         self.view.set_visualizer_click_command(self.seek_audio)
 
+    def update_output_directories(self, music_dir, sfx_dir, speech_dir):
+        self.music_service.update_output_directory(music_dir)
+        self.sfx_service.update_output_directory(sfx_dir)
+        self.speech_service.update_output_directory(speech_dir)
+        self.view.audio_file_selector.refresh_files(self.view.current_module.get().lower())
+
     def process_input(self):
         current_module = self.view.current_module.get()
         if current_module == "Music":
@@ -167,9 +173,8 @@ class AudioController:
         self.view.clear_input()
         self.model.stop()
         self.view.audio_visualizer.clear()
-        self.view.audio_file_selector.refresh_files(self.view.current_module.get().lower())
-        self.view.audio_visualizer.hide_playhead()  # Hide playhead when clearing
-
+        self.view.audio_file_selector.clear()
+        self.view.audio_visualizer.hide_playhead()
 
     def load_voices(self):
         try:

@@ -26,11 +26,9 @@
 # logs
 /logs/ai_audio_creator.log
 
-# audio output
-/output
-/output/music
-/output/sfx
-/output/speech
+# Project Data
+/Projects
+
 
 project_structure.txt
 

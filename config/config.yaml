@@ -1,3 +1,5 @@
+# config/config.yaml
+
 # API Configuration
 api:
   base_url: 'http://localhost:3000'
@@ -6,6 +8,10 @@ api:
 # Llama Configuration
 llama:
   model: 'llama3:latest'
+
+# Project Configuration
+projects:
+  base_dir: './Projects'
 
 # Music Generation Configuration
 music_gen:

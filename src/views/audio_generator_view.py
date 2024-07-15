@@ -3,9 +3,10 @@ from utils.audio_visualizer import AudioVisualizer
 from utils.audio_file_selector import AudioFileSelector
 
 class AudioGeneratorView(ctk.CTkFrame):
-    def __init__(self, master, config):
+    def __init__(self, master, config, project_model):
         super().__init__(master)
         self.config = config
+        self.project_model = project_model
         self.create_widgets()
 
     def create_widgets(self):
@@ -116,7 +117,7 @@ class AudioGeneratorView(ctk.CTkFrame):
     def create_audio_components(self):
         self.audio_visualizer = AudioVisualizer(self)
         self.audio_visualizer.canvas_widget.grid(row=7, column=0, pady=(0, 5), padx=10, sticky="ew")
-        self.audio_file_selector = AudioFileSelector(self, self.config)
+        self.audio_file_selector = AudioFileSelector(self, self.config, self.project_model)
         self.audio_file_selector.refresh_files(self.current_module.get().lower())
         self.create_audio_controls()
 
@@ -192,7 +193,7 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.update_status("")
         self.audio_visualizer.clear()
         self.audio_file_selector.clear()
-        self.audio_visualizer.hide_playhead()  # Hide playhead when clearing
+        self.audio_visualizer.hide_playhead()
 
     def set_generate_command(self, command):
         self.generate_button.configure(command=command)
