@@ -6,8 +6,6 @@ class AudioGeneratorView(ctk.CTkFrame):
     def __init__(self, master, config):
         super().__init__(master)
         self.config = config
-        self.grid_rowconfigure(1, weight=1)
-        self.grid_columnconfigure(0, weight=1)
         self.create_widgets()
 
     def create_widgets(self):
@@ -15,15 +13,15 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.create_input_field()
         self.create_action_buttons()
         self.create_tab_specific_options()
+        self.create_audio_components()
         self.create_progress_and_status_bar()
         self.create_separator()
         self.create_output_display()
-        self.create_audio_components()
 
     def create_module_buttons(self):
         self.current_module = ctk.StringVar(value="Music")
         module_frame = ctk.CTkFrame(self)
-        module_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=(5, 2))
+        module_frame.grid(row=0, column=0, pady=10, padx=10, sticky="ew")
         for i, module in enumerate(["Music", "SFX", "Speech"]):
             ctk.CTkRadioButton(
                 module_frame, 
@@ -32,6 +30,7 @@ class AudioGeneratorView(ctk.CTkFrame):
                 value=module, 
                 command=self.update_tab_widgets
             ).grid(row=0, column=i, padx=5)
+
 
     def create_input_field(self):
         input_frame = ctk.CTkFrame(self)
@@ -138,12 +137,15 @@ class AudioGeneratorView(ctk.CTkFrame):
         current_tab = self.current_module.get()
         self.current_tab_widget.grid_remove()
         self.current_tab_widget = self.tab_widgets[current_tab]
-        self.current_tab_widget.grid(row=3, column=0, pady=5, padx=10, sticky="w")
+        self.current_tab_widget.grid(row=3, column=0, pady=10, padx=11, sticky="w")
         
         if current_tab in ["Music", "SFX"]:
             self.llama_button.pack(side="left", padx=(0, 5))
         else:
             self.llama_button.pack_forget()
+
+        # Update the audio file selector
+        self.audio_file_selector.update_module(current_tab.lower())
 
     def update_button_states(self, is_playing, is_paused):
         if is_playing:

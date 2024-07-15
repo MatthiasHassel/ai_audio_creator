@@ -39,8 +39,12 @@ class AudioFileSelector:
         else:
             raise ValueError(f"Unknown module: {module}")
 
-    def refresh_files(self, module):
-        self.current_directory = self.get_output_dir(module)
+    def refresh_files(self, module=None):
+        if module is not None:
+            self.current_directory = self.get_output_dir(module)
+        elif self.current_directory is None:
+            self.current_directory = self.get_output_dir('music')  # Default to music
+
         files = [f for f in os.listdir(self.current_directory) if f.endswith('.mp3')]
         if files:
             self.file_dropdown.configure(values=files)
@@ -68,3 +72,6 @@ class AudioFileSelector:
 
     def set_file_select_command(self, command):
         self.file_select_command = command
+
+    def update_module(self, module):
+        self.refresh_files(module)

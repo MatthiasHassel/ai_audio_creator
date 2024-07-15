@@ -30,6 +30,9 @@ class MainController:
         self.view.set_save_analysis_callback(self.save_analysis)
         self.view.set_load_analysis_callback(self.load_analysis)
 
+        # Ensure the audio file selector is initialized with the correct module
+        audio_view.audio_file_selector.update_module('music')
+
     def analyze_script(self):
         script_text = self.script_editor_controller.get_script_text()
         analysis_result = self.script_analyzer.analyze_script(script_text)
