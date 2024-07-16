@@ -191,5 +191,8 @@ class AudioController:
     def update_status(self, message):
         self.view.update_status(message)
 
+    def set_show_timeline_command(self, command):
+        self.view.set_timeline_command(command)
+
     def quit(self):
         self.model.quit()

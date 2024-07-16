@@ -1,7 +1,6 @@
 from controllers.audio_controller import AudioController
 from controllers.script_editor_controller import ScriptEditorController
-from models.audio_model import AudioModel
-from models.script_model import ScriptModel
+from controllers.timeline_controller import TimelineController
 from utils.script_analyzer import ScriptAnalyzer
 from tkinter import simpledialog, messagebox
 import os
@@ -12,7 +11,6 @@ class MainController:
         self.view = view
         self.config = config
         self.project_model = project_model
-        self.script_analyzer = ScriptAnalyzer()
         self.setup_controllers()
         self.setup_callbacks()
 
@@ -25,12 +23,17 @@ class MainController:
         script_view = self.view.get_script_editor_view()
         self.script_editor_controller = ScriptEditorController(script_model, script_view, self.config, self.project_model)
 
-        self.script_editor_controller.set_analysis_callback(self.analyze_script)
+        self.timeline_controller = TimelineController(self.view, self.model)
+        self.view.set_timeline_controller(self.timeline_controller)
 
     def setup_callbacks(self):
         self.view.set_new_project_callback(self.new_project)
         self.view.set_open_project_callback(self.open_project)
         self.view.set_save_project_callback(self.save_project)
+        
+        # Set up the connection between Timeline and Audio Creator
+        self.timeline_controller.set_toggle_audio_creator_command(self.view.toggle_visibility)
+        self.audio_controller.set_show_timeline_command(self.timeline_controller.show)
 
     def new_project(self):
         project_name = simpledialog.askstring("New Project", "Enter project name:")
@@ -104,6 +107,13 @@ class MainController:
         estimated_duration = self.script_analyzer.estimate_duration(analysis_result)
         
         self.view.update_analysis_results(analyzed_script, suggested_voices, element_counts, estimated_duration, categorized_sentences)
+
+    def toggle_timeline(self):
+        self.timeline_controller.toggle_visibility()
+
+    def run(self):
+        self.audio_controller.load_voices()
+        self.view.run()
 
     def run(self):
         self.audio_controller.load_voices()

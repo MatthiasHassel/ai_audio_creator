@@ -1,4 +1,7 @@
 import customtkinter as ctk
+import tkinter as tk
+import os
+from tkinter import messagebox
 from utils.audio_visualizer import AudioVisualizer
 from utils.audio_file_selector import AudioFileSelector
 
@@ -7,70 +10,140 @@ class AudioGeneratorView(ctk.CTkFrame):
         super().__init__(master)
         self.config = config
         self.project_model = project_model
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
         self.create_widgets()
 
     def create_widgets(self):
-        self.create_module_buttons()
-        self.create_input_field()
-        self.create_action_buttons()
-        self.create_tab_specific_options()
-        self.create_audio_components()
-        self.create_progress_and_status_bar()
-        self.create_separator()
-        self.create_output_display()
+        self.create_top_bar()
+        self.create_main_content()
 
-    def create_module_buttons(self):
+    def create_top_bar(self):
+        top_bar = ctk.CTkFrame(self)
+        top_bar.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 0))
+        top_bar.grid_columnconfigure(3, weight=1)
+
         self.current_module = ctk.StringVar(value="Music")
-        module_frame = ctk.CTkFrame(self)
-        module_frame.grid(row=0, column=0, pady=10, padx=10, sticky="ew")
         for i, module in enumerate(["Music", "SFX", "Speech"]):
             ctk.CTkRadioButton(
-                module_frame, 
+                top_bar, 
                 text=module, 
                 variable=self.current_module, 
                 value=module, 
                 command=self.update_tab_widgets
             ).grid(row=0, column=i, padx=5)
 
+        self.timeline_button = ctk.CTkButton(top_bar, text="Show Timeline", width=120)
+        self.timeline_button.grid(row=0, column=4, padx=5, sticky="e")
 
-    def create_input_field(self):
-        input_frame = ctk.CTkFrame(self)
-        input_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=2)
-        input_frame.grid_rowconfigure(1, weight=1)
+    def create_main_content(self):
+        main_content = ctk.CTkFrame(self)
+        main_content.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+        main_content.grid_columnconfigure(0, weight=1)
+        main_content.grid_rowconfigure(4, weight=1)  # Make output field expandable
+
+        self.create_input_field(main_content)
+        self.create_action_buttons(main_content)
+        self.create_tab_specific_options(main_content)
+        self.create_output_display(main_content)
+        self.create_separator(main_content)
+        self.create_audio_file_selector(main_content)
+        self.create_audio_visualizer(main_content)
+        self.create_audio_controls(main_content)
+        self.create_progress_and_status_bar(main_content)
+
+    def create_input_field(self, parent):
+        input_frame = ctk.CTkFrame(parent)
+        input_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
         input_frame.grid_columnconfigure(0, weight=1)
-        
+        input_frame.grid_rowconfigure(1, weight=1)
+
         ctk.CTkLabel(input_frame, text="Enter your text:").grid(row=0, column=0, sticky="w")
-        self.user_input = ctk.CTkTextbox(input_frame)
+        self.user_input = ctk.CTkTextbox(input_frame, height=100)
         self.user_input.grid(row=1, column=0, sticky="nsew")
 
-    def create_action_buttons(self):
-        action_frame = ctk.CTkFrame(self)
-        action_frame.grid(row=2, column=0, pady=10, padx=10, sticky="w")
-        self.generate_button = ctk.CTkButton(action_frame, text="Generate")
-        self.generate_button.pack(side="left", padx=(0, 5))
-        self.clear_button = ctk.CTkButton(action_frame, text="Clear")
-        self.clear_button.pack(side="left", padx=(0, 5))
-        self.llama_button = ctk.CTkButton(action_frame, text="Input to Llama3")
-        self.llama_button.pack(side="left")
+    def create_action_buttons(self, parent):
+        action_frame = ctk.CTkFrame(parent)
+        action_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        action_frame.grid_columnconfigure(3, weight=1)
 
-    def create_tab_specific_options(self):
+        self.generate_button = ctk.CTkButton(action_frame, text="Generate")
+        self.generate_button.grid(row=0, column=0, padx=(0, 5))
+
+        self.clear_button = ctk.CTkButton(action_frame, text="Clear")
+        self.clear_button.grid(row=0, column=1, padx=5)
+
+        self.llama_button = ctk.CTkButton(action_frame, text="Input to Llama3")
+        self.llama_button.grid(row=0, column=2, padx=5)
+
+    def create_tab_specific_options(self, parent):
         self.tab_widgets = {
-            'Music': self.create_music_widgets(),
-            'SFX': self.create_sfx_widgets(),
-            'Speech': self.create_speech_widgets()
+            'Music': self.create_music_widgets(parent),
+            'SFX': self.create_sfx_widgets(parent),
+            'Speech': self.create_speech_widgets(parent)
         }
         self.current_tab_widget = self.tab_widgets['Music']
-        self.current_tab_widget.grid(row=3, column=0, pady=5, padx=10, sticky="w")
+        self.current_tab_widget.grid(row=2, column=0, sticky="ew", pady=(0, 10))
 
-    def create_music_widgets(self):
-        frame = ctk.CTkFrame(self)
+    def create_output_display(self, parent):
+        output_frame = ctk.CTkFrame(parent)
+        output_frame.grid(row=3, column=0, sticky="nsew", pady=(0, 10))
+        output_frame.grid_columnconfigure(0, weight=1)
+        output_frame.grid_rowconfigure(1, weight=1)
+
+        ctk.CTkLabel(output_frame, text="Output:").grid(row=0, column=0, sticky="w")
+        self.output_text = ctk.CTkTextbox(output_frame, height=100, state="disabled")
+        self.output_text.grid(row=1, column=0, sticky="nsew")
+
+    def create_separator(self, parent):
+        separator = ctk.CTkFrame(parent, height=2, fg_color="gray")
+        separator.grid(row=4, column=0, sticky="ew", pady=(0, 10))
+
+    def create_audio_file_selector(self, parent):
+        self.audio_file_selector = AudioFileSelector(parent, self.config, self.project_model)
+        self.audio_file_selector.grid(row=5, column=0, sticky="ew", pady=(0, 10))
+
+    def create_audio_visualizer(self, parent):
+        self.audio_visualizer = AudioVisualizer(parent)
+        self.audio_visualizer.canvas_widget.grid(row=6, column=0, sticky="nsew", pady=(0, 10))
+
+    def create_audio_controls(self, parent):
+        control_frame = ctk.CTkFrame(parent)
+        control_frame.grid(row=7, column=0, sticky="ew", pady=(0, 10))
+
+        self.play_button = ctk.CTkButton(control_frame, text="Play", state="disabled", width=60)
+        self.play_button.grid(row=0, column=0, padx=(0, 2))
+
+        self.pause_resume_button = ctk.CTkButton(control_frame, text="Pause", state="disabled", width=60)
+        self.pause_resume_button.grid(row=0, column=1, padx=2)
+
+        self.stop_button = ctk.CTkButton(control_frame, text="Stop", state="disabled", width=60)
+        self.stop_button.grid(row=0, column=2, padx=2)
+
+    def create_progress_and_status_bar(self, parent):
+        progress_status_frame = ctk.CTkFrame(parent)
+        progress_status_frame.grid(row=8, column=0, sticky="ew")
+        progress_status_frame.grid_columnconfigure(0, weight=1)
+
+        self.progress_bar = ctk.CTkProgressBar(progress_status_frame)
+        self.progress_bar.grid(row=0, column=0, sticky="ew", pady=(0, 5))
+        self.progress_bar.set(0)
+        self.progress_bar.grid_remove()  # Initially hidden
+
+        self.status_var = ctk.StringVar()
+        self.status_var.set(" ")
+        self.status_bar = ctk.CTkLabel(progress_status_frame, textvariable=self.status_var, anchor="w")
+        self.status_bar.grid(row=1, column=0, sticky="ew")
+
+    def create_music_widgets(self, parent):
+        frame = ctk.CTkFrame(parent)
         self.instrumental_var = ctk.BooleanVar(value=False)
         checkbox = ctk.CTkCheckBox(frame, text="Instrumental", variable=self.instrumental_var)
         checkbox.pack()
         return frame
 
-    def create_sfx_widgets(self):
-        frame = ctk.CTkFrame(self)
+    def create_sfx_widgets(self, parent):
+        frame = ctk.CTkFrame(parent)
         self.duration_var = ctk.StringVar(value="0")
         label = ctk.CTkLabel(frame, text="Duration (0 = automatic, 0.5-22s):")
         entry = ctk.CTkEntry(frame, textvariable=self.duration_var, width=100)
@@ -78,8 +151,8 @@ class AudioGeneratorView(ctk.CTkFrame):
         entry.pack(side="left")
         return frame
 
-    def create_speech_widgets(self):
-        frame = ctk.CTkFrame(self)
+    def create_speech_widgets(self, parent):
+        frame = ctk.CTkFrame(parent)
         self.selected_voice = ctk.StringVar()
         label = ctk.CTkLabel(frame, text="Select Voice:")
         self.voice_dropdown = ctk.CTkOptionMenu(frame, variable=self.selected_voice, width=120)
@@ -87,66 +160,21 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.voice_dropdown.pack(side="left")
         return frame
 
-    def create_progress_and_status_bar(self):
-        progress_status_frame = ctk.CTkFrame(self)
-        progress_status_frame.grid(row=4, column=0, pady=(5, 0), padx=10, sticky="ew")
-        progress_status_frame.grid_columnconfigure(0, weight=1)
-
-        self.progress_bar = ctk.CTkProgressBar(progress_status_frame)
-        self.progress_bar.grid(row=0, column=0, pady=(0, 5), sticky="ew")
-        self.progress_bar.set(0)
-        self.progress_bar.grid_remove()  # Initially hidden
-
-        self.status_var = ctk.StringVar()
-        self.status_var.set(" ")
-        self.status_bar = ctk.CTkLabel(progress_status_frame, textvariable=self.status_var, anchor="w", padx=10)
-        self.status_bar.grid(row=1, column=0, sticky="ew")
-
-    def create_separator(self):
-        separator = ctk.CTkFrame(self, height=2, fg_color="gray")
-        separator.grid(row=5, column=0, pady=(5, 0), padx=10, sticky="ew")
-
-    def create_output_display(self):
-        output_frame = ctk.CTkFrame(self)
-        output_frame.grid(row=6, column=0, pady=(5, 5), padx=10, sticky="ew")
-        output_frame.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(output_frame, text="Output:").grid(row=0, column=0, sticky="w")
-        self.output_text = ctk.CTkTextbox(output_frame, height=60, state="disabled")
-        self.output_text.grid(row=1, column=0, sticky="ew")
-
-    def create_audio_components(self):
-        self.audio_visualizer = AudioVisualizer(self)
-        self.audio_visualizer.canvas_widget.grid(row=7, column=0, pady=(0, 5), padx=10, sticky="ew")
-        self.audio_file_selector = AudioFileSelector(self, self.config, self.project_model)
-        self.audio_file_selector.refresh_files(self.current_module.get().lower())
-        self.create_audio_controls()
-
-    def create_audio_controls(self):
-        audio_frame = ctk.CTkFrame(self)
-        audio_frame.grid(row=8, column=0, sticky="ew", padx=5, pady=2)
-
-        self.play_button = ctk.CTkButton(audio_frame, text="Play", state="disabled", width=60)
-        self.play_button.grid(row=0, column=0, padx=(0, 2))
-
-        self.pause_resume_button = ctk.CTkButton(audio_frame, text="Pause", state="disabled", width=60)
-        self.pause_resume_button.grid(row=0, column=1, padx=2)
-
-        self.stop_button = ctk.CTkButton(audio_frame, text="Stop", state="disabled", width=60)
-        self.stop_button.grid(row=0, column=2, padx=2)
-
     def update_tab_widgets(self):
         current_tab = self.current_module.get()
         self.current_tab_widget.grid_remove()
         self.current_tab_widget = self.tab_widgets[current_tab]
-        self.current_tab_widget.grid(row=3, column=0, pady=10, padx=11, sticky="w")
+        self.current_tab_widget.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         
         if current_tab in ["Music", "SFX"]:
-            self.llama_button.pack(side="left", padx=(0, 5))
+            self.llama_button.grid()
         else:
-            self.llama_button.pack_forget()
+            self.llama_button.grid_remove()
 
         # Update the audio file selector
         self.audio_file_selector.update_module(current_tab.lower())
+
+    
 
     def update_button_states(self, is_playing, is_paused):
         if is_playing:
@@ -184,6 +212,48 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.progress_bar.stop()
         self.progress_bar.grid_remove()
 
+    def on_drag_start(self, event):
+        if self.audio_file_selector.file_var.get() != "No files available":
+            self.drag_data = {'x': event.x, 'y': event.y, 'item': self.audio_file_selector.file_var.get()}
+            self.drag_icon = ctk.CTkLabel(self, text=self.drag_data['item'])
+            self.drag_icon.place(x=event.x_root - self.winfo_rootx(), y=event.y_root - self.winfo_rooty())
+
+    def on_drag_motion(self, event):
+        if hasattr(self, 'drag_icon'):
+            x = event.x_root - self.winfo_rootx()
+            y = event.y_root - self.winfo_rooty()
+            self.drag_icon.place(x=x, y=y)
+
+    def on_drag_release(self, event):
+        if hasattr(self, 'drag_icon'):
+            self.drag_icon.destroy()
+            del self.drag_icon
+
+            # Check if the release happened over the timeline window
+            timeline_view = self.master.timeline_controller.view
+            if timeline_view.winfo_containing(event.x_root, event.y_root) == timeline_view:
+                file_path = self.audio_file_selector.get_selected_file()
+                if file_path:
+                    # Determine which track to add the clip to based on the current module
+                    track_index = {"music": 1, "sfx": 2, "speech": 0}.get(self.current_module.get().lower(), 0)
+                    
+                    # Create clip data
+                    clip_data = {
+                        "name": os.path.basename(file_path),
+                        "file_path": file_path,
+                        "start_time": 0,  # You might want to calculate this based on the drop position
+                        "end_time": 10,   # You might want to calculate this based on the audio duration
+                        "color": {"music": "blue", "sfx": "green", "speech": "red"}.get(self.current_module.get().lower(), "gray")
+                    }
+                    
+                    # Add the clip to the timeline
+                    self.master.timeline_controller.add_clip_to_timeline(track_index, clip_data)
+                    messagebox.showinfo("Clip Added", f"Added {clip_data['name']} to the timeline.")
+                else:
+                    messagebox.showerror("Error", "No file selected.")
+            else:
+                messagebox.showinfo("Invalid Drop", "Please drop the file onto the timeline window.")
+
     def clear_input(self):
         self.user_input.delete("1.0", "end")
         self.output_text.configure(state="normal")
@@ -215,6 +285,9 @@ class AudioGeneratorView(ctk.CTkFrame):
 
     def set_file_select_command(self, command):
         self.audio_file_selector.set_file_select_command(command)
+
+    def set_timeline_command(self, command):
+        self.timeline_button.configure(command=command)
 
     def refresh_file_list(self, module):
         self.audio_file_selector.refresh_files(module)

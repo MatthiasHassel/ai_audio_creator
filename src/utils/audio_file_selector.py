@@ -1,9 +1,9 @@
 import os
 import customtkinter as ctk
 
-class AudioFileSelector:
+class AudioFileSelector(ctk.CTkFrame):
     def __init__(self, master, config, project_model):
-        self.master = master
+        super().__init__(master)
         self.config = config
         self.project_model = project_model
         self.file_var = ctk.StringVar(value="Select audio file")
@@ -12,23 +12,23 @@ class AudioFileSelector:
         self.create_widgets()
 
     def create_widgets(self):
-        selector_frame = ctk.CTkFrame(self.master)
-        selector_frame.grid(row=9, column=0, pady=10, padx=10, sticky="ew")
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=0)
 
         self.file_dropdown = ctk.CTkOptionMenu(
-            selector_frame, 
+            self, 
             variable=self.file_var,
             width=290,
             command=self.on_file_select
         )
-        self.file_dropdown.pack(side="left", padx=(0, 10))
+        self.file_dropdown.grid(row=0, column=0, padx=(0, 10), sticky="ew")
 
         self.refresh_button = ctk.CTkButton(
-            selector_frame,
+            self,
             text="Refresh",
             command=self.refresh_files
         )
-        self.refresh_button.pack(side="left")
+        self.refresh_button.grid(row=0, column=1, sticky="e")
 
     def get_output_dir(self, module):
         if self.project_model.current_project:

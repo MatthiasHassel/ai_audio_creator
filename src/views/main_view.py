@@ -4,6 +4,7 @@ from tkinter import filedialog
 import os
 from views.audio_generator_view import AudioGeneratorView
 from views.script_editor_view import ScriptEditorView
+from controllers.timeline_controller import TimelineController
 
 class MainView(ctk.CTk):
     def __init__(self, config, project_model):
@@ -12,6 +13,7 @@ class MainView(ctk.CTk):
         self.project_model = project_model
         self.setup_window()
         self.create_components()
+        self.protocol("WM_DELETE_WINDOW", self.hide)
 
     def setup_window(self):
         self.title(self.config_data['gui']['window_title'])
@@ -37,13 +39,10 @@ class MainView(ctk.CTk):
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.quit)
 
-    def create_project_frame(self):
-        project_frame = ctk.CTkFrame(self)
-        project_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=5)
-        
-        ctk.CTkLabel(project_frame, text="Current Project:").pack(side="left", padx=(0, 5))
-        self.current_project_var = ctk.StringVar(value="No project open")
-        ctk.CTkLabel(project_frame, textvariable=self.current_project_var).pack(side="left")
+        self.window_menu = tk.Menu(self.menu, tearoff=0)
+        self.menu.add_cascade(label="Window", menu=self.window_menu)
+        self.window_menu.add_command(label="Show/Hide Timeline", command=self.toggle_timeline)
+        self.window_menu.add_command(label="Show/Hide Audio Creator", command=self.toggle_visibility)
 
     def create_main_content(self):
         self.paned_window = tk.PanedWindow(self, orient=tk.HORIZONTAL, sashwidth=10, sashrelief=tk.RAISED, bg='#3E3E3E')
@@ -56,6 +55,29 @@ class MainView(ctk.CTk):
         self.paned_window.add(self.audio_generator_view, stretch="always")
 
         self.paned_window.after(10, self.set_initial_sash_position)
+
+    def toggle_timeline(self):
+        if hasattr(self, 'timeline_controller'):
+            self.timeline_controller.toggle_visibility()
+
+    def toggle_visibility(self):
+        if self.winfo_viewable():
+            self.hide()
+        else:
+            self.show()
+
+    def hide(self):
+        self.withdraw()
+
+    def show(self):
+        self.deiconify()
+
+    def set_timeline_controller(self, timeline_controller):
+        self.timeline_controller = timeline_controller
+        self.audio_generator_view.set_timeline_command(self.timeline_controller.show)
+
+    def on_close(self):
+        self.withdraw()  # Hide the main window instead of destroying it
 
     def set_initial_sash_position(self):
         width = self.paned_window.winfo_width()
@@ -75,6 +97,14 @@ class MainView(ctk.CTk):
 
     def set_save_project_callback(self, callback):
         self.save_project_callback = callback
+    
+    def create_project_frame(self):
+        project_frame = ctk.CTkFrame(self)
+        project_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=5)
+        
+        ctk.CTkLabel(project_frame, text="Current Project:").pack(side="left", padx=(0, 5))
+        self.current_project_var = ctk.StringVar(value="No project open")
+        ctk.CTkLabel(project_frame, textvariable=self.current_project_var).pack(side="left")
 
     def new_project(self):
         if hasattr(self, 'new_project_callback'):
@@ -84,6 +114,13 @@ class MainView(ctk.CTk):
         self.status_var = tk.StringVar()
         self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var, anchor="w")
         self.status_bar.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
+
+    def create_timeline_button(self):
+        timeline_button = ctk.CTkButton(self, text="Open Timeline", command=self.open_timeline)
+        timeline_button.grid(row=3, column=0, pady=10)
+
+    def open_timeline(self):
+        self.timeline_controller.show()
 
     def update_status(self, message):
         self.status_var.set(message)
