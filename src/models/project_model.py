@@ -7,6 +7,7 @@ class ProjectModel:
         self.base_projects_dir = base_projects_dir
         self.current_project = None
         self.metadata = {}
+        self.default_project_name = "Default Project"
 
     def create_project(self, project_name):
         project_dir = os.path.join(self.base_projects_dir, project_name)
@@ -35,6 +36,11 @@ class ProjectModel:
         
         self.current_project = project_name
         self.load_project_metadata()
+
+    def ensure_default_project(self):
+        if not os.path.exists(os.path.join(self.base_projects_dir, self.default_project_name)):
+            self.create_project(self.default_project_name)
+        self.load_project(self.default_project_name)
 
     def save_project_metadata(self):
         if not self.current_project:

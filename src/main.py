@@ -26,7 +26,6 @@ def main():
     project_model = ProjectModel(config['projects']['base_dir'])
     view = MainView(config, project_model)
     controller = MainController(main_model, view, config, project_model)
-    controller.timeline_controller.set_toggle_audio_creator_command(controller.view.toggle_visibility)
 
     # Run the application
     controller.run()

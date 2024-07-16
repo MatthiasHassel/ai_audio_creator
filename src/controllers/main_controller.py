@@ -11,8 +11,13 @@ class MainController:
         self.view = view
         self.config = config
         self.project_model = project_model
+        self.audio_controller = None
+        self.script_editor_controller = None
+        self.timeline_controller = None
+
         self.setup_controllers()
         self.setup_callbacks()
+        self.load_default_project()
 
     def setup_controllers(self):
         audio_model = self.model.get_audio_model()
@@ -34,6 +39,15 @@ class MainController:
         # Set up the connection between Timeline and Audio Creator
         self.timeline_controller.set_toggle_audio_creator_command(self.view.toggle_visibility)
         self.audio_controller.set_show_timeline_command(self.timeline_controller.show)
+
+    def load_default_project(self):
+        try:
+            self.project_model.ensure_default_project()
+            self.view.update_current_project(self.project_model.current_project)
+            self.update_output_directories()
+        except Exception as e:
+            self.view.update_status(f"Error loading default project: {str(e)}")
+
 
     def new_project(self):
         project_name = simpledialog.askstring("New Project", "Enter project name:")
@@ -88,14 +102,17 @@ class MainController:
         self.audio_controller.clear_input()
 
     def update_output_directories(self):
-        self.audio_controller.update_output_directories(
-            music_dir=self.project_model.get_output_dir('music'),
-            sfx_dir=self.project_model.get_output_dir('sfx'),
-            speech_dir=self.project_model.get_output_dir('speech')
-        )
-        self.script_editor_controller.update_scripts_directory(
-            self.project_model.get_scripts_dir()
-        )
+        if self.audio_controller:
+            self.audio_controller.update_output_directories(
+                music_dir=self.project_model.get_output_dir('music'),
+                sfx_dir=self.project_model.get_output_dir('sfx'),
+                speech_dir=self.project_model.get_output_dir('speech')
+            )
+        if self.script_editor_controller:
+            self.script_editor_controller.update_scripts_directory(
+                self.project_model.get_scripts_dir()
+            )
+
 
     def analyze_script(self):
         script_text = self.script_editor_controller.get_script_text()
@@ -116,9 +133,11 @@ class MainController:
         self.view.run()
 
     def run(self):
-        self.audio_controller.load_voices()
+        if self.audio_controller:
+            self.audio_controller.load_voices()
         self.view.run()
 
     def quit(self):
-        self.audio_controller.quit()
+        if self.audio_controller:
+            self.audio_controller.quit()
         self.view.quit()
