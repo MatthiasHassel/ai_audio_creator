@@ -13,10 +13,10 @@ class TimelineController:
         if self.view is None or not self.view.winfo_exists():
             self.view = TimelineView(self.master)
             self.setup_view_bindings()
-        self.update_project_name(self.project_model.current_project)
+        self.view.update_title(self.project_model.current_project)
         self.load_timeline_data()
         self.view.deiconify()
-
+    
     def hide(self):
         if self.view and self.view.winfo_exists():
             self.view.withdraw()
@@ -27,6 +27,9 @@ class TimelineController:
         self.view.play_button.configure(command=self.play_timeline)
         self.view.stop_button.configure(command=self.stop_timeline)
         self.view.toggle_audio_creator_button.configure(command=self.toggle_audio_creator)
+        self.view.set_rename_track_callback(self.rename_track)
+        self.view.set_delete_track_callback(self.delete_track)
+        self.view.bind("<Configure>", self.view.on_resize)
 
     def load_timeline_data(self):
         if self.view:
@@ -53,10 +56,17 @@ class TimelineController:
             self.model.mark_as_saved()
 
     def add_track(self):
-        if self.view:
-            track_name = f"Track {len(self.model.get_tracks()) + 1}"
-            self.view.add_track(track_name)
-            self.model.add_track({'name': track_name, 'clips': []})
+        track_name = f"Track {len(self.model.get_tracks()) + 1}"
+        self.view.add_track(track_name)
+        self.model.add_track({'name': track_name, 'clips': []})
+
+    def rename_track(self, track, new_name):
+        track_index = self.view.tracks.index(track)
+        self.model.rename_track(track_index, new_name)
+
+    def delete_track(self, track):
+        track_index = self.view.tracks.index(track)
+        self.model.remove_track(track_index)
 
     def add_clip_to_timeline(self, track_name, clip_data):
         if self.view:
