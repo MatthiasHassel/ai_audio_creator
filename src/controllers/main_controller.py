@@ -28,7 +28,7 @@ class MainController:
         script_view = self.view.get_script_editor_view()
         self.script_editor_controller = ScriptEditorController(script_model, script_view, self.config, self.project_model)
 
-        self.timeline_controller = TimelineController(self.view, self.model)
+        self.timeline_controller = TimelineController(self.view, self.model, self.project_model)
         self.view.set_timeline_controller(self.timeline_controller)
 
     def setup_callbacks(self):
@@ -43,31 +43,54 @@ class MainController:
     def load_default_project(self):
         try:
             self.project_model.ensure_default_project()
-            self.view.update_current_project(self.project_model.current_project)
+            self.update_current_project(self.project_model.current_project)
             self.update_output_directories()
+            if self.timeline_controller:
+                self.timeline_controller.on_project_change()
         except Exception as e:
             self.view.update_status(f"Error loading default project: {str(e)}")
 
+    def update_current_project(self, project_name):
+        self.view.update_current_project(project_name)
+        if self.timeline_controller:
+            self.timeline_controller.on_project_change()
 
     def new_project(self):
-        project_name = simpledialog.askstring("New Project", "Enter project name:")
+        project_name = self.view.ask_string("New Project", "Enter project name:")
         if project_name:
             try:
                 self.project_model.create_project(project_name)
-                self.view.update_current_project(project_name)
+                self.update_current_project(project_name)
                 self.update_output_directories()
                 self.clear_input_fields()
                 self.view.update_status(f"Project '{project_name}' created successfully.")
-                messagebox.showinfo("Success", f"Project '{project_name}' created successfully.")
+                self.view.show_info("Success", f"Project '{project_name}' created successfully.")
             except ValueError as e:
                 error_message = str(e)
                 self.view.update_status(f"Error: {error_message}")
-                messagebox.showerror("Error", error_message)
+                self.view.show_error("Error", error_message)
+
+    def save_project(self):
+        if not self.project_model.current_project:
+            self.view.show_warning("No Project", "No project is currently open.")
+            return
+        try:
+            self.project_model.save_project_metadata()
+            if self.timeline_controller:
+                self.timeline_controller.save_timeline_data()
+            self.view.update_status("Project saved successfully.")
+            self.view.show_info("Success", "Project saved successfully.")
+        except Exception as e:
+            error_message = f"Failed to save project: {str(e)}"
+            self.view.update_status(error_message)
+            self.view.show_error("Error", error_message)
 
     def open_project(self, project_name):
         try:
+            if self.timeline_controller:
+                self.timeline_controller.hide()  # Hide the timeline view before changing projects
             self.project_model.load_project(project_name)
-            self.view.update_current_project(project_name)
+            self.update_current_project(project_name)
             self.update_output_directories()
             self.clear_input_fields()
             last_script = self.project_model.get_last_opened_script()
@@ -78,24 +101,11 @@ class MainController:
                 else:
                     self.view.update_status(f"Last opened script not found: {last_script}")
             self.view.update_status(f"Project '{project_name}' opened successfully.")
-            messagebox.showinfo("Success", f"Project '{project_name}' opened successfully.")
+            self.view.show_info("Success", f"Project '{project_name}' opened successfully.")
         except ValueError as e:
             error_message = str(e)
             self.view.update_status(f"Error: {error_message}")
-            messagebox.showerror("Error", error_message)
-
-    def save_project(self):
-        if not self.project_model.current_project:
-            messagebox.showwarning("No Project", "No project is currently open.")
-            return
-        try:
-            self.project_model.save_project_metadata()
-            self.view.update_status("Project metadata saved successfully.")
-            messagebox.showinfo("Success", "Project metadata saved successfully.")
-        except Exception as e:
-            error_message = f"Failed to save project metadata: {str(e)}"
-            self.view.update_status(error_message)
-            messagebox.showerror("Error", error_message)
+            self.view.show_error("Error", error_message)
 
     def clear_input_fields(self):
         self.script_editor_controller.clear_text()

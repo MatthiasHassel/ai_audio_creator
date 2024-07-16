@@ -8,6 +8,7 @@ class ProjectModel:
         self.current_project = None
         self.metadata = {}
         self.default_project_name = "Default Project"
+        self.timeline_data = []
 
     def create_project(self, project_name):
         project_dir = os.path.join(self.base_projects_dir, project_name)
@@ -27,7 +28,9 @@ class ProjectModel:
             "last_modified": datetime.datetime.now().isoformat(),
             "last_opened_script": None
         }
+        self.timeline_data = []
         self.save_project_metadata()
+        self.save_timeline_data()
 
     def load_project(self, project_name):
         project_dir = os.path.join(self.base_projects_dir, project_name)
@@ -36,6 +39,7 @@ class ProjectModel:
         
         self.current_project = project_name
         self.load_project_metadata()
+        self.load_timeline_data()
 
     def ensure_default_project(self):
         if not os.path.exists(os.path.join(self.base_projects_dir, self.default_project_name)):
@@ -59,6 +63,29 @@ class ProjectModel:
                 self.metadata = json.load(f)
         else:
             self.metadata = {}
+
+    def save_timeline_data(self):
+        if not self.current_project:
+            raise ValueError("No project is currently active")
+        
+        timeline_file = os.path.join(self.get_project_dir(), "timeline_data.json")
+        with open(timeline_file, 'w') as f:
+            json.dump(self.timeline_data, f, indent=2)
+
+    def load_timeline_data(self):
+        timeline_file = os.path.join(self.get_project_dir(), "timeline_data.json")
+        if os.path.exists(timeline_file):
+            with open(timeline_file, 'r') as f:
+                self.timeline_data = json.load(f)
+        else:
+            self.timeline_data = []
+
+    def get_timeline_data(self):
+        return self.timeline_data
+
+    def update_timeline_data(self, new_timeline_data):
+        self.timeline_data = new_timeline_data
+        self.save_timeline_data()
 
     def get_last_opened_script(self):
         return self.metadata.get('last_opened_script')

@@ -1,10 +1,9 @@
 import customtkinter as ctk
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 import os
 from views.audio_generator_view import AudioGeneratorView
 from views.script_editor_view import ScriptEditorView
-from controllers.timeline_controller import TimelineController
 
 class MainView(ctk.CTk):
     def __init__(self, config, project_model):
@@ -13,17 +12,23 @@ class MainView(ctk.CTk):
         self.project_model = project_model
         self.setup_window()
         self.create_components()
-        self.protocol("WM_DELETE_WINDOW", self.hide)
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def setup_window(self):
-        self.title(self.config_data['gui']['window_title'])
+        self.base_title = "Audio Creator"
+        self.update_title()
         self.geometry(self.config_data['gui']['window_size'])
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
+    def update_title(self, project_name=None):
+        if project_name:
+            self.title(f"{self.base_title} - {project_name}")
+        else:
+            self.title(self.base_title)
+
     def create_components(self):
         self.create_menu()
-        self.create_project_frame()
         self.create_main_content()
         self.create_status_bar()
 
@@ -122,8 +127,18 @@ class MainView(ctk.CTk):
     def open_timeline(self):
         self.timeline_controller.show()
 
+    def show_info(self, title, message):
+        messagebox.showinfo(title, message)
+
+    def show_error(self, title, message):
+        messagebox.showerror(title, message)
+
+    def show_warning(self, title, message):
+        messagebox.showwarning(title, message)
+
     def update_status(self, message):
-        self.status_var.set(message)
+        if hasattr(self, 'status_var'):
+            self.status_var.set(message)
 
     def open_project(self):
         if hasattr(self, 'open_project_callback'):
@@ -141,7 +156,9 @@ class MainView(ctk.CTk):
             self.save_project_callback()
 
     def update_current_project(self, project_name):
-        self.current_project_var.set(project_name)
+        self.update_title(project_name)
+        if hasattr(self, 'timeline_controller'):
+            self.timeline_controller.update_project_name(project_name)
 
     def update_analysis_results(self, analyzed_script, suggested_voices, element_counts, estimated_duration, categorized_sentences):
         self.script_editor_view.update_analysis_results(
