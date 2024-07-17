@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import tkinter as tk
+from tkinter import ttk
 
 class TimelineView(ctk.CTkToplevel):
     def __init__(self, master, *args, **kwargs):
@@ -11,15 +12,24 @@ class TimelineView(ctk.CTkToplevel):
         self.protocol("WM_DELETE_WINDOW", self.withdraw)
         self.tracks = []
         self.selected_track = None
-        self.track_height = 60
+        self.base_track_height = 60
+        self.track_height = self.base_track_height
+        self.min_track_height = 30  # Adjust this value to set the minimum track height
+        self.max_track_height = 200  # Adjust this value to set the maximum track height
         self.seconds_per_pixel = 0.1
+        self.x_zoom = 1.0
+        self.y_zoom = 1.0
+        self.min_x_zoom = 0.1  # Adjust this value to change the minimum x-axis zoom
+        self.max_x_zoom = 5.0  # Adjust this value to change the maximum x-axis zoom
+        
+        self.option_key_pressed = False
+        
         self.create_widgets()
         self.bind("<Delete>", self.delete_selected_track)
-
-    def update_title(self, project_name=None):
-        if project_name:
-            self.current_project = project_name
-        self.title(f"{self.base_title} - {self.current_project}")
+        self.bind("<KeyPress-Alt_L>", self.option_key_press)
+        self.bind("<KeyRelease-Alt_L>", self.option_key_release)
+        self.bind_all("<MouseWheel>", self.on_mouse_scroll)
+        self.bind_all("<Shift-MouseWheel>", self.on_shift_mouse_scroll)
 
     def create_widgets(self):
         self.create_toolbar()
@@ -38,7 +48,20 @@ class TimelineView(ctk.CTkToplevel):
         self.stop_button = ctk.CTkButton(toolbar, text="Stop", command=self.stop_timeline)
         self.stop_button.pack(side=tk.LEFT, padx=5)
 
-        self.toggle_audio_creator_button = ctk.CTkButton(toolbar, text="Show Audio Creator")
+        ttk.Label(toolbar, text="   ").pack(side=tk.LEFT)
+
+        self.x_zoom_slider = ttk.Scale(toolbar, from_=self.min_x_zoom, to=self.max_x_zoom, orient=tk.HORIZONTAL, 
+                                       command=self.update_x_zoom, length=100)
+        self.x_zoom_slider.set(1.0)
+        self.x_zoom_slider.pack(side=tk.LEFT, padx=(0, 5))
+
+        min_y_zoom = self.min_track_height / self.base_track_height
+        max_y_zoom = self.max_track_height / self.base_track_height
+        self.y_zoom_slider = ttk.Scale(toolbar, from_=min_y_zoom, to=max_y_zoom, orient=tk.VERTICAL, 
+                                       command=self.update_y_zoom, length=50)
+        self.y_zoom_slider.set(1.0)
+        self.y_zoom_slider.pack(side=tk.LEFT)
+        self.toggle_audio_creator_button = ctk.CTkButton(toolbar, text="Toggle Audio Creator")
         self.toggle_audio_creator_button.pack(side=tk.RIGHT, padx=5)
 
     def create_main_content(self):
@@ -64,6 +87,11 @@ class TimelineView(ctk.CTkToplevel):
         self.timeline_canvas.pack(expand=True, fill=tk.BOTH)
         self.timeline_canvas.bind("<Configure>", self.on_canvas_resize)
 
+    def redraw_timeline(self):
+        if hasattr(self, 'track_label_canvas'):
+            self.update_track_labels()
+            self.draw_grid()
+
     def on_canvas_resize(self, event):
         self.draw_grid()
         self.update_track_labels()
@@ -73,27 +101,25 @@ class TimelineView(ctk.CTkToplevel):
         width = self.timeline_canvas.winfo_width()
         height = self.timeline_canvas.winfo_height()
         
-        # Draw vertical lines for seconds
-        for x in range(0, width, int(1 / self.seconds_per_pixel)):
+        for x in range(0, width, int(1 / (self.seconds_per_pixel * self.x_zoom))):
             self.timeline_canvas.create_line(x, 0, x, height, fill="gray50", tags="grid")
         
-        # Draw horizontal lines for tracks
         for i in range(len(self.tracks) + 1):
             y = i * self.track_height
             self.timeline_canvas.create_line(0, y, width, y, fill="gray50", tags="grid")
 
     def update_track_labels(self):
-        self.track_label_canvas.delete("all")
-        for i, track in enumerate(self.tracks):
-            y = i * self.track_height
-            fill_color = "gray35" if track == self.selected_track else "gray25"
-            self.track_label_canvas.create_rectangle(0, y, 200, y + self.track_height, fill=fill_color, tags=f"track_{i}")
-            self.track_label_canvas.create_text(10, y + self.track_height // 2, text=track["name"], anchor="w", fill="white", tags=f"track_{i}")
-            
-            # Bind events to the track label area
-            self.track_label_canvas.tag_bind(f"track_{i}", "<Button-1>", lambda e, t=track: self.select_track(t))
-            self.track_label_canvas.tag_bind(f"track_{i}", "<Double-Button-1>", lambda e, t=track: self.start_rename_track(t))
-            self.track_label_canvas.tag_bind(f"track_{i}", "<Button-2>", lambda e, t=track: self.show_track_context_menu(e, t))
+        if hasattr(self, 'track_label_canvas'):
+            self.track_label_canvas.delete("all")
+            for i, track in enumerate(self.tracks):
+                y = i * self.track_height
+                fill_color = "gray35" if track == self.selected_track else "gray25"
+                self.track_label_canvas.create_rectangle(0, y, 200, y + self.track_height, fill=fill_color, tags=f"track_{i}")
+                self.track_label_canvas.create_text(10, y + self.track_height // 2, text=track["name"], anchor="w", fill="white", tags=f"track_{i}")
+                
+                self.track_label_canvas.tag_bind(f"track_{i}", "<Button-1>", lambda e, t=track: self.select_track(t))
+                self.track_label_canvas.tag_bind(f"track_{i}", "<Double-Button-1>", lambda e, t=track: self.start_rename_track(t))
+                self.track_label_canvas.tag_bind(f"track_{i}", "<Button-2>", lambda e, t=track: self.show_track_context_menu(e, t))
 
     def add_track(self, track_name=None):
         if track_name is None:
@@ -107,30 +133,14 @@ class TimelineView(ctk.CTkToplevel):
         if self.selected_track:
             self.timeline_canvas.delete("track_highlight")
         self.selected_track = track
-        self.update_track_labels()  # This will update the label colors
+        self.update_track_labels()
         
-        # Highlight the entire row in the timeline
         track_index = self.tracks.index(track)
         y1 = track_index * self.track_height
         y2 = y1 + self.track_height
         width = self.timeline_canvas.winfo_width()
         self.timeline_canvas.create_rectangle(0, y1, width, y2, fill="gray40", outline="", tags="track_highlight")
         self.timeline_canvas.tag_lower("track_highlight", "grid")
-
-    def create_track(self, name):
-        track_frame = ctk.CTkFrame(self.track_list, fg_color="gray25", height=30)
-        track_frame.pack(fill=tk.X, padx=2, pady=(0, 2))
-        track_frame.pack_propagate(False)
-
-        track_label = ctk.CTkLabel(track_frame, text=name, anchor="w", fg_color="gray25")
-        track_label.pack(side=tk.LEFT, padx=5)
-
-        track_data = {"name": name, "frame": track_frame, "label": track_label, "clips": []}
-        self.tracks.append(track_data)
-
-        track_frame.bind("<Button-1>", lambda e, t=track_data: self.select_track(t))
-        track_label.bind("<Double-Button-1>", lambda e, t=track_data: self.start_rename_track(t))
-        track_frame.bind("<Button-3>", lambda e, t=track_data: self.show_track_context_menu(e, t))
 
     def start_rename_track(self, track):
         track_index = self.tracks.index(track)
@@ -146,10 +156,10 @@ class TimelineView(ctk.CTkToplevel):
         new_name = entry.get()
         self.track_label_canvas.delete(entry_window)
         if new_name != track["name"]:
-            if self.rename_track_callback:
+            track["name"] = new_name
+            if hasattr(self, 'rename_track_callback'):
                 self.rename_track_callback(track, new_name)
             self.update_track_labels()
-
 
     def show_track_context_menu(self, event, track):
         context_menu = tk.Menu(self, tearoff=0)
@@ -159,10 +169,13 @@ class TimelineView(ctk.CTkToplevel):
 
     def delete_track(self, track):
         if track in self.tracks:
-            if self.delete_track_callback:
-                self.delete_track_callback(track)
+            self.tracks.remove(track)
+            if self.selected_track == track:
+                self.selected_track = None
             self.update_track_labels()
             self.draw_grid()
+            if hasattr(self, 'delete_track_callback'):
+                self.delete_track_callback(track)
 
     def delete_selected_track(self, event=None):
         if self.selected_track:
@@ -187,8 +200,55 @@ class TimelineView(ctk.CTkToplevel):
 
     def play_timeline(self):
         print("Playing timeline")
-        # Implement playback logic here
 
     def stop_timeline(self):
         print("Stopping timeline")
-        # Implement stop logic here
+
+    def option_key_press(self, event):
+        self.option_key_pressed = True
+
+    def option_key_release(self, event):
+        self.option_key_pressed = False
+    
+    def on_mouse_scroll(self, event):
+        if self.option_key_pressed:
+            if event.delta > 0:
+                self.zoom_y(1.1)
+            else:
+                self.zoom_y(0.9)
+
+    def on_shift_mouse_scroll(self, event):
+        if self.option_key_pressed:
+            if event.delta > 0:
+                self.zoom_x(1.1)
+            else:
+                self.zoom_x(0.9)
+
+    def zoom_x(self, factor):
+        new_zoom = self.x_zoom * factor
+        new_zoom = max(self.min_x_zoom, min(new_zoom, self.max_x_zoom))
+        self.x_zoom_slider.set(new_zoom)
+
+    def zoom_y(self, factor):
+        new_zoom = self.y_zoom * factor
+        new_track_height = self.base_track_height * new_zoom
+        if self.min_track_height <= new_track_height <= self.max_track_height:
+            self.y_zoom_slider.set(new_zoom)
+
+    def update_x_zoom(self, value):
+        self.x_zoom = float(value)
+        self.seconds_per_pixel = 0.1 / self.x_zoom
+        self.redraw_timeline()
+
+    def update_y_zoom(self, value):
+        self.y_zoom = float(value)
+        self.track_height = self.base_track_height * self.y_zoom
+        self.redraw_timeline()
+
+    def update_title(self, project_name=None):
+        if project_name:
+            self.current_project = project_name
+        self.title(f"{self.base_title} - {self.current_project}")
+
+    def set_toggle_audio_creator_command(self, command):
+        self.toggle_audio_creator_button.configure(command=command)

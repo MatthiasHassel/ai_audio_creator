@@ -26,7 +26,7 @@ class TimelineController:
         self.view.add_track_button.configure(command=self.add_track)
         self.view.play_button.configure(command=self.play_timeline)
         self.view.stop_button.configure(command=self.stop_timeline)
-        self.view.toggle_audio_creator_button.configure(command=self.toggle_audio_creator)
+        self.view.set_toggle_audio_creator_command(self.toggle_audio_creator)
         self.view.set_rename_track_callback(self.rename_track)
         self.view.set_delete_track_callback(self.delete_track)
 
