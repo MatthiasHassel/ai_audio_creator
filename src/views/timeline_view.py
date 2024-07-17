@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import tkinter as tk
+from tkinter import messagebox
 
 class TimelineView(ctk.CTkToplevel):
     def __init__(self, master, *args, **kwargs):
@@ -93,7 +94,7 @@ class TimelineView(ctk.CTkToplevel):
             # Bind events to the track label area
             self.track_label_canvas.tag_bind(f"track_{i}", "<Button-1>", lambda e, t=track: self.select_track(t))
             self.track_label_canvas.tag_bind(f"track_{i}", "<Double-Button-1>", lambda e, t=track: self.start_rename_track(t))
-            self.track_label_canvas.tag_bind(f"track_{i}", "<Button-3>", lambda e, t=track: self.show_track_context_menu(e, t))
+            self.track_label_canvas.tag_bind(f"track_{i}", "<Button-2>", lambda e, t=track: self.show_track_context_menu(e, t))
 
     def add_track(self, track_name=None):
         if track_name is None:
@@ -117,6 +118,7 @@ class TimelineView(ctk.CTkToplevel):
         self.timeline_canvas.create_rectangle(0, y1, width, y2, fill="gray40", outline="", tags="track_highlight")
         self.timeline_canvas.tag_lower("track_highlight", "grid")
 
+
     def create_track(self, name):
         track_frame = ctk.CTkFrame(self.track_list, fg_color="gray25", height=30)
         track_frame.pack(fill=tk.X, padx=2, pady=(0, 2))
@@ -132,6 +134,12 @@ class TimelineView(ctk.CTkToplevel):
         track_label.bind("<Double-Button-1>", lambda e, t=track_data: self.start_rename_track(t))
         track_frame.bind("<Button-3>", lambda e, t=track_data: self.show_track_context_menu(e, t))
 
+    def show_track_context_menu(self, event, track):
+        context_menu = tk.Menu(self, tearoff=0)
+        context_menu.add_command(label="Rename", command=lambda: self.start_rename_track(track))
+        context_menu.add_command(label="Delete", command=lambda: self.delete_track(track))
+        context_menu.tk_popup(event.x_root, event.y_root)
+
     def start_rename_track(self, track):
         track_index = self.tracks.index(track)
         y = track_index * self.track_height
@@ -146,10 +154,9 @@ class TimelineView(ctk.CTkToplevel):
         new_name = entry.get()
         self.track_label_canvas.delete(entry_window)
         if new_name != track["name"]:
-            track["name"] = new_name
-            self.update_track_labels()
             if self.rename_track_callback:
                 self.rename_track_callback(track, new_name)
+            self.update_track_labels()
 
 
     def show_track_context_menu(self, event, track):
@@ -160,17 +167,19 @@ class TimelineView(ctk.CTkToplevel):
 
     def delete_track(self, track):
         if track in self.tracks:
-            self.tracks.remove(track)
-            if self.selected_track == track:
-                self.selected_track = None
-            self.update_track_labels()
-            self.draw_grid()
             if self.delete_track_callback:
                 self.delete_track_callback(track)
+            self.update_track_labels()
+            self.draw_grid()
 
     def delete_selected_track(self, event=None):
         if self.selected_track:
             self.delete_track(self.selected_track)
+        
+    def update_tracks(self, new_tracks):
+        self.tracks = new_tracks
+        self.update_track_labels()
+        self.draw_grid()
 
     def clear_tracks(self):
         self.tracks.clear()

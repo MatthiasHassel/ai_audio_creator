@@ -29,7 +29,6 @@ class TimelineController:
         self.view.toggle_audio_creator_button.configure(command=self.toggle_audio_creator)
         self.view.set_rename_track_callback(self.rename_track)
         self.view.set_delete_track_callback(self.delete_track)
-        self.view.bind("<Configure>", self.view.on_resize)
 
     def load_timeline_data(self):
         if self.view:
@@ -61,12 +60,16 @@ class TimelineController:
         self.model.add_track({'name': track_name, 'clips': []})
 
     def rename_track(self, track, new_name):
-        track_index = self.view.tracks.index(track)
-        self.model.rename_track(track_index, new_name)
+        track_index = self.model.get_track_index(track)
+        if track_index is not None:
+            self.model.rename_track(track_index, new_name)
+            self.view.update_tracks(self.model.get_tracks())
 
     def delete_track(self, track):
-        track_index = self.view.tracks.index(track)
-        self.model.remove_track(track_index)
+        track_index = self.model.get_track_index(track)
+        if track_index is not None:
+            self.model.remove_track(track_index)
+            self.view.update_tracks(self.model.get_tracks())
 
     def add_clip_to_timeline(self, track_name, clip_data):
         if self.view:
