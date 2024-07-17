@@ -7,14 +7,20 @@ class TimelineModel:
         self.tracks.append(track_data)
         self.is_modified = True
 
-    def remove_track(self, track_index):
-        if 0 <= track_index < len(self.tracks):
-            del self.tracks[track_index]
-            self.is_modified = True
+    def get_track_index(self, track):
+        for index, t in enumerate(self.tracks):
+            if t == track:
+                return index
+        return None
 
     def rename_track(self, track_index, new_name):
         if 0 <= track_index < len(self.tracks):
             self.tracks[track_index]['name'] = new_name
+            self.is_modified = True
+
+    def remove_track(self, track_index):
+        if 0 <= track_index < len(self.tracks):
+            del self.tracks[track_index]
             self.is_modified = True
 
     def add_clip_to_track(self, track_index, clip_data):
