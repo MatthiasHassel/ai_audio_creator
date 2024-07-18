@@ -8,7 +8,7 @@ class TimelineController:
     def __init__(self, master, model, project_model):
         self.master = master
         self.model = model
-        self.timeline_model = model.get_timeline_model()  # Get the TimelineModel from MainModel
+        self.timeline_model = model.get_timeline_model()
         self.project_model = project_model
         self.view = None
 
@@ -25,16 +25,15 @@ class TimelineController:
             self.view.withdraw()
 
     def setup_view_bindings(self):
-        self.view.protocol("WM_DELETE_WINDOW", self.hide)
-        self.view.add_track_button.configure(command=self.add_track)
-        self.view.play_button.configure(command=self.play_timeline)
-        self.view.stop_button.configure(command=self.stop_timeline)
-        self.view.set_toggle_audio_creator_command(self.toggle_audio_creator)
-        self.view.set_rename_track_callback(self.rename_track)
-        self.view.set_remove_track_callback(self.remove_track)
-        self.view.timeline_canvas.drop_target_register(DND_FILES)
-        self.view.timeline_canvas.dnd_bind('<<Drop>>', self.on_drop)
-        self.view.set_add_clip_callback(self.add_clip_to_model)
+        if self.view:
+            self.view.protocol("WM_DELETE_WINDOW", self.hide)
+            self.view.add_track_button.configure(command=self.add_track)
+            self.view.play_button.configure(command=self.play_timeline)
+            self.view.stop_button.configure(command=self.stop_timeline)
+            self.view.set_toggle_audio_creator_command(self.toggle_audio_creator)
+            self.view.set_rename_track_callback(self.rename_track)
+            self.view.set_remove_track_callback(self.remove_track)
+            self.view.set_add_clip_callback(self.add_clip_to_model)
 
     def load_timeline_data(self):
         if self.view:

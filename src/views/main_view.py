@@ -16,6 +16,7 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
         self.setup_window()
         self.create_components()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.timeline_controller = None
 
     def setup_window(self):
         self.base_title = "Audio Creator"
@@ -69,7 +70,7 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
         self.paned_window.after(10, self.set_initial_sash_position)
 
     def toggle_timeline(self):
-        if hasattr(self, 'timeline_controller'):
+        if self.timeline_controller:
             self.timeline_controller.toggle_visibility()
 
     def toggle_visibility(self):
