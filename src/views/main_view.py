@@ -1,13 +1,16 @@
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from tkinterdnd2 import DND_FILES, TkinterDnD
 import os
 from views.audio_generator_view import AudioGeneratorView
 from views.script_editor_view import ScriptEditorView
 
-class MainView(ctk.CTk):
-    def __init__(self, config, project_model):
-        super().__init__()
+class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
+    def __init__(self, master, config, project_model):
+        tk.Toplevel.__init__(self, master)
+        self.TkdndVersion = TkinterDnD._require(self)
+        
         self.config_data = config
         self.project_model = project_model
         self.setup_window()
@@ -43,6 +46,10 @@ class MainView(ctk.CTk):
         file_menu.add_command(label="Save Project", command=self.save_project)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.quit)
+
+        edit_menu = tk.Menu(self.menu, tearoff=0)
+        self.menu.add_cascade(label="Edit", menu=edit_menu)
+        edit_menu.add_command(label="Import Audio", command=self.import_audio)
 
         self.window_menu = tk.Menu(self.menu, tearoff=0)
         self.menu.add_cascade(label="Window", menu=self.window_menu)
@@ -155,6 +162,13 @@ class MainView(ctk.CTk):
         if hasattr(self, 'save_project_callback'):
             self.save_project_callback()
 
+    def import_audio(self):
+        if self.import_audio_callback:
+            self.import_audio_callback()
+
+    def set_import_audio_callback(self, callback):
+        self.import_audio_callback = callback
+        
     def update_current_project(self, project_name):
         self.update_title(project_name)
         if hasattr(self, 'timeline_controller'):

@@ -4,6 +4,7 @@ import numpy as np
 from pydub import AudioSegment
 import threading
 import queue
+from PIL import Image, ImageTk
 
 class AudioVisualizer:
     def __init__(self, master):
@@ -115,6 +116,35 @@ class AudioVisualizer:
         self.hide_playhead()
         self.canvas.draw()
 
+    # For Timeline View
+    def create_waveform_image(self, audio_file, width, height):
+        audio = AudioSegment.from_file(audio_file)
+        if audio.channels == 2:
+            audio = audio.set_channels(1)
+        
+        samples = np.array(audio.get_array_of_samples()).astype(np.float32)
+        samples = samples / np.max(np.abs(samples))
+        
+        chunk_size = len(samples) // width
+        max_min = np.array([(np.max(samples[i:i+chunk_size]), np.min(samples[i:i+chunk_size])) 
+                            for i in range(0, len(samples), chunk_size)])
+        
+        fig, ax = plt.subplots(figsize=(width/100, height/100), dpi=100)
+        ax.plot(max_min[:, 0], color='#00aaff', linewidth=0.5, alpha=0.7)
+        ax.plot(max_min[:, 1], color='#00aaff', linewidth=0.5, alpha=0.7)
+        ax.fill_between(range(len(max_min)), max_min[:, 0], max_min[:, 1], color='#00aaff', alpha=0.3)
+        
+        ax.set_xlim(0, len(max_min))
+        ax.set_ylim(-1, 1)
+        ax.axis('off')
+        fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        
+        fig.canvas.draw()
+        image = Image.frombytes('RGB', fig.canvas.get_width_height(), fig.canvas.tostring_rgb())
+        plt.close(fig)
+        
+        return ImageTk.PhotoImage(image)
+    
     def quit(self):
         self.render_queue.put((None, None))
         self.render_thread.join()

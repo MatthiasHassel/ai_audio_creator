@@ -1,9 +1,9 @@
 from controllers.audio_controller import AudioController
 from controllers.script_editor_controller import ScriptEditorController
 from controllers.timeline_controller import TimelineController
-from utils.script_analyzer import ScriptAnalyzer
-from tkinter import simpledialog, messagebox
+from tkinter import filedialog
 import os
+import logging
 
 class MainController:
     def __init__(self, model, view, config, project_model):
@@ -35,6 +35,7 @@ class MainController:
         self.view.set_new_project_callback(self.new_project)
         self.view.set_open_project_callback(self.open_project)
         self.view.set_save_project_callback(self.save_project)
+        self.view.set_import_audio_callback(self.import_audio)
         
         # Set up the connection between Timeline and Audio Creator
         self.timeline_controller.set_toggle_audio_creator_command(self.view.toggle_visibility)
@@ -48,7 +49,10 @@ class MainController:
             if self.timeline_controller:
                 self.timeline_controller.on_project_change()
         except Exception as e:
-            self.view.update_status(f"Error loading default project: {str(e)}")
+            error_message = f"Error loading default project: {str(e)}"
+            print(error_message)  # Print to console for debugging
+            self.view.update_status(error_message)
+            self.view.show_error("Error", error_message)
 
     def update_current_project(self, project_name):
         self.view.update_current_project(project_name)
@@ -142,10 +146,30 @@ class MainController:
         self.audio_controller.load_voices()
         self.view.run()
 
-    def run(self):
-        if self.audio_controller:
-            self.audio_controller.load_voices()
-        self.view.run()
+    def import_audio(self):
+        if not self.project_model.current_project:
+            self.view.show_warning("No Project", "Please open a project before importing audio.")
+            return
+
+        file_path = filedialog.askopenfilename(
+            title="Select Audio File",
+            filetypes=[("Audio Files", "*.mp3 *.wav")]
+        )
+
+        if file_path:
+            try:
+                # Import the audio file
+                new_file_path = self.project_model.import_audio_file(file_path)
+                logging.info(f"Audio file imported: {new_file_path}")
+                
+                # Add the audio clip to the timeline
+                if self.timeline_controller:
+                    self.timeline_controller.add_audio_clip(new_file_path, 0, 0)  # Add to first track at the start
+                
+                self.view.update_status(f"Audio file imported: {os.path.basename(new_file_path)}")
+            except Exception as e:
+                logging.error(f"Failed to import audio file: {str(e)}")
+                self.view.show_error("Import Error", f"Failed to import audio file: {str(e)}")
 
     def quit(self):
         if self.audio_controller:

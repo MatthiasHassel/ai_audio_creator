@@ -1,3 +1,5 @@
+# timeline_model.py
+
 class TimelineModel:
     def __init__(self):
         self.tracks = []
@@ -8,10 +10,7 @@ class TimelineModel:
         self.is_modified = True
 
     def get_track_index(self, track):
-        for index, t in enumerate(self.tracks):
-            if t == track:
-                return index
-        return None
+        return self.tracks.index(track)
 
     def rename_track(self, track_index, new_name):
         if 0 <= track_index < len(self.tracks):
@@ -23,10 +22,14 @@ class TimelineModel:
             del self.tracks[track_index]
             self.is_modified = True
 
-    def add_clip_to_track(self, track_index, clip_data):
-        if 0 <= track_index < len(self.tracks):
-            self.tracks[track_index]['clips'].append(clip_data)
-            self.is_modified = True
+    def add_clip_to_track(self, track_index, clip):
+        if track_index >= len(self.tracks):
+            # Add new tracks if necessary
+            for _ in range(track_index - len(self.tracks) + 1):
+                self.tracks.append({"name": f"Track {len(self.tracks) + 1}", "clips": []})
+        
+        self.tracks[track_index]['clips'].append(clip)
+        self.is_modified = True
 
     def remove_clip_from_track(self, track_index, clip_index):
         if 0 <= track_index < len(self.tracks):
@@ -47,6 +50,3 @@ class TimelineModel:
 
     def mark_as_saved(self):
         self.is_modified = False
-
-    def is_modified(self):
-        return self.is_modified

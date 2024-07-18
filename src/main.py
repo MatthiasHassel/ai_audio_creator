@@ -1,5 +1,5 @@
-# src/main.py
-
+import customtkinter as ctk
+from tkinterdnd2 import TkinterDnD
 from models.main_model import MainModel
 from models.project_model import ProjectModel
 from views.main_view import MainView
@@ -22,9 +22,12 @@ def main():
     setup_logging(config)
 
     # Create main components
+    root = TkinterDnD.Tk()
+    root.withdraw()  # Hide the root window
+    
     main_model = MainModel()
     project_model = ProjectModel(config['projects']['base_dir'])
-    view = MainView(config, project_model)
+    view = MainView(root, config, project_model)
     controller = MainController(main_model, view, config, project_model)
 
     # Run the application
