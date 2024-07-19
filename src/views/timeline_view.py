@@ -30,7 +30,8 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.track_height = self.base_track_height
         self.min_track_height = 30
         self.max_track_height = 200
-        self.seconds_per_pixel = 0.1
+        self.base_seconds_per_pixel = 0.01  # 100 pixels = 1 second at default zoom
+        self.seconds_per_pixel = self.base_seconds_per_pixel
         self.x_zoom = 1.0
         self.y_zoom = 1.0
         self.min_x_zoom = 0.1
@@ -119,6 +120,14 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.timeline_canvas.drop_target_register(DND_FILES)
         self.timeline_canvas.dnd_bind('<<Drop>>', self.on_drop)
 
+        self.after(100, self.initialize_playhead)
+
+    def initialize_playhead(self):
+        if self.timeline_canvas:
+            self.draw_playhead(0)
+        else:
+            self.after(100, self.initialize_playhead)
+
     def redraw_timeline(self):
         if self.timeline_canvas:
             self.timeline_canvas.delete("all")
@@ -141,8 +150,9 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         width = self.timeline_canvas.winfo_width()
         height = self.timeline_canvas.winfo_height()
         
-        # Draw vertical lines
-        for x in range(0, width, int(100 * self.x_zoom)):  # Adjust 100 to change grid density
+        # Draw vertical lines (1 second apart at default zoom)
+        seconds_per_line = max(1, round(100 * self.seconds_per_pixel))
+        for x in range(0, width, int(seconds_per_line / self.seconds_per_pixel)):
             self.timeline_canvas.create_line(x, 0, x, height, fill="gray50", tags="grid")
         
         # Draw horizontal lines
@@ -241,19 +251,23 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.remove_track_callback = callback
 
     def play_timeline(self):
-        if self.controller:
-            self.controller.play_timeline()
-        self.is_playing = True
-        self.start_time = time.time() - self.playhead_position
-        self.update_playhead()
+        if not self.is_playing:
+            self.is_playing = True
+            self.start_time = time.time() - self.playhead_position
+            self.update_playhead()
+            logging.info("Timeline playback started in view")
+        self.play_button.configure(state="disabled")
+        self.stop_button.configure(state="normal")
+        self.restart_button.configure(state="normal")
 
     def stop_timeline(self):
-        if self.controller:
-            self.controller.stop_timeline()
         self.is_playing = False
         if self.after_id:
             self.after_cancel(self.after_id)
             self.after_id = None
+        self.play_button.configure(state="normal")
+        self.stop_button.configure(state="disabled")
+        self.restart_button.configure(state="normal")
 
     def restart_timeline(self):
         self.stop_timeline()
@@ -264,23 +278,33 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
 
     def update_playhead(self):
         if self.is_playing:
-            self.playhead_position = time.time() - self.start_time
-            x = self.playhead_position * self.seconds_per_pixel * self.x_zoom
+            current_time = time.time() - self.start_time
+            x = current_time / self.seconds_per_pixel
+            self.playhead_position = current_time
             self.draw_playhead(x)
+            logging.info(f"Playhead updated: time={current_time}, x={x}")
             self.after_id = self.after(50, self.update_playhead)  # Update every 50ms
+        else:
+            logging.info("Playhead update stopped")
 
     def draw_playhead(self, x):
-        if self.playhead_line:
-            self.timeline_canvas.delete(self.playhead_line)
-        height = self.timeline_canvas.winfo_height()
-        self.playhead_line = self.timeline_canvas.create_line(x, 0, x, height, fill="red", width=2)
-        # Ensure the playhead is visible by scrolling the canvas if necessary
-        self.timeline_canvas.xview_moveto(max(0, (x - self.timeline_canvas.winfo_width() / 2) / self.timeline_canvas.winfo_width()))
+        if self.timeline_canvas:
+            if self.playhead_line:
+                self.timeline_canvas.delete(self.playhead_line)
+            height = self.timeline_canvas.winfo_height()
+            if height > 0:
+                self.playhead_line = self.timeline_canvas.create_line(x, 0, x, height, fill="red", width=2)
+                # Ensure the playhead is visible by scrolling the canvas if necessary
+                self.timeline_canvas.xview_moveto(max(0, (x - self.timeline_canvas.winfo_width() / 2) / self.timeline_canvas.winfo_width()))
+            else:
+                self.after(100, lambda: self.draw_playhead(x))
+        else:
+            self.after(100, lambda: self.draw_playhead(x))
 
     def on_canvas_click(self, event):
         if self.controller:
             x = self.timeline_canvas.canvasx(event.x)
-            self.playhead_position = x / (self.seconds_per_pixel * self.x_zoom)
+            self.playhead_position = x * self.seconds_per_pixel
             self.controller.set_playhead_position(self.playhead_position)
             self.draw_playhead(x)
             if self.is_playing:
@@ -318,12 +342,11 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             self.y_zoom_slider.set(new_zoom)
 
     def update_x_zoom(self, value):
-        old_zoom = self.x_zoom
         self.x_zoom = float(value)
-        self.seconds_per_pixel = 0.1 / self.x_zoom
+        self.seconds_per_pixel = self.base_seconds_per_pixel / self.x_zoom
         # Adjust playhead position after zooming
         if self.playhead_line:
-            x = self.playhead_position * self.seconds_per_pixel * self.x_zoom
+            x = self.playhead_position / self.seconds_per_pixel
             self.draw_playhead(x)
         self.redraw_timeline()
 

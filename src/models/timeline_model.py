@@ -1,6 +1,7 @@
 # timeline_model.py
 import pygame
 import time
+import logging
 
 class TimelineModel:
     def __init__(self):
@@ -61,11 +62,13 @@ class TimelineModel:
         if not self.is_playing:
             self.is_playing = True
             self.start_time = time.time() - self.playhead_position
+            logging.info("Timeline model: playback started")
 
     def stop_timeline(self):
         if self.is_playing:
             self.is_playing = False
             self.playhead_position = time.time() - self.start_time
+            logging.info("Timeline model: playback stopped")
 
     def get_playhead_position(self):
         if self.is_playing:
@@ -76,7 +79,6 @@ class TimelineModel:
         self.playhead_position = position
         if self.is_playing:
             self.start_time = time.time() - position
-
 
     def update_playhead(self):
         if self.is_playing:

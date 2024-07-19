@@ -1,5 +1,5 @@
 from views.timeline_view import TimelineView
-from models.timeline_model import TimelineModel
+import time 
 from utils.audio_clip import AudioClip
 from tkinterdnd2 import DND_FILES
 import logging 
@@ -116,16 +116,14 @@ class TimelineController:
     def play_timeline(self):
         self.timeline_model.play_timeline()
         if self.view:
-            self.view.play_button.configure(state="disabled")
-            self.view.stop_button.configure(state="normal")
-            self.view.restart_button.configure(state="normal")
+            self.view.play_timeline()
+        logging.info("Timeline playback initiated from controller")
 
     def stop_timeline(self):
         self.timeline_model.stop_timeline()
         if self.view:
-            self.view.play_button.configure(state="normal")
-            self.view.stop_button.configure(state="disabled")
-            self.view.restart_button.configure(state="normal")
+            self.view.stop_timeline()
+        logging.info("Timeline playback stopped from controller")
 
     def restart_timeline(self):
         self.stop_timeline()
