@@ -7,6 +7,8 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 from utils.audio_clip import AudioClip
 from utils.audio_visualizer import AudioVisualizer
 import logging
+import os 
+import time
 
 class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
     def __init__(self, master, project_model, *args, **kwargs):
@@ -14,6 +16,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.TkdndVersion = TkinterDnD._require(self)
         
         self.project_model = project_model
+        self.controller = None
         self.base_title = "Audio Timeline"
         self.current_project = "Untitled Project"
         self.update_title()
@@ -37,6 +40,11 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
 
         self.track_label_canvas = None
         self.timeline_canvas = None
+        self.playhead_line = None
+        self.after_id = None
+        self.start_time = 0
+        self.is_playing = False
+        self.playhead_position = 0
 
         self.create_widgets()
         
@@ -46,6 +54,10 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.bind("<KeyRelease-Alt_L>", self.option_key_release)
         self.bind_all("<MouseWheel>", self.on_mouse_scroll)
         self.bind_all("<Shift-MouseWheel>", self.on_shift_mouse_scroll)
+        self.timeline_canvas.bind("<Button-1>", self.on_canvas_click)
+
+    def set_controller(self, controller):
+        self.controller = controller
 
     def create_widgets(self):
         self.create_toolbar()
@@ -65,6 +77,12 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.stop_button = ctk.CTkButton(toolbar, text="Stop", command=self.stop_timeline)
         self.stop_button.pack(side=tk.LEFT, padx=5)
 
+        self.restart_button = ctk.CTkButton(toolbar, text="Restart", command=self.restart_timeline)
+        self.restart_button.pack(side=tk.LEFT, padx=5)
+
+        self.toggle_audio_creator_button = ctk.CTkButton(toolbar, text="Show Audio Creator")
+        self.toggle_audio_creator_button.pack(side=tk.RIGHT, padx=5)
+
         ttk.Label(toolbar, text="   ").pack(side=tk.LEFT)
 
         self.x_zoom_slider = ttk.Scale(toolbar, from_=self.min_x_zoom, to=self.max_x_zoom, orient=tk.HORIZONTAL, 
@@ -78,9 +96,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.y_zoom_slider.set(1.0)
         self.y_zoom_slider.pack(side=tk.LEFT)
 
-        self.toggle_audio_creator_button = ctk.CTkButton(toolbar, text="Toggle Audio Creator")
-        self.toggle_audio_creator_button.pack(side=tk.RIGHT, padx=5)
-
     def create_main_content(self):
         self.main_frame = ctk.CTkFrame(self)
         self.main_frame.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
@@ -92,39 +107,26 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.timeline_frame = ctk.CTkFrame(self.main_frame)
         self.timeline_frame.pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
 
-        # Create track_label_canvas here
         self.track_label_canvas = tk.Canvas(self.track_label_frame, bg="gray20", highlightthickness=0)
         self.track_label_canvas.pack(expand=True, fill=tk.BOTH)
         
     def create_timeline(self):
-        if not hasattr(self, 'timeline_frame'):
-            logging.warning("Timeline frame is not created.")
-            return
         self.timeline_canvas = tk.Canvas(self.timeline_frame, bg="gray30", highlightthickness=0)
         self.timeline_canvas.pack(expand=True, fill=tk.BOTH)
         self.timeline_canvas.bind("<Configure>", self.on_canvas_resize)
+        self.timeline_canvas.bind("<Button-1>", self.on_canvas_click)
         
-        # Register the canvas as a drop target
         self.timeline_canvas.drop_target_register(DND_FILES)
         self.timeline_canvas.dnd_bind('<<Drop>>', self.on_drop)
-
-    def update_x_zoom(self, value):
-        self.x_zoom = float(value)
-        self.seconds_per_pixel = 0.1 / self.x_zoom
-        self.redraw_timeline()
-
-    def update_y_zoom(self, value):
-        self.y_zoom = float(value)
-        self.track_height = max(self.min_track_height, min(self.base_track_height * self.y_zoom, self.max_track_height))
-        self.redraw_timeline()
-        if self.track_label_canvas:
-            self.update_track_labels()
 
     def redraw_timeline(self):
         if self.timeline_canvas:
             self.timeline_canvas.delete("all")
             self.draw_grid()
             self.draw_clips()
+            if self.playhead_line:
+                x = self.playhead_position * self.seconds_per_pixel * self.x_zoom
+                self.draw_playhead(x)
         else:
             logging.warning("Timeline canvas is not initialized.")
 
@@ -148,7 +150,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             y = i * self.track_height
             self.timeline_canvas.create_line(0, y, width, y, fill="gray50", tags="grid")
 
-
     def update_track_labels(self):
         if not self.track_label_canvas:
             return  # Exit if track_label_canvas doesn't exist
@@ -162,8 +163,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             self.track_label_canvas.tag_bind(f"track_{i}", "<Button-1>", lambda e, t=track: self.select_track(t))
             self.track_label_canvas.tag_bind(f"track_{i}", "<Double-Button-1>", lambda e, t=track: self.start_rename_track(t))
             self.track_label_canvas.tag_bind(f"track_{i}", "<Button-2>", lambda e, t=track: self.show_track_context_menu(e, t))
-
-
 
     def add_track(self, track_name=None):
         if track_name is None:
@@ -242,10 +241,50 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.remove_track_callback = callback
 
     def play_timeline(self):
-        print("Playing timeline")
+        if self.controller:
+            self.controller.play_timeline()
+        self.is_playing = True
+        self.start_time = time.time() - self.playhead_position
+        self.update_playhead()
 
     def stop_timeline(self):
-        print("Stopping timeline")
+        if self.controller:
+            self.controller.stop_timeline()
+        self.is_playing = False
+        if self.after_id:
+            self.after_cancel(self.after_id)
+            self.after_id = None
+
+    def restart_timeline(self):
+        self.stop_timeline()
+        self.playhead_position = 0
+        if self.controller:
+            self.controller.set_playhead_position(0)
+        self.draw_playhead(0)
+
+    def update_playhead(self):
+        if self.is_playing:
+            self.playhead_position = time.time() - self.start_time
+            x = self.playhead_position * self.seconds_per_pixel * self.x_zoom
+            self.draw_playhead(x)
+            self.after_id = self.after(50, self.update_playhead)  # Update every 50ms
+
+    def draw_playhead(self, x):
+        if self.playhead_line:
+            self.timeline_canvas.delete(self.playhead_line)
+        height = self.timeline_canvas.winfo_height()
+        self.playhead_line = self.timeline_canvas.create_line(x, 0, x, height, fill="red", width=2)
+        # Ensure the playhead is visible by scrolling the canvas if necessary
+        self.timeline_canvas.xview_moveto(max(0, (x - self.timeline_canvas.winfo_width() / 2) / self.timeline_canvas.winfo_width()))
+
+    def on_canvas_click(self, event):
+        if self.controller:
+            x = self.timeline_canvas.canvasx(event.x)
+            self.playhead_position = x / (self.seconds_per_pixel * self.x_zoom)
+            self.controller.set_playhead_position(self.playhead_position)
+            self.draw_playhead(x)
+            if self.is_playing:
+                self.start_time = time.time() - self.playhead_position
 
     def option_key_press(self, event):
         self.option_key_pressed = True
@@ -278,6 +317,24 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         if self.min_track_height <= new_track_height <= self.max_track_height:
             self.y_zoom_slider.set(new_zoom)
 
+    def update_x_zoom(self, value):
+        old_zoom = self.x_zoom
+        self.x_zoom = float(value)
+        self.seconds_per_pixel = 0.1 / self.x_zoom
+        # Adjust playhead position after zooming
+        if self.playhead_line:
+            x = self.playhead_position * self.seconds_per_pixel * self.x_zoom
+            self.draw_playhead(x)
+        self.redraw_timeline()
+
+    def update_y_zoom(self, value):
+        self.y_zoom = float(value)
+        self.track_height = max(self.min_track_height, min(self.base_track_height * self.y_zoom, self.max_track_height))
+        self.redraw_timeline()
+        if self.track_label_canvas:
+            self.update_track_labels()
+
+
     def update_title(self, project_name=None):
         if project_name:
             self.current_project = project_name
@@ -298,6 +355,9 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
                 self.add_audio_clip(new_file_path, track_index, x_position)
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to import audio file: {str(e)}")
+    
+    def get_track_index_from_y(self, y):
+        return int(y // self.track_height)
 
     def add_audio_clip(self, file_path, track_index, x_position):
         if track_index < len(self.tracks):
@@ -306,6 +366,14 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             self.draw_clip(clip, track_index)
             if hasattr(self, 'add_clip_callback'):
                 self.add_clip_callback(track_index, clip)
+
+    def add_clip(self, clip, track_index):
+            if track_index < len(self.tracks):
+                self.tracks[track_index]['clips'].append(clip)
+                self.draw_clip(clip, track_index)
+                logging.info(f"Clip added to track {track_index} in view")
+            else:
+                logging.warning(f"Attempted to add clip to non-existent track {track_index}")
 
     def set_add_clip_callback(self, callback):
         self.add_clip_callback = callback
@@ -316,11 +384,13 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             for clip in track['clips']:
                 self.draw_clip(clip, y)
 
-    def draw_clip(self, clip, y):
-        x = clip['start_time'] * self.seconds_per_pixel * self.x_zoom
-        width = clip['duration'] * self.seconds_per_pixel * self.x_zoom
-        self.timeline_canvas.create_rectangle(x, y, x + width, y + self.track_height, fill="lightblue", outline="blue")
-        self.timeline_canvas.create_text(x + 5, y + self.track_height // 2, text=clip['name'], anchor="w")
+    def draw_clip(self, clip, track_index):
+        y = track_index * self.track_height
+        x = clip.x * self.seconds_per_pixel * self.x_zoom
+        width = clip.duration * self.seconds_per_pixel * self.x_zoom
+        self.timeline_canvas.create_rectangle(x, y, x + width, y + self.track_height, fill="lightblue", outline="blue", tags="clip")
+        self.timeline_canvas.create_text(x + 5, y + self.track_height // 2, text=os.path.basename(clip.file_path), anchor="w", tags="clip")
+        logging.info(f"Clip drawn on track {track_index} at x={x}, y={y}, width={width}")
 
     def draw_waveform(self, clip, x, y, width, height):
         if clip not in self.waveform_images:

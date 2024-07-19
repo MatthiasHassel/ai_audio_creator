@@ -1,9 +1,15 @@
 # timeline_model.py
+import pygame
+import time
 
 class TimelineModel:
     def __init__(self):
         self.tracks = []
         self.is_modified = False
+        self.is_playing = False
+        self.playhead_position = 0
+        self.start_time = 0
+        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=1024)
 
     def add_track(self, track_data):
         self.tracks.append(track_data)
@@ -50,3 +56,29 @@ class TimelineModel:
 
     def mark_as_saved(self):
         self.is_modified = False
+
+    def play_timeline(self):
+        if not self.is_playing:
+            self.is_playing = True
+            self.start_time = time.time() - self.playhead_position
+
+    def stop_timeline(self):
+        if self.is_playing:
+            self.is_playing = False
+            self.playhead_position = time.time() - self.start_time
+
+    def get_playhead_position(self):
+        if self.is_playing:
+            return time.time() - self.start_time
+        return self.playhead_position
+
+    def set_playhead_position(self, position):
+        self.playhead_position = position
+        if self.is_playing:
+            self.start_time = time.time() - position
+
+
+    def update_playhead(self):
+        if self.is_playing:
+            self.playhead_position = time.time() - self.start_time
+        return self.playhead_position

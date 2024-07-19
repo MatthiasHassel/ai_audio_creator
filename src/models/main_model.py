@@ -57,3 +57,15 @@ class MainModel:
 
     def mark_as_saved(self):
         self.timeline_model.mark_as_saved()
+
+    def play_timeline(self):
+        return self.timeline_model.play_timeline()
+
+    def stop_timeline(self):
+        return self.timeline_model.stop_timeline()
+
+    def update_playhead(self):
+        return self.timeline_model.update_playhead()
+
+    def set_playhead_position(self, position):
+        return self.timeline_model.set_playhead_position(position)

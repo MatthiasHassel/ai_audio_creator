@@ -15,6 +15,7 @@ class TimelineController:
     def show(self):
         if self.view is None or not self.view.winfo_exists():
             self.view = TimelineView(self.master, self.project_model)
+            self.view.set_controller(self)
             self.setup_view_bindings()
             self.load_timeline_data()
         self.view.update_title(self.project_model.current_project)
@@ -85,40 +86,59 @@ class TimelineController:
         except Exception as e:
             logging.error(f"Error removing track: {str(e)}")
 
-    def on_drop(self, event):
-        file_path = event.data
-        if file_path.lower().endswith(('.mp3', '.wav')):
-            track_index = self.view.get_track_index_from_y(event.y)
-            x_position = event.x
-            self.add_audio_clip(file_path, track_index, x_position)
-
     def add_audio_clip(self, file_path, track_index, start_time):
         try:
             logging.info(f"Adding audio clip: file={file_path}, track={track_index}, start_time={start_time}")
             clip = AudioClip(file_path, start_time)
-            self.model.add_clip_to_track(track_index, clip)
+            self.timeline_model.add_clip_to_track(track_index, clip)
+            logging.info(f"Audio clip added to track {track_index} at time {start_time}")
             if self.view:
-                self.view.draw_clip(clip, track_index)
+                self.view.add_clip(clip, track_index)
                 self.view.redraw_timeline()
-            logging.info("Audio clip added successfully")
+            logging.info("Audio clip added and displayed successfully")
         except Exception as e:
             logging.error(f"Error adding audio clip: {str(e)}", exc_info=True)
-            # Optionally, show an error message to the user
             if hasattr(self.view, 'show_error'):
                 self.view.show_error("Error", f"Failed to add audio clip: {str(e)}")
+
+    def on_drop(self, event):
+        file_path = event.data
+        if file_path.lower().endswith(('.mp3', '.wav')):
+            track_index = self.view.get_track_index_from_y(event.y)
+            x_position = event.x / (self.view.seconds_per_pixel * self.view.x_zoom)
+            self.add_audio_clip(file_path, track_index, x_position)
+            logging.info(f"File dropped on track {track_index} at position {x_position}")
 
     def move_clip(self, track_index, clip_index, new_x):
         self.model.move_clip(track_index, clip_index, new_x)
         self.view.redraw_timeline()
 
     def play_timeline(self):
-        print("Playing timeline")
-        # Implement playback logic here
+        self.timeline_model.play_timeline()
+        if self.view:
+            self.view.play_button.configure(state="disabled")
+            self.view.stop_button.configure(state="normal")
+            self.view.restart_button.configure(state="normal")
 
     def stop_timeline(self):
-        print("Stopping timeline")
-        # Implement stop logic here
+        self.timeline_model.stop_timeline()
+        if self.view:
+            self.view.play_button.configure(state="normal")
+            self.view.stop_button.configure(state="disabled")
+            self.view.restart_button.configure(state="normal")
 
+    def restart_timeline(self):
+        self.stop_timeline()
+        self.set_playhead_position(0)
+        if self.view:
+            self.view.restart_button.configure(state="normal")
+
+    def set_playhead_position(self, position):
+        self.timeline_model.set_playhead_position(position)
+
+    def get_playhead_position(self):
+        return self.timeline_model.get_playhead_position()
+    
     def clear_timeline(self):
         if self.view:
             self.view.clear_timeline()

@@ -1,9 +1,9 @@
 import customtkinter as ctk
-import tkinter as tk
-import os
+import logging
 from tkinter import messagebox
 from utils.audio_visualizer import AudioVisualizer
 from utils.audio_file_selector import AudioFileSelector
+
 
 class AudioGeneratorView(ctk.CTkFrame):
     def __init__(self, master, config, project_model):
@@ -237,22 +237,17 @@ class AudioGeneratorView(ctk.CTkFrame):
                     # Determine which track to add the clip to based on the current module
                     track_index = {"music": 1, "sfx": 2, "speech": 0}.get(self.current_module.get().lower(), 0)
                     
-                    # Create clip data
-                    clip_data = {
-                        "name": os.path.basename(file_path),
-                        "file_path": file_path,
-                        "start_time": 0,  # You might want to calculate this based on the drop position
-                        "end_time": 10,   # You might want to calculate this based on the audio duration
-                        "color": {"music": "blue", "sfx": "green", "speech": "red"}.get(self.current_module.get().lower(), "gray")
-                    }
+                    # Calculate the x position relative to the timeline canvas
+                    x_position = timeline_view.timeline_canvas.winfo_pointerx() - timeline_view.timeline_canvas.winfo_rootx()
+                    start_time = x_position / (timeline_view.seconds_per_pixel * timeline_view.x_zoom)
                     
                     # Add the clip to the timeline
-                    self.master.timeline_controller.add_clip_to_timeline(track_index, clip_data)
-                    messagebox.showinfo("Clip Added", f"Added {clip_data['name']} to the timeline.")
+                    self.master.timeline_controller.add_audio_clip(file_path, track_index, start_time)
+                    logging.info(f"Clip added to timeline: track={track_index}, start_time={start_time}")
                 else:
-                    messagebox.showerror("Error", "No file selected.")
+                    logging.warning("No file selected for drag and drop.")
             else:
-                messagebox.showinfo("Invalid Drop", "Please drop the file onto the timeline window.")
+                logging.info("File dropped outside the timeline window.")
 
     def clear_input(self):
         self.user_input.delete("1.0", "end")
