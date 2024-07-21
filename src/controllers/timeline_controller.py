@@ -86,28 +86,27 @@ class TimelineController:
         except Exception as e:
             logging.error(f"Error removing track: {str(e)}")
 
-    def add_audio_clip(self, file_path, track_index, start_time):
+    def add_audio_clip(self, file_path):
+        if self.timeline_model.is_playing:
+            self.view.show_error("Playback in Progress", "Cannot import audio while playback is running. Stop playback and try again.")
+            return
+
+        selected_track = self.view.selected_track
+        if selected_track is None:
+            self.view.show_error("No Track Selected", "Please select a track before importing audio.")
+            return
+
+        track_index = self.timeline_model.get_track_index(selected_track)
+        start_time = self.timeline_model.get_playhead_position()
+
         try:
-            logging.info(f"Adding audio clip: file={file_path}, track={track_index}, start_time={start_time}")
             clip = AudioClip(file_path, start_time)
             self.timeline_model.add_clip_to_track(track_index, clip)
-            logging.info(f"Audio clip added to track {track_index} at time {start_time}")
-            if self.view:
-                self.view.add_clip(clip, track_index)
-                self.view.redraw_timeline()
-            logging.info("Audio clip added and displayed successfully")
-        except FileNotFoundError as e:
-            logging.error(str(e))
-            if self.view and hasattr(self.view, 'show_error'):
-                self.view.show_error("File Not Found", str(e))
-        except ValueError as e:
-            logging.error(str(e))
-            if self.view and hasattr(self.view, 'show_error'):
-                self.view.show_error("Invalid Audio File", str(e))
+            self.view.add_clip(clip, track_index)
+            self.view.redraw_timeline()
         except Exception as e:
-            logging.error(f"Error adding audio clip: {str(e)}", exc_info=True)
-            if self.view and hasattr(self.view, 'show_error'):
-                self.view.show_error("Error", f"Failed to add audio clip: {str(e)}")
+            self.view.show_error("Import Error", f"Failed to import audio clip: {str(e)}")
+
 
     def on_drop(self, event):
         file_path = event.data

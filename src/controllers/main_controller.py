@@ -151,6 +151,10 @@ class MainController:
             self.view.show_warning("No Project", "Please open a project before importing audio.")
             return
 
+        if self.timeline_controller.timeline_model.is_playing:
+            self.view.show_error("Playback in Progress", "Cannot import audio while playback is running. Stop playback and try again.")
+            return
+
         file_path = filedialog.askopenfilename(
             title="Select Audio File",
             filetypes=[("Audio Files", "*.mp3 *.wav")]
@@ -164,7 +168,7 @@ class MainController:
                 
                 # Add the audio clip to the timeline
                 if self.timeline_controller:
-                    self.timeline_controller.add_audio_clip(new_file_path, 0, 0)  # Add to first track at the start
+                    self.timeline_controller.add_audio_clip(new_file_path)
                 else:
                     logging.error("Timeline controller is not initialized")
                     self.view.show_error("Error", "Timeline controller is not initialized")
