@@ -112,6 +112,18 @@ class TimelineModel:
         return self.playhead_position
 
     def set_playhead_position(self, position):
-        self.playhead_position = position
+        self.playhead_position = max(0, position)  # Ensure position is not negative
         if self.is_playing:
-            self.start_time = time.time() - position
+            self.start_time = time.time() - self.playhead_position
+            
+    def get_track_index_for_clip(self, clip):
+        for i, track in enumerate(self.tracks):
+            if clip in track['clips']:
+                return i
+        return -1
+
+    def move_clip(self, clip, new_x, old_track_index, new_track_index):
+        self.tracks[old_track_index]['clips'].remove(clip)
+        self.tracks[new_track_index]['clips'].append(clip)
+        clip.x = max(0, new_x)
+        self.is_modified = True

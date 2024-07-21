@@ -15,7 +15,7 @@ class TimelineController:
     def show(self):
         if self.view is None or not self.view.winfo_exists():
             self.view = TimelineView(self.master, self.project_model)
-            self.view.set_controller(self)
+            self.view.set_controller(self)  # Set the controller
             self.setup_view_bindings()
             self.load_timeline_data()
         self.view.update_title(self.project_model.current_project)
@@ -116,9 +116,11 @@ class TimelineController:
             self.add_audio_clip(file_path, track_index, x_position)
             logging.info(f"File dropped on track {track_index} at position {x_position}")
 
-    def move_clip(self, track_index, clip_index, new_x):
-        self.model.move_clip(track_index, clip_index, new_x)
-        self.view.redraw_timeline()
+    def move_clip(self, clip, new_x, new_track_index):
+        old_track_index = self.timeline_model.get_track_index_for_clip(clip)
+        self.timeline_model.move_clip(clip, new_x, old_track_index, new_track_index)
+        if self.view:
+            self.view.redraw_timeline()
 
     def play_timeline(self):
         self.timeline_model.play_timeline()
@@ -140,6 +142,8 @@ class TimelineController:
 
     def set_playhead_position(self, position):
         self.timeline_model.set_playhead_position(position)
+        if self.view:
+            self.view.update_playhead_position(position)
 
     def get_playhead_position(self):
         return self.timeline_model.get_playhead_position()

@@ -43,6 +43,10 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.is_playing = False
         self.after_id = None
         self.start_time = 0
+        self.selected_clip = None
+        self.dragging = False
+        self.drag_start_x = 0
+        self.drag_start_y = 0
 
         self.audio_visualizer = AudioVisualizer(self)
         self.waveform_cache = {}
@@ -104,14 +108,14 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.main_frame = ctk.CTkFrame(self)
         self.main_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
         self.main_frame.grid_columnconfigure(1, weight=1)
-        self.main_frame.grid_rowconfigure(0, weight=1)
+        self.main_frame.grid_rowconfigure(1, weight=1)
 
         self.create_track_label_frame()
         self.create_timeline_frame()
 
     def create_track_label_frame(self):
         self.track_label_frame = ctk.CTkFrame(self.main_frame, width=200)
-        self.track_label_frame.grid(row=0, column=0, sticky="ns")
+        self.track_label_frame.grid(row=0, column=0, rowspan=2, sticky="ns")
         self.track_label_frame.grid_propagate(False)
         self.track_label_frame.grid_rowconfigure(0, weight=1)
         self.track_label_frame.grid_columnconfigure(0, weight=1)
@@ -121,19 +125,30 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
 
     def create_timeline_frame(self):
         self.timeline_frame = ctk.CTkFrame(self.main_frame)
-        self.timeline_frame.grid(row=0, column=1, sticky="nsew")
-        self.timeline_frame.grid_rowconfigure(0, weight=1)
+        self.timeline_frame.grid(row=0, column=1, rowspan=2, sticky="nsew")
+        self.timeline_frame.grid_rowconfigure(1, weight=1)
         self.timeline_frame.grid_columnconfigure(0, weight=1)
 
-        self.timeline_canvas = tk.Canvas(self.timeline_frame, bg="gray30", highlightthickness=0)
-        self.timeline_canvas.grid(row=0, column=0, sticky="nsew")
+        self.create_topbar()
+        self.create_timeline_canvas()
+        
+    def create_topbar(self):
+        self.topbar = tk.Canvas(self.timeline_frame, bg="gray40", height=30, highlightthickness=0)
+        self.topbar.grid(row=0, column=0, sticky="ew")
+        self.topbar.bind("<Button-1>", self.on_topbar_click)
 
-        self.x_scrollbar = ctk.CTkScrollbar(self.timeline_frame, orientation="horizontal", command=self.timeline_canvas.xview)
-        self.x_scrollbar.grid(row=1, column=0, sticky="ew")
+    def create_timeline_canvas(self):
+        self.timeline_canvas = tk.Canvas(self.timeline_frame, bg="gray30", highlightthickness=0)
+        self.timeline_canvas.grid(row=1, column=0, sticky="nsew")
+
+        self.x_scrollbar = ctk.CTkScrollbar(self.timeline_frame, orientation="horizontal", command=self.on_scroll)
+        self.x_scrollbar.grid(row=2, column=0, sticky="ew")
 
         self.timeline_canvas.configure(xscrollcommand=self.x_scrollbar.set)
         self.timeline_canvas.bind("<Configure>", self.on_canvas_resize)
         self.timeline_canvas.bind("<Button-1>", self.on_canvas_click)
+        self.timeline_canvas.bind("<B1-Motion>", self.on_drag)
+        self.timeline_canvas.bind("<ButtonRelease-1>", self.on_drag_release)
         
         self.timeline_canvas.drop_target_register(DND_FILES)
         self.timeline_canvas.dnd_bind('<<Drop>>', self.on_drop)
@@ -142,31 +157,11 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.draw_playhead(0)
 
     def redraw_timeline(self):
-        try:
-            logging.info("Starting timeline redraw")
-            start_time = time.time()
-
-            self.timeline_canvas.delete("all")
-            logging.info("Canvas cleared")
-
-            self.draw_grid()
-            logging.info("Grid drawn")
-
-            for i, track in enumerate(self.tracks):
-                for clip in track['clips']:
-                    clip_start = time.time()
-                    self.draw_clip(clip, i)
-                    logging.info(f"Clip drawn: track={i}, file={clip.file_path}, time={time.time() - clip_start:.4f}s")
-
-            if self.playhead_line:
-                x = self.playhead_position / self.seconds_per_pixel
-                self.draw_playhead(x)
-                logging.info("Playhead drawn")
-
-            end_time = time.time()
-            logging.info(f"Timeline redraw completed in {end_time - start_time:.4f} seconds")
-        except Exception as e:
-            logging.error(f"Error in redraw_timeline: {str(e)}", exc_info=True)
+        self.timeline_canvas.delete("all")
+        self.draw_grid()
+        self.draw_clips()
+        if self.playhead_line:
+            self.draw_playhead(self.playhead_position / self.seconds_per_pixel)
 
     def set_toggle_audio_creator_command(self, command):
         self.toggle_audio_creator_button.configure(command=command)
@@ -190,6 +185,9 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.timeline_canvas.configure(scrollregion=(0, 0, self.timeline_width, len(self.tracks) * self.track_height))
     
     def draw_grid(self):
+        self.timeline_canvas.delete("grid")
+        self.topbar.delete("all")
+        
         width = self.timeline_canvas.winfo_width()
         height = self.timeline_canvas.winfo_height()
         
@@ -197,19 +195,24 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         seconds_per_line = max(1, round(100 * self.seconds_per_pixel))
         for x in range(0, width, int(seconds_per_line / self.seconds_per_pixel)):
             self.timeline_canvas.create_line(x, 0, x, height, fill="gray50", tags="grid")
+            time_text = f"{x * self.seconds_per_pixel:.1f}s"
+            self.topbar.create_text(x, 15, text=time_text, fill="white", anchor="center")
         
         # Draw horizontal lines
         for i in range(len(self.tracks) + 1):
             y = i * self.track_height
             self.timeline_canvas.create_line(0, y, width, y, fill="gray50", tags="grid")
 
+    def on_topbar_click(self, event):
+        x = self.topbar.canvasx(event.x)
+        new_position = x * self.seconds_per_pixel
+        if self.controller:
+            self.controller.set_playhead_position(new_position)
+
     def update_track_labels(self):
-        if not hasattr(self, 'track_label_canvas') or not self.track_label_canvas:
-            logging.warning("Track label canvas is not initialized.")
-            return
         self.track_label_canvas.delete("all")
         for i, track in enumerate(self.tracks):
-            y = i * self.track_height
+            y = i * self.track_height + self.topbar.winfo_height()  # Add topbar height
             fill_color = "gray35" if track == self.selected_track else "gray25"
             self.track_label_canvas.create_rectangle(0, y, 200, y + self.track_height, fill=fill_color, tags=f"track_{i}")
             self.track_label_canvas.create_text(10, y + self.track_height // 2, text=track["name"], anchor="w", fill="white", tags=f"track_{i}")
@@ -323,12 +326,13 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
     def update_playhead(self):
         if self.is_playing:
             current_time = time.time() - self.start_time
-            x = current_time / self.seconds_per_pixel
             self.playhead_position = current_time
-            self.draw_playhead(x)
-            self.after_id = self.after(50, self.update_playhead)  # Update every 50ms
-        else:
-            logging.info("Playhead update stopped")
+            self.draw_playhead(self.playhead_position / self.seconds_per_pixel)
+            self.after(50, self.update_playhead)  # Update every 50ms
+
+    def update_playhead_position(self, position):
+        self.playhead_position = position
+        self.draw_playhead(position / self.seconds_per_pixel)
 
     def draw_playhead(self, x):
         if self.timeline_canvas:
@@ -345,13 +349,17 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             self.after(100, lambda: self.draw_playhead(x))
 
     def on_canvas_click(self, event):
-        if self.controller and self.timeline_canvas:
-            x = self.timeline_canvas.canvasx(event.x)
-            self.playhead_position = x * self.seconds_per_pixel
-            self.controller.set_playhead_position(self.playhead_position)
-            self.draw_playhead(x)
-            if self.is_playing:
-                self.start_time = time.time() - self.playhead_position
+        x = self.timeline_canvas.canvasx(event.x)
+        y = self.timeline_canvas.canvasy(event.y)
+        
+        clicked_clip = self.find_clip_at_position(x, y)
+        if clicked_clip:
+            self.select_clip(clicked_clip)
+            self.drag_start_x = x
+            self.drag_start_y = y
+            self.dragging = True
+        else:
+            self.deselect_clip()
 
     def option_key_press(self, event):
         self.option_key_pressed = True
@@ -395,7 +403,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.track_height = max(self.min_track_height, min(self.base_track_height * self.y_zoom, self.max_track_height))
         self.redraw_timeline()
         self.update_track_labels()
-
 
     def update_title(self, project_name=None):
         if project_name:
@@ -458,24 +465,63 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             for clip in track['clips']:
                 self.draw_clip(clip, y)
 
-    def draw_clip(self, clip, track_index):
-        try:
-            y = track_index * self.track_height
-            x = clip.x / self.seconds_per_pixel
-            width = clip.duration / self.seconds_per_pixel
-            self.timeline_canvas.create_rectangle(x, y, x + width, y + self.track_height, 
-                                                  fill="lightblue", outline="blue", tags="clip")
-            self.timeline_canvas.create_text(x + 5, y + 5, text=os.path.basename(clip.file_path), 
-                                             anchor="nw", tags="clip")
+    def draw_clip(self, clip, y):
+        x = clip.x / self.seconds_per_pixel
+        width = clip.duration / self.seconds_per_pixel
+        fill_color = "lightblue" if clip != self.selected_clip else "blue"
+        self.timeline_canvas.create_rectangle(x, y, x + width, y + self.track_height, 
+                                              fill=fill_color, outline="blue", tags="clip")
+        self.timeline_canvas.create_text(x + 5, y + 5, text=os.path.basename(clip.file_path), 
+                                         anchor="nw", tags="clip")
+    
+    def on_drag(self, event):
+        if self.dragging and self.selected_clip:
+            x = self.timeline_canvas.canvasx(event.x)
+            y = self.timeline_canvas.canvasy(event.y)
+            dx = x - self.drag_start_x
+            dy = y - self.drag_start_y
             
-            if clip.file_path in self.waveform_cache:
-                waveform_image = self.waveform_cache[clip.file_path]
-                self.timeline_canvas.create_image(x, y, anchor="nw", image=waveform_image, tags="clip")
-            else:
-                logging.warning(f"Waveform not found for {clip.file_path}")
+            new_x = self.selected_clip.x + dx * self.seconds_per_pixel
+            new_track_index = int(y / self.track_height)
+            
+            if 0 <= new_track_index < len(self.tracks):
+                self.move_clip(self.selected_clip, new_x, new_track_index)
+            
+            self.drag_start_x = x
+            self.drag_start_y = y
 
-            logging.info(f"Clip drawn: track={track_index}, x={x}, y={y}, width={width}")
-        except Exception as e:
-            logging.error(f"Error drawing clip: {str(e)}", exc_info=True)
+    def on_drag_release(self, event):
+        self.dragging = False
+
+    def find_clip_at_position(self, x, y):
+        for track_index, track in enumerate(self.tracks):
+            for clip in track['clips']:
+                clip_x = clip.x / self.seconds_per_pixel
+                clip_width = clip.duration / self.seconds_per_pixel
+                clip_y = track_index * self.track_height
+                if clip_x <= x <= clip_x + clip_width and clip_y <= y < clip_y + self.track_height:
+                    return clip
+        return None
+
+    def select_clip(self, clip):
+        self.deselect_clip()
+        self.selected_clip = clip
+        self.redraw_timeline()
+
+    def deselect_clip(self):
+        self.selected_clip = None
+        self.redraw_timeline()
+
+    def move_clip(self, clip, new_x, new_track_index):
+        old_track_index = next(i for i, track in enumerate(self.tracks) if clip in track['clips'])
+        self.tracks[old_track_index]['clips'].remove(clip)
+        self.tracks[new_track_index]['clips'].append(clip)
+        clip.x = max(0, new_x)
+        self.redraw_timeline()
+
+    def on_scroll(self, *args):
+        self.timeline_canvas.xview(*args)
+        self.topbar.xview(*args)
+
     def show_error(self, title, message):
         messagebox.showerror(title, message)
