@@ -214,15 +214,39 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
     def update_track_labels(self):
         self.track_label_canvas.delete("all")
         for i, track in enumerate(self.tracks):
-            y = i * self.track_height + self.topbar.winfo_height()  # Add topbar height
+            y = i * self.track_height + self.topbar.winfo_height()
             fill_color = "gray35" if track == self.selected_track else "gray25"
             self.track_label_canvas.create_rectangle(0, y, 200, y + self.track_height, fill=fill_color, tags=f"track_{i}")
             self.track_label_canvas.create_text(10, y + self.track_height // 2, text=track["name"], anchor="w", fill="white", tags=f"track_{i}")
+            
+            # Add Solo checkbox
+            solo_var = tk.BooleanVar(value=track.get("solo", False))
+            solo_cb = ctk.CTkCheckBox(self.track_label_canvas, text="S", variable=solo_var, width=20, height=20)
+            self.track_label_canvas.create_window(140, y + self.track_height // 2, window=solo_cb)
+            
+            # Add Mute checkbox
+            mute_var = tk.BooleanVar(value=track.get("mute", False))
+            mute_cb = ctk.CTkCheckBox(self.track_label_canvas, text="M", variable=mute_var, width=20, height=20)
+            self.track_label_canvas.create_window(170, y + self.track_height // 2, window=mute_cb)
+            
+            # Store references to the variables
+            track["solo_var"] = solo_var
+            track["mute_var"] = mute_var
+            
+            # Bind the checkboxes to update functions
+            solo_cb.configure(command=lambda t=track: self.update_solo_mute(t))
+            mute_cb.configure(command=lambda t=track: self.update_solo_mute(t))
             
             self.track_label_canvas.tag_bind(f"track_{i}", "<Button-1>", lambda e, t=track: self.select_track(t))
             self.track_label_canvas.tag_bind(f"track_{i}", "<Double-Button-1>", lambda e, t=track: self.start_rename_track(t))
             self.track_label_canvas.tag_bind(f"track_{i}", "<Button-2>", lambda e, t=track: self.show_track_context_menu(e, t))
 
+    def update_solo_mute(self, track):
+        track["solo"] = track["solo_var"].get()
+        track["mute"] = track["mute_var"].get()
+        if self.controller:
+            self.controller.update_track_solo_mute(track)
+            
     def add_track(self, track_name=None):
         if self.controller:
             self.controller.add_track(track_name)

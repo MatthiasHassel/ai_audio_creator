@@ -167,8 +167,18 @@ class TimelineController:
             logging.error(f"Error moving clip: {str(e)}")
             return False
 
+    def update_track_solo_mute(self, track):
+        self.timeline_model.update_track_solo_mute(track)
+        self.redraw_timeline()
+
+    def get_active_tracks(self):
+        solo_tracks = [track for track in self.timeline_model.get_tracks() if track.get("solo", False)]
+        if solo_tracks:
+            return solo_tracks
+        return [track for track in self.timeline_model.get_tracks() if not track.get("mute", False)]
+    
     def play_timeline(self):
-        self.timeline_model.play_timeline()
+        self.timeline_model.play_timeline(self.get_active_tracks())
         if self.view:
             self.view.play_timeline()
         self._schedule_playhead_update()

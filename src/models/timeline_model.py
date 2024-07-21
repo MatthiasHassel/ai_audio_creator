@@ -60,11 +60,18 @@ class TimelineModel:
     def mark_as_saved(self):
         self.is_modified = False
 
-    def play_timeline(self):
+    def update_track_solo_mute(self, track):
+        track_index = self.get_track_index(track)
+        if 0 <= track_index < len(self.tracks):
+            self.tracks[track_index]["solo"] = track.get("solo", False)
+            self.tracks[track_index]["mute"] = track.get("mute", False)
+            self.is_modified = True
+
+    def play_timeline(self, active_tracks):
         if not self.is_playing:
             self.is_playing = True
             self.start_time = time.time() - self.playhead_position
-            self.play_clips()
+            self.play_clips(active_tracks)
             logging.info("Timeline model: playback started")
 
     def stop_timeline(self):
@@ -74,10 +81,10 @@ class TimelineModel:
             self.stop_clips()
             logging.info("Timeline model: playback stopped")
 
-    def play_clips(self):
+    def play_clips(self, active_tracks):
         self.stop_clips()  # Stop any currently playing clips
         current_time = self.playhead_position
-        for track in self.tracks:
+        for track in active_tracks:
             for clip in track['clips']:
                 clip_end = clip.x + clip.duration
                 if clip.x <= current_time < clip_end:
@@ -109,7 +116,7 @@ class TimelineModel:
             current_time = time.time() - self.start_time
             self.playhead_position = current_time
             self.update_active_sounds()
-            self.play_new_clips()
+            self.play_new_clips(self.get_active_tracks())
         return self.playhead_position
 
     def update_active_sounds(self):
@@ -119,9 +126,9 @@ class TimelineModel:
                 channel.stop()
                 self.active_sounds.remove((sound, channel, clip))
 
-    def play_new_clips(self):
+    def play_new_clips(self, active_tracks):
         current_time = self.playhead_position
-        for track in self.tracks:
+        for track in active_tracks:
             for clip in track['clips']:
                 if clip.x <= current_time < clip.x + clip.duration:
                     if not any(c == clip for _, _, c in self.active_sounds):
@@ -174,3 +181,10 @@ class TimelineModel:
                 self.is_modified = True
                 return True
         return False
+    
+    def get_active_tracks(self):
+        solo_tracks = [track for track in self.tracks if track.get("solo", False)]
+        if solo_tracks:
+            return solo_tracks
+        return [track for track in self.tracks if not track.get("mute", False)]
+    
