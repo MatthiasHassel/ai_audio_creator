@@ -11,6 +11,7 @@ class TimelineController:
         self.timeline_model = model.get_timeline_model()
         self.project_model = project_model
         self.view = None
+        self.update_interval = 50  # milliseconds
 
     def show(self):
         if self.view is None or not self.view.winfo_exists():
@@ -126,24 +127,37 @@ class TimelineController:
         self.timeline_model.play_timeline()
         if self.view:
             self.view.play_timeline()
+        self._schedule_playhead_update()
         logging.info("Timeline playback initiated from controller")
 
     def stop_timeline(self):
         self.timeline_model.stop_timeline()
         if self.view:
             self.view.stop_timeline()
+        if hasattr(self, '_update_id'):
+            self.master.after_cancel(self._update_id)
         logging.info("Timeline playback stopped from controller")
+
+    def _schedule_playhead_update(self):
+        self._update_playhead()
+        if self.timeline_model.is_playing:
+            self._update_id = self.master.after(self.update_interval, self._schedule_playhead_update)
+
+    def _update_playhead(self):
+        position = self.timeline_model.update_playhead()
+        if self.view:
+            self.view.update_playhead_position(position)
+
+    def set_playhead_position(self, position):
+        self.timeline_model.set_playhead_position(position)
+        if self.view:
+            self.view.update_playhead_position(position)
 
     def restart_timeline(self):
         self.stop_timeline()
         self.set_playhead_position(0)
         if self.view:
             self.view.restart_button.configure(state="normal")
-
-    def set_playhead_position(self, position):
-        self.timeline_model.set_playhead_position(position)
-        if self.view:
-            self.view.update_playhead_position(position)
 
     def get_playhead_position(self):
         return self.timeline_model.get_playhead_position()
