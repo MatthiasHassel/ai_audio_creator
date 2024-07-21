@@ -1,5 +1,5 @@
 from views.timeline_view import TimelineView
-import time 
+import os
 from utils.audio_clip import AudioClip
 from tkinterdnd2 import DND_FILES
 import logging 
@@ -12,6 +12,7 @@ class TimelineController:
         self.project_model = project_model
         self.view = None
         self.update_interval = 50  # milliseconds
+        self.ensure_one_track()
 
     def show(self):
         if self.view is None or not self.view.winfo_exists():
@@ -26,6 +27,15 @@ class TimelineController:
         if self.view and self.view.winfo_exists():
             self.view.withdraw()
 
+    def ensure_one_track(self):
+        if not self.timeline_model.get_tracks():
+            self.add_track("Track 1")
+
+    def select_first_track(self):
+        if self.view and self.timeline_model.get_tracks():
+            first_track = self.timeline_model.get_tracks()[0]
+            self.view.select_track(first_track)
+
     def setup_view_bindings(self):
         if self.view:
             self.view.protocol("WM_DELETE_WINDOW", self.hide)
@@ -39,14 +49,15 @@ class TimelineController:
 
     def load_timeline_data(self):
         if self.view:
-            self.view.clear_tracks()
             timeline_data = self.project_model.get_timeline_data()
             self.timeline_model.set_tracks(timeline_data)
+            self.ensure_one_track()
+            self.view.update_tracks(self.timeline_model.get_tracks())
             for track_data in self.timeline_model.get_tracks():
-                self.view.add_track(track_data['name'])
                 for clip in track_data['clips']:
                     self.view.draw_clip(clip, self.timeline_model.get_tracks().index(track_data))
             self.view.redraw_timeline()
+            self.select_first_track()
 
     def update_project_name(self, project_name):
         if self.view and self.view.winfo_exists():
@@ -61,11 +72,12 @@ class TimelineController:
             self.project_model.update_timeline_data(self.model.get_tracks())
             self.model.mark_as_saved()
 
-    def add_track(self):
-        track_name = f"Track {len(self.timeline_model.get_tracks()) + 1}"
+    def add_track(self, track_name=None):
+        if track_name is None:
+            track_name = f"Track {len(self.timeline_model.get_tracks()) + 1}"
         self.timeline_model.add_track({'name': track_name, 'clips': []})
         if self.view:
-            self.view.add_track(track_name)
+            self.view.update_tracks(self.timeline_model.get_tracks())
 
     def rename_track(self, track, new_name):
         try:
@@ -80,8 +92,21 @@ class TimelineController:
     def remove_track(self, track):
         try:
             track_index = self.timeline_model.get_track_index(track)
+            clips_to_delete = self.timeline_model.get_tracks()[track_index]['clips']
+            
+            # Delete audio files associated with the clips
+            for clip in clips_to_delete:
+                self.delete_audio_file(clip.file_path)
+            
+            # Remove the track from the model
             self.timeline_model.remove_track(track_index)
-            self.view.remove_track(track)  # Pass the track object, not the index
+            
+            # Update the view
+            if self.view:
+                self.view.update_tracks(self.timeline_model.get_tracks())
+                self.view.redraw_timeline()
+            
+            logging.info(f"Track and associated clips removed: {track['name']}")
         except ValueError:
             logging.error(f"Track not found: {track}")
         except Exception as e:
@@ -108,6 +133,20 @@ class TimelineController:
         except Exception as e:
             self.view.show_error("Import Error", f"Failed to import audio clip: {str(e)}")
 
+    def delete_clip(self, clip):
+        track_index = self.timeline_model.get_track_index_for_clip(clip)
+        if track_index != -1:
+            self.timeline_model.remove_clip_from_track(track_index, clip)
+            if self.view:
+                self.view.remove_clip(clip)
+            self.delete_audio_file(clip.file_path)
+
+    def delete_audio_file(self, file_path):
+        try:
+            os.remove(file_path)
+            logging.info(f"Deleted audio file: {file_path}")
+        except Exception as e:
+            logging.error(f"Failed to delete audio file {file_path}: {str(e)}")
 
     def on_drop(self, event):
         file_path = event.data
@@ -117,11 +156,16 @@ class TimelineController:
             self.add_audio_clip(file_path, track_index, x_position)
             logging.info(f"File dropped on track {track_index} at position {x_position}")
 
-    def move_clip(self, clip, new_x, new_track_index):
-        old_track_index = self.timeline_model.get_track_index_for_clip(clip)
-        self.timeline_model.move_clip(clip, new_x, old_track_index, new_track_index)
-        if self.view:
-            self.view.redraw_timeline()
+    def move_clip(self, clip, new_x, old_track_index, new_track_index):
+        try:
+            self.timeline_model.move_clip(clip, new_x, old_track_index, new_track_index)
+            if self.view:
+                self.view.update_tracks(self.timeline_model.get_tracks())
+                self.view.redraw_timeline()
+            return True
+        except Exception as e:
+            logging.error(f"Error moving clip: {str(e)}")
+            return False
 
     def play_timeline(self):
         self.timeline_model.play_timeline()

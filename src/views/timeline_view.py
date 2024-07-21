@@ -33,8 +33,8 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.seconds_per_pixel = self.base_seconds_per_pixel
         self.x_zoom = 1.0
         self.y_zoom = 1.0
-        self.min_x_zoom = 0.1
-        self.max_x_zoom = 5.0
+        self.min_x_zoom = 0.01
+        self.max_x_zoom = 4.0
         self.option_key_pressed = False
         self.waveform_images = {}
         self.timeline_width = 10000  # Initial width, will be adjusted based on clips
@@ -58,13 +58,14 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.create_widgets()
         
         # Set up bindings
-        self.bind("<Delete>", self.remove_selected_track)
+        self.bind("<Delete>", self.handle_delete)
         self.bind("<KeyPress-Alt_L>", self.option_key_press)
         self.bind("<KeyRelease-Alt_L>", self.option_key_release)
         self.bind_all("<MouseWheel>", self.on_mouse_scroll)
         self.bind_all("<Shift-MouseWheel>", self.on_shift_mouse_scroll)
         if self.timeline_canvas:
             self.timeline_canvas.bind("<Button-1>", self.on_canvas_click)
+            self.timeline_canvas.bind("<Button-2>", self.show_clip_context_menu)
 
     def set_controller(self, controller):
         self.controller = controller
@@ -146,10 +147,11 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
 
         self.timeline_canvas.configure(xscrollcommand=self.x_scrollbar.set)
         self.timeline_canvas.bind("<Configure>", self.on_canvas_resize)
-        self.timeline_canvas.bind("<Button-1>", self.on_canvas_click)
+        self.timeline_canvas.bind("<ButtonPress-1>", self.on_canvas_click)
         self.timeline_canvas.bind("<B1-Motion>", self.on_drag)
         self.timeline_canvas.bind("<ButtonRelease-1>", self.on_drag_release)
-        
+        self.timeline_canvas.bind("<Button-2>", self.show_clip_context_menu)
+
         self.timeline_canvas.drop_target_register(DND_FILES)
         self.timeline_canvas.dnd_bind('<<Drop>>', self.on_drop)
 
@@ -222,10 +224,12 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             self.track_label_canvas.tag_bind(f"track_{i}", "<Button-2>", lambda e, t=track: self.show_track_context_menu(e, t))
 
     def add_track(self, track_name=None):
-        if track_name is None:
-            track_name = f"Track {len(self.tracks) + 1}"
-        track_data = {"name": track_name, "clips": []}
-        self.tracks.append(track_data)
+        if self.controller:
+            self.controller.add_track(track_name)
+        # The view will be updated via update_tracks method
+
+    def update_tracks(self, new_tracks):
+        self.tracks = new_tracks
         self.update_track_labels()
         self.redraw_timeline()
 
@@ -261,29 +265,22 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
                 self.rename_track_callback(track, new_name)
             self.update_track_labels()
 
+    def handle_delete(self, event):
+        if self.selected_clip and self.controller:
+            self.controller.delete_clip(self.selected_clip)
+        elif self.selected_track:
+            self.remove_track(self.selected_track)
+
     def remove_track(self, track):
         if track in self.tracks:
-            track_index = self.tracks.index(track)
-            del self.tracks[track_index]
-            self.update_track_labels()
-            self.redraw_timeline()
             if self.remove_track_callback:
                 self.remove_track_callback(track)
-
-    def remove_selected_track(self, event=None):
-        if self.selected_track:
-            self.remove_track(self.selected_track)
 
     def show_track_context_menu(self, event, track):
         context_menu = tk.Menu(self, tearoff=0)
         context_menu.add_command(label="Rename", command=lambda: self.start_rename_track(track))
         context_menu.add_command(label="Remove", command=lambda: self.remove_track(track))
         context_menu.tk_popup(event.x_root, event.y_root)
-
-    def update_tracks(self, new_tracks):
-        self.tracks = new_tracks
-        self.update_track_labels()
-        self.draw_grid()
 
     def clear_tracks(self):
         self.tracks.clear()
@@ -468,7 +465,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
     def draw_clip(self, clip, y):
         x = clip.x / self.seconds_per_pixel
         width = clip.duration / self.seconds_per_pixel
-        fill_color = "lightblue" if clip != self.selected_clip else "blue"
+        fill_color = "blue" if clip == self.selected_clip else "lightblue"
         self.timeline_canvas.create_rectangle(x, y, x + width, y + self.track_height, 
                                               fill=fill_color, outline="blue", tags="clip")
         self.timeline_canvas.create_text(x + 5, y + 5, text=os.path.basename(clip.file_path), 
@@ -478,21 +475,45 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         if self.dragging and self.selected_clip:
             x = self.timeline_canvas.canvasx(event.x)
             y = self.timeline_canvas.canvasy(event.y)
-            dx = x - self.drag_start_x
-            dy = y - self.drag_start_y
             
-            new_x = self.selected_clip.x + dx * self.seconds_per_pixel
+            new_x = x * self.seconds_per_pixel
             new_track_index = int(y / self.track_height)
             
             if 0 <= new_track_index < len(self.tracks):
-                self.move_clip(self.selected_clip, new_x, new_track_index)
-            
-            self.drag_start_x = x
-            self.drag_start_y = y
+                # Only update the view, actual move will happen on drag release
+                self.draw_dragged_clip(self.selected_clip, new_x, new_track_index)
 
     def on_drag_release(self, event):
+        if self.dragging and self.selected_clip:
+            x = self.timeline_canvas.canvasx(event.x)
+            y = self.timeline_canvas.canvasy(event.y)
+            new_x = x * self.seconds_per_pixel
+            new_track_index = int(y / self.track_height)
+            
+            if 0 <= new_track_index < len(self.tracks):
+                old_track_index = self.find_clip_track_index(self.selected_clip)
+                if old_track_index != -1:
+                    # Move the clip in the controller
+                    success = self.controller.move_clip(self.selected_clip, new_x, old_track_index, new_track_index)
+                    if success:
+                        # Only remove from old track if move was successful
+                        self.tracks[old_track_index]['clips'].remove(self.selected_clip)
+                        self.tracks[new_track_index]['clips'].append(self.selected_clip)
+                        self.selected_clip.x = new_x
+        
         self.dragging = False
-
+        self.redraw_timeline()
+                
+    def draw_dragged_clip(self, clip, new_x, new_track_index):
+        self.redraw_timeline()  # Redraw to clear the old position
+        x = new_x / self.seconds_per_pixel
+        y = new_track_index * self.track_height
+        width = clip.duration / self.seconds_per_pixel
+        self.timeline_canvas.create_rectangle(x, y, x + width, y + self.track_height, 
+                                              fill="red", outline="red", tags="dragged_clip")
+        self.timeline_canvas.create_text(x + 5, y + 5, text=os.path.basename(clip.file_path), 
+                                         anchor="nw", tags="dragged_clip")
+        
     def find_clip_at_position(self, x, y):
         for track_index, track in enumerate(self.tracks):
             for clip in track['clips']:
@@ -512,11 +533,32 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.selected_clip = None
         self.redraw_timeline()
 
-    def move_clip(self, clip, new_x, new_track_index):
-        old_track_index = next(i for i, track in enumerate(self.tracks) if clip in track['clips'])
-        self.tracks[old_track_index]['clips'].remove(clip)
-        self.tracks[new_track_index]['clips'].append(clip)
-        clip.x = max(0, new_x)
+    def delete_selected_clip(self, event=None):
+        if self.selected_clip and self.controller:
+            self.controller.delete_clip(self.selected_clip)
+
+    def find_clip_track_index(self, clip):
+        for i, track in enumerate(self.tracks):
+            if clip in track['clips']:
+                return i
+        return -1
+
+    def show_clip_context_menu(self, event):
+        x = self.timeline_canvas.canvasx(event.x)
+        y = self.timeline_canvas.canvasy(event.y)
+        
+        clicked_clip = self.find_clip_at_position(x, y)
+        if clicked_clip:
+            self.select_clip(clicked_clip)
+            context_menu = tk.Menu(self, tearoff=0)
+            context_menu.add_command(label="Delete clip", command=self.delete_selected_clip)
+            context_menu.tk_popup(event.x_root, event.y_root)
+
+    def remove_clip(self, clip):
+        for track in self.tracks:
+            if clip in track['clips']:
+                track['clips'].remove(clip)
+                break
         self.redraw_timeline()
 
     def on_scroll(self, *args):

@@ -50,12 +50,12 @@ class TimelineModel:
         self.tracks.clear()
         self.is_modified = True
 
+    def get_tracks(self):
+        return self.tracks
+
     def set_tracks(self, tracks_data):
         self.tracks = tracks_data
         self.is_modified = True
-
-    def get_tracks(self):
-        return self.tracks
 
     def mark_as_saved(self):
         self.is_modified = False
@@ -79,15 +79,19 @@ class TimelineModel:
         current_time = self.playhead_position
         for track in self.tracks:
             for clip in track['clips']:
-                if clip.x <= current_time < clip.x + clip.duration:
+                clip_end = clip.x + clip.duration
+                if clip.x <= current_time < clip_end:
                     try:
                         sound = pygame.mixer.Sound(clip.file_path)
-                        start_pos = int((current_time - clip.x) * 1000)  # Calculate start position in milliseconds
+                        clip_start_time = current_time - clip.x
                         
-                        # Cut the sound to start from the correct position
+                        # Calculate the start position in samples
+                        sample_rate = pygame.mixer.get_init()[0]
+                        start_sample = int(clip_start_time * sample_rate)
+                        
+                        # Create a new Sound object starting from the calculated position
                         sound_array = pygame.sndarray.array(sound)
-                        start_frame = int(start_pos * sound.get_length() * 1000 / len(sound_array))
-                        cut_sound = pygame.sndarray.make_sound(sound_array[start_frame:])
+                        cut_sound = pygame.sndarray.make_sound(sound_array[start_sample:])
                         
                         channel = cut_sound.play()
                         self.active_sounds.append((sound, channel, clip))
@@ -150,8 +154,23 @@ class TimelineModel:
                 return i
         return -1
 
+    def remove_clip_from_track(self, track_index, clip):
+        if 0 <= track_index < len(self.tracks):
+            if clip in self.tracks[track_index]['clips']:
+                self.tracks[track_index]['clips'].remove(clip)
+                self.is_modified = True
+                # Stop the clip if it's currently playing
+                for sound, channel, playing_clip in self.active_sounds[:]:
+                    if playing_clip == clip:
+                        channel.stop()
+                        self.active_sounds.remove((sound, channel, playing_clip))
+
     def move_clip(self, clip, new_x, old_track_index, new_track_index):
-        self.tracks[old_track_index]['clips'].remove(clip)
-        self.tracks[new_track_index]['clips'].append(clip)
-        clip.x = max(0, new_x)
-        self.is_modified = True
+        if 0 <= old_track_index < len(self.tracks) and 0 <= new_track_index < len(self.tracks):
+            if clip in self.tracks[old_track_index]['clips']:
+                self.tracks[old_track_index]['clips'].remove(clip)
+                self.tracks[new_track_index]['clips'].append(clip)
+                clip.x = max(0, new_x)
+                self.is_modified = True
+                return True
+        return False
