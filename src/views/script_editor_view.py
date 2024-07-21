@@ -137,11 +137,14 @@ class ScriptEditorView(ctk.CTkFrame):
     def create_text_area(self):
         text_frame = ctk.CTkFrame(self.paned_window)
         self.text_area = tk.Text(text_frame, wrap=tk.WORD, undo=True)
-        self.text_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.text_area.grid(row=0, column=0, sticky="nsew")
 
         scrollbar = ctk.CTkScrollbar(text_frame, command=self.text_area.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        scrollbar.grid(row=0, column=1, sticky="ns")
         self.text_area.configure(yscrollcommand=scrollbar.set)
+
+        text_frame.grid_rowconfigure(0, weight=1)
+        text_frame.grid_columnconfigure(0, weight=1)
 
         self.paned_window.add(text_frame)
 

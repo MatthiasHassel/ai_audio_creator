@@ -5,6 +5,7 @@ from services.llama_service import LlamaService
 from services.music_service import MusicService
 from services.sfx_service import SFXService
 from services.speech_service import SpeechService
+import logging
 
 class AudioController:
     def __init__(self, model: AudioModel, view, config):
@@ -16,6 +17,7 @@ class AudioController:
         self.sfx_service = None
         self.speech_service = None
         self.playhead_update_id = None
+        self.current_audio_file = None
         self.setup_services()
         self.setup_view_commands()
 
@@ -124,26 +126,23 @@ class AudioController:
                 self.play_audio()
 
     def play_audio(self):
-        if self.model.current_audio_file:
+        if self.current_audio_file:
             self.model.play()
             self.view.update_button_states(self.model.is_playing, self.model.is_paused)
             self.start_playhead_update()
         else:
-            print("No audio file loaded")  # For debugging
+            logging.warning("No audio file loaded")
 
     def pause_resume_audio(self):
         if self.model.is_playing and not self.model.is_paused:
             self.model.pause()
-            self.stop_playhead_update()
         elif self.model.is_paused:
             self.model.resume()
-            self.start_playhead_update()
         self.view.update_button_states(self.model.is_playing, self.model.is_paused)
 
     def stop_audio(self):
         self.model.stop()
-        self.view.update_button_states(self.model.is_playing, self.model.is_paused)
-        self.stop_playhead_update()
+        self.view.update_button_states(False, False)
         self.view.audio_visualizer.update_playhead(0)
 
     def start_playhead_update(self):
@@ -159,15 +158,17 @@ class AudioController:
         if self.model.is_playing and not self.model.is_paused:
             current_time = self.model.get_current_position()
             self.view.audio_visualizer.update_playhead(current_time)
-            self.playhead_update_id = self.view.after(50, self.update_playhead)  # Update every 50ms
+            self.view.after(50, self.update_playhead)  # Update every 50ms
 
     def on_audio_file_select(self, file_path):
         if file_path and os.path.exists(file_path):
             self.model.load_audio(file_path)
             self.view.audio_visualizer.update_waveform(file_path)
             self.view.update_button_states(False, False)  # Enable play button
+            self.current_audio_file = file_path
+            logging.info(f"Audio file loaded: {file_path}")
         else:
-            print(f"Invalid file path: {file_path}")  # For debugging
+            logging.warning(f"Invalid file path: {file_path}")
 
     def clear_input(self):
         self.view.clear_input()

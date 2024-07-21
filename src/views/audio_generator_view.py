@@ -104,8 +104,14 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.audio_file_selector.grid(row=5, column=0, sticky="ew", pady=(0, 10))
 
     def create_audio_visualizer(self, parent):
-        self.audio_visualizer = AudioVisualizer(parent)
-        self.audio_visualizer.canvas_widget.grid(row=6, column=0, sticky="nsew", pady=(0, 10))
+        visualizer_frame = ctk.CTkFrame(parent)
+        visualizer_frame.grid(row=6, column=0, sticky="nsew", pady=(0, 10))
+        visualizer_frame.grid_rowconfigure(0, weight=1)
+        visualizer_frame.grid_columnconfigure(0, weight=1)
+        
+        self.audio_visualizer = AudioVisualizer(visualizer_frame)
+        self.audio_visualizer.pack(fill=ctk.BOTH, expand=True)
+        parent.grid_rowconfigure(6, weight=1)  # Make the visualizer expandable
 
     def create_audio_controls(self, parent):
         control_frame = ctk.CTkFrame(parent)

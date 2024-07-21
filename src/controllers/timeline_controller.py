@@ -96,9 +96,17 @@ class TimelineController:
                 self.view.add_clip(clip, track_index)
                 self.view.redraw_timeline()
             logging.info("Audio clip added and displayed successfully")
+        except FileNotFoundError as e:
+            logging.error(str(e))
+            if self.view and hasattr(self.view, 'show_error'):
+                self.view.show_error("File Not Found", str(e))
+        except ValueError as e:
+            logging.error(str(e))
+            if self.view and hasattr(self.view, 'show_error'):
+                self.view.show_error("Invalid Audio File", str(e))
         except Exception as e:
             logging.error(f"Error adding audio clip: {str(e)}", exc_info=True)
-            if hasattr(self.view, 'show_error'):
+            if self.view and hasattr(self.view, 'show_error'):
                 self.view.show_error("Error", f"Failed to add audio clip: {str(e)}")
 
     def on_drop(self, event):
@@ -166,3 +174,4 @@ class TimelineController:
             'start_time': clip.x,
             'duration': clip.duration
         })
+

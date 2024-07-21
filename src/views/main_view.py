@@ -127,7 +127,7 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
         self.status_var = tk.StringVar()
         self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var, anchor="w")
         self.status_bar.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
-
+        
     def create_timeline_button(self):
         timeline_button = ctk.CTkButton(self, text="Open Timeline", command=self.open_timeline)
         timeline_button.grid(row=3, column=0, pady=10)

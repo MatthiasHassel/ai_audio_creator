@@ -1,5 +1,6 @@
 # timeline_model.py
 import pygame
+import pygame.sndarray
 import time
 import logging
 
@@ -11,6 +12,7 @@ class TimelineModel:
         self.playhead_position = 0
         self.start_time = 0
         pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=1024)
+        self.active_sounds = []
 
     def add_track(self, track_data):
         self.tracks.append(track_data)
@@ -62,13 +64,47 @@ class TimelineModel:
         if not self.is_playing:
             self.is_playing = True
             self.start_time = time.time() - self.playhead_position
+            self.play_clips()
             logging.info("Timeline model: playback started")
 
     def stop_timeline(self):
         if self.is_playing:
             self.is_playing = False
             self.playhead_position = time.time() - self.start_time
+            self.stop_clips()
             logging.info("Timeline model: playback stopped")
+
+    def play_clips(self):
+        current_time = self.playhead_position
+        for track in self.tracks:
+            for clip in track['clips']:
+                if clip.x <= current_time < clip.x + clip.duration:
+                    try:
+                        sound = pygame.mixer.Sound(clip.file_path)
+                        start_pos = int((current_time - clip.x) * 1000)  # Calculate start position in milliseconds
+                        
+                        # Cut the sound to start from the correct position
+                        sound_array = pygame.sndarray.array(sound)
+                        start_frame = int(start_pos * sound.get_length() * 1000 / len(sound_array))
+                        cut_sound = pygame.sndarray.make_sound(sound_array[start_frame:])
+                        
+                        channel = cut_sound.play()
+                        self.active_sounds.append((sound, channel))
+                    except Exception as e:
+                        logging.error(f"Error playing clip {clip.file_path}: {str(e)}")
+
+    def stop_clips(self):
+        for sound, channel in self.active_sounds:
+            if channel is not None:
+                channel.stop()
+        self.active_sounds.clear()
+
+    def update_playhead(self):
+        if self.is_playing:
+            current_time = time.time() - self.start_time
+            self.playhead_position = current_time
+            self.play_clips()  # Check for new clips to play
+        return self.playhead_position
 
     def get_playhead_position(self):
         if self.is_playing:
@@ -79,8 +115,3 @@ class TimelineModel:
         self.playhead_position = position
         if self.is_playing:
             self.start_time = time.time() - position
-
-    def update_playhead(self):
-        if self.is_playing:
-            self.playhead_position = time.time() - self.start_time
-        return self.playhead_position

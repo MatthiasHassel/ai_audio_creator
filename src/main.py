@@ -20,7 +20,8 @@ def main():
 
     # Setup logging
     setup_logging(config)
-
+    logging.info("Application starting")
+    
     # Create main components
     root = TkinterDnD.Tk()
     root.withdraw()  # Hide the root window
