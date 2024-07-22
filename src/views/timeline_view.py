@@ -47,6 +47,9 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.dragging = False
         self.drag_start_x = 0
         self.drag_start_y = 0
+        self.track_volume_vars = {}
+        self.solo_buttons = {}  # Initialize solo_buttons
+        self.mute_buttons = {}  # Initialize mute_buttons
 
         self.audio_visualizer = AudioVisualizer(self)
         self.waveform_cache = {}
@@ -65,7 +68,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.bind_all("<Shift-MouseWheel>", self.on_shift_mouse_scroll)
         if self.timeline_canvas:
             self.timeline_canvas.bind("<Button-1>", self.on_canvas_click)
-            self.timeline_canvas.bind("<Button-2>", self.show_clip_context_menu)
+            self.timeline_canvas.bind("<Button-3>", self.show_clip_context_menu)
 
     def set_controller(self, controller):
         self.controller = controller
@@ -217,36 +220,64 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             y = i * self.track_height + self.topbar.winfo_height()
             fill_color = "gray35" if track == self.selected_track else "gray25"
             self.track_label_canvas.create_rectangle(0, y, 200, y + self.track_height, fill=fill_color, tags=f"track_{i}")
-            self.track_label_canvas.create_text(10, y + self.track_height // 2, text=track["name"], anchor="w", fill="white", tags=f"track_{i}")
+            self.track_label_canvas.create_text(10, y + 15, text=track["name"], anchor="w", fill="white", tags=f"track_{i}")
             
-            # Add Solo checkbox
-            solo_var = tk.BooleanVar(value=track.get("solo", False))
-            solo_cb = ctk.CTkCheckBox(self.track_label_canvas, text="S", variable=solo_var, width=20, height=20)
-            self.track_label_canvas.create_window(140, y + self.track_height // 2, window=solo_cb)
+            # Add Solo button
+            solo_button = ctk.CTkButton(self.track_label_canvas, text="S", width=20, height=20, 
+                                        fg_color="gray50", hover_color="green",
+                                        command=lambda t=track: self.toggle_solo(t))
+            solo_button_window = self.track_label_canvas.create_window(140, y + 15, window=solo_button)
+            self.solo_buttons[i] = solo_button
             
-            # Add Mute checkbox
-            mute_var = tk.BooleanVar(value=track.get("mute", False))
-            mute_cb = ctk.CTkCheckBox(self.track_label_canvas, text="M", variable=mute_var, width=20, height=20)
-            self.track_label_canvas.create_window(170, y + self.track_height // 2, window=mute_cb)
+            # Add Mute button
+            mute_button = ctk.CTkButton(self.track_label_canvas, text="M", width=20, height=20, 
+                                        fg_color="gray50", hover_color="red",
+                                        command=lambda t=track: self.toggle_mute(t))
+            mute_button_window = self.track_label_canvas.create_window(170, y + 15, window=mute_button)
+            self.mute_buttons[i] = mute_button
+            
+            # Add volume slider
+            volume_var = tk.DoubleVar(value=track.get("volume", 1.0))
+            volume_slider = ctk.CTkSlider(self.track_label_canvas, from_=0, to=1, variable=volume_var, width=180)
+            volume_slider_window = self.track_label_canvas.create_window(100, y + 45, window=volume_slider)
             
             # Store references to the variables
-            track["solo_var"] = solo_var
-            track["mute_var"] = mute_var
+            self.track_volume_vars[i] = volume_var
             
-            # Bind the checkboxes to update functions
-            solo_cb.configure(command=lambda t=track: self.update_solo_mute(t))
-            mute_cb.configure(command=lambda t=track: self.update_solo_mute(t))
+            # Bind the volume slider to update function
+            volume_slider.configure(command=lambda value, t=track: self.update_volume(t, value))
             
-            self.track_label_canvas.tag_bind(f"track_{i}", "<Button-1>", lambda e, t=track: self.select_track(t))
-            self.track_label_canvas.tag_bind(f"track_{i}", "<Double-Button-1>", lambda e, t=track: self.start_rename_track(t))
-            self.track_label_canvas.tag_bind(f"track_{i}", "<Button-2>", lambda e, t=track: self.show_track_context_menu(e, t))
+            # Update button colors based on current state
+            self.update_button_colors(track)
 
-    def update_solo_mute(self, track):
-        track["solo"] = track["solo_var"].get()
-        track["mute"] = track["mute_var"].get()
+    def toggle_solo(self, track):
+        track["solo"] = not track.get("solo", False)
         if self.controller:
             self.controller.update_track_solo_mute(track)
-            
+        self.update_button_colors(track)
+
+    def toggle_mute(self, track):
+        track["mute"] = not track.get("mute", False)
+        if self.controller:
+            self.controller.update_track_solo_mute(track)
+        self.update_button_colors(track)
+
+    def update_button_colors(self, track):
+        track_index = self.tracks.index(track)
+        solo_button = self.solo_buttons.get(track_index)
+        mute_button = self.mute_buttons.get(track_index)
+        
+        if solo_button:
+            solo_button.configure(fg_color="green" if track.get("solo", False) else "gray50")
+        
+        if mute_button:
+            mute_button.configure(fg_color="red" if track.get("mute", False) else "gray50")
+
+    def update_volume(self, track, value):
+        track["volume"] = value
+        if self.controller:
+            self.controller.update_track_volume(track)
+                    
     def add_track(self, track_name=None):
         if self.controller:
             self.controller.add_track(track_name)

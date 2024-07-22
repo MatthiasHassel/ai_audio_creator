@@ -169,14 +169,22 @@ class TimelineController:
 
     def update_track_solo_mute(self, track):
         self.timeline_model.update_track_solo_mute(track)
-        self.redraw_timeline()
+        self.update_active_tracks()
+        if self.view:
+            self.view.update_button_colors(track)
+
+    def update_track_volume(self, track):
+        self.timeline_model.update_track_volume(track)
+        self.update_active_tracks()
+
+    def update_active_tracks(self):
+        active_tracks = self.get_active_tracks()
+        if self.timeline_model.is_playing:
+            self.timeline_model.update_playing_tracks(active_tracks)
 
     def get_active_tracks(self):
-        solo_tracks = [track for track in self.timeline_model.get_tracks() if track.get("solo", False)]
-        if solo_tracks:
-            return solo_tracks
-        return [track for track in self.timeline_model.get_tracks() if not track.get("mute", False)]
-    
+        return self.timeline_model.get_active_tracks()
+
     def play_timeline(self):
         self.timeline_model.play_timeline(self.get_active_tracks())
         if self.view:

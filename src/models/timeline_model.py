@@ -67,6 +67,12 @@ class TimelineModel:
             self.tracks[track_index]["mute"] = track.get("mute", False)
             self.is_modified = True
 
+    def update_track_volume(self, track):
+        track_index = self.get_track_index(track)
+        if 0 <= track_index < len(self.tracks):
+            self.tracks[track_index]["volume"] = track.get("volume", 1.0)
+            self.is_modified = True
+
     def play_timeline(self, active_tracks):
         if not self.is_playing:
             self.is_playing = True
@@ -85,11 +91,13 @@ class TimelineModel:
         self.stop_clips()  # Stop any currently playing clips
         current_time = self.playhead_position
         for track in active_tracks:
+            volume = track.get("volume", 1.0)
             for clip in track['clips']:
                 clip_end = clip.x + clip.duration
                 if clip.x <= current_time < clip_end:
                     try:
                         sound = pygame.mixer.Sound(clip.file_path)
+                        sound.set_volume(volume)
                         clip_start_time = current_time - clip.x
                         
                         # Calculate the start position in samples
@@ -187,4 +195,3 @@ class TimelineModel:
         if solo_tracks:
             return solo_tracks
         return [track for track in self.tracks if not track.get("mute", False)]
-    
