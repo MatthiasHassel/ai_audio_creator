@@ -352,18 +352,13 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
     def play_timeline(self):
         if not self.is_playing:
             self.is_playing = True
-            self.start_time = time.time() - self.playhead_position
-            self.update_playhead()
+            self.play_button.configure(state="disabled")
+            self.stop_button.configure(state="normal")
+            self.restart_button.configure(state="normal")
             logging.info("Timeline playback started in view")
-        self.play_button.configure(state="disabled")
-        self.stop_button.configure(state="normal")
-        self.restart_button.configure(state="normal")
 
     def stop_timeline(self):
         self.is_playing = False
-        if self.after_id:
-            self.after_cancel(self.after_id)
-            self.after_id = None
         self.play_button.configure(state="normal")
         self.stop_button.configure(state="disabled")
         self.restart_button.configure(state="normal")

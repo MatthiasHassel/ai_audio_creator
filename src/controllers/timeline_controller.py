@@ -169,13 +169,11 @@ class TimelineController:
 
     def update_track_solo_mute(self, track):
         self.timeline_model.update_track_solo_mute(track)
-        self.update_active_tracks()
         if self.view:
             self.view.update_button_colors(track)
 
     def update_track_volume(self, track):
         self.timeline_model.update_track_volume(track)
-        self.update_active_tracks()
 
     def update_active_tracks(self):
         active_tracks = self.get_active_tracks()
@@ -186,7 +184,8 @@ class TimelineController:
         return self.timeline_model.get_active_tracks()
 
     def play_timeline(self):
-        self.timeline_model.play_timeline(self.get_active_tracks())
+        active_tracks = self.get_active_tracks()
+        self.timeline_model.play_timeline(active_tracks)
         if self.view:
             self.view.play_timeline()
         self._schedule_playhead_update()
@@ -206,7 +205,7 @@ class TimelineController:
             self._update_id = self.master.after(self.update_interval, self._schedule_playhead_update)
 
     def _update_playhead(self):
-        position = self.timeline_model.update_playhead()
+        position = self.timeline_model.get_playhead_position()
         if self.view:
             self.view.update_playhead_position(position)
 
