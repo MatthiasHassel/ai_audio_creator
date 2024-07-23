@@ -2,13 +2,15 @@
 
 import customtkinter as ctk
 import tkinter as tk
-from tkinterdnd2 import DND_FILES, TkinterDnD
-from utils.audio_clip import AudioClip
-from utils.audio_visualizer import AudioVisualizer
 import logging
 import os 
 import time
 from tkinter import messagebox
+from tkinterdnd2 import DND_FILES, TkinterDnD
+from utils.audio_clip import AudioClip
+from utils.audio_visualizer import AudioVisualizer
+from utils.keyboard_shortcuts import KeyboardShortcuts
+
 
 class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
     def __init__(self, master, project_model):
@@ -21,7 +23,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.update_title()
         self.geometry("1200x600")
         self.protocol("WM_DELETE_WINDOW", self.withdraw)
-        
+        self.keyboard_shortcuts = KeyboardShortcuts(self)
         
         # Initialize variables
         self.tracks = []
@@ -113,7 +115,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.topbar = tk.Canvas(self.timeline_frame, bg="gray40", height=30, highlightthickness=0)
         self.topbar.grid(row=0, column=0, sticky="ew")
         self.topbar.bind("<Button-1>", self.on_topbar_click)
-        
+
     def create_main_content(self):
         self.main_frame = ctk.CTkFrame(self)
         self.main_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)

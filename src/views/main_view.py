@@ -149,15 +149,15 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
             self.status_var.set(message)
 
     def open_project(self):
-        if hasattr(self, 'open_project_callback'):
-            initial_dir = self.config_data['projects']['base_dir']
-            project_dir = filedialog.askdirectory(
-                title="Select Project Directory",
-                initialdir=initial_dir
-            )
-            if project_dir:
-                project_name = os.path.basename(project_dir)
-                self.open_project_callback(project_name)  # Pass project_name to the callback
+        initial_dir = self.config_data['projects']['base_dir']
+        project_dir = filedialog.askdirectory(
+            title="Select Project Directory",
+            initialdir=initial_dir
+        )
+        if project_dir:
+            project_name = os.path.basename(project_dir)
+            self.open_project_callback(project_name)
+
 
     def save_project(self):
         if hasattr(self, 'save_project_callback'):

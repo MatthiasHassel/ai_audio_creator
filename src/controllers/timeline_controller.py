@@ -316,3 +316,42 @@ class TimelineController:
         self.project_model.load_timeline_data()
         self.timeline_model = self.project_model.get_timeline_model()
         self.load_timeline_data()
+
+    def save_project(self):
+        if self.project_model:
+            success, message = self.project_model.save_project()
+            if success:
+                self.on_project_saved()
+                if self.view:
+                    self.view.update_status("Project saved successfully")
+            else:
+                if self.view:
+                    self.view.update_status(f"Failed to save project: {message}")
+
+    def open_project(self):
+        if self.master_controller:
+            self.master_controller.show_open_project_dialog()
+
+    def new_project(self):
+        if self.master_controller:
+            self.master_controller.show_new_project_dialog()
+
+    def is_playing(self):
+        return self.timeline_model.is_playing
+
+    def toggle_solo(self, track):
+        track["solo"] = not track.get("solo", False)
+        self.update_track_solo_mute(track)
+
+    def toggle_mute(self, track):
+        track["mute"] = not track.get("mute", False)
+        self.update_track_solo_mute(track)
+    
+    def add_track(self, track_name=None):
+        if track_name is None:
+            track_name = f"Track {len(self.timeline_model.get_tracks()) + 1}"
+        self.timeline_model.add_track({'name': track_name, 'clips': []})
+        if self.view:
+            self.view.update_tracks(self.timeline_model.get_tracks())
+            self.view.select_track(self.timeline_model.get_tracks()[-1])
+    

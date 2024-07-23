@@ -1,7 +1,7 @@
 from controllers.audio_controller import AudioController
 from controllers.script_editor_controller import ScriptEditorController
 from controllers.timeline_controller import TimelineController
-from tkinter import filedialog
+from tkinter import filedialog, simpledialog
 import os
 import logging
 
@@ -30,6 +30,7 @@ class MainController:
 
         timeline_model = self.project_model.get_timeline_model()
         self.timeline_controller = TimelineController(self.view, timeline_model, self.project_model)
+        self.timeline_controller.master_controller = self
         self.view.set_timeline_controller(self.timeline_controller)
 
     def setup_callbacks(self):
@@ -174,6 +175,24 @@ class MainController:
             except Exception as e:
                 logging.error(f"Failed to import audio file: {str(e)}", exc_info=True)
                 self.view.show_error("Import Error", f"Failed to import audio file: {str(e)}")
+
+    def show_open_project_dialog(self):
+        self.view.open_project()
+
+    def show_new_project_dialog(self):
+        project_name = simpledialog.askstring("New Project", "Enter project name:")
+        if project_name:
+            try:
+                self.project_model.create_project(project_name)
+                self.update_current_project(project_name)
+                self.update_output_directories()
+                self.clear_input_fields()
+                self.view.update_status(f"Project '{project_name}' created successfully.")
+                self.view.show_info("Success", f"Project '{project_name}' created successfully.")
+            except ValueError as e:
+                error_message = str(e)
+                self.view.update_status(f"Error: {error_message}")
+                self.view.show_error("Error", error_message)
 
     def quit(self):
         if self.audio_controller:
