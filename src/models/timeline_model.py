@@ -4,6 +4,7 @@ import numpy as np
 import time
 import logging
 from pydub import AudioSegment
+from utils.audio_clip import AudioClip
 
 class TimelineModel:
     def __init__(self):
@@ -204,6 +205,40 @@ class TimelineModel:
             return solo_tracks
         return [track for track in self.tracks if not track.get("mute", False)]
     
+    def get_serializable_tracks(self):
+        serializable_tracks = []
+        for track in self.tracks:
+            serializable_clips = []
+            for clip in track['clips']:
+                serializable_clips.append({
+                    'file_path': clip.file_path,
+                    'x': clip.x,
+                    'duration': clip.duration
+                })
+            serializable_tracks.append({
+                'name': track['name'],
+                'clips': serializable_clips,
+                'solo': track.get('solo', False),
+                'mute': track.get('mute', False),
+                'volume': track.get('volume', 1.0)
+            })
+        return serializable_tracks
+
+    def load_from_serializable(self, serializable_tracks):
+        self.tracks = []
+        for track_data in serializable_tracks:
+            clips = []
+            for clip_data in track_data['clips']:
+                clips.append(AudioClip(clip_data['file_path'], clip_data['x']))
+            self.tracks.append({
+                'name': track_data['name'],
+                'clips': clips,
+                'solo': track_data.get('solo', False),
+                'mute': track_data.get('mute', False),
+                'volume': track_data.get('volume', 1.0)
+            })
+        self.is_modified = False
+
     def __del__(self):
         if self.stream:
             self.stream.stop_stream()

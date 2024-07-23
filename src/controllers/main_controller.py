@@ -28,7 +28,8 @@ class MainController:
         script_view = self.view.get_script_editor_view()
         self.script_editor_controller = ScriptEditorController(script_model, script_view, self.config, self.project_model)
 
-        self.timeline_controller = TimelineController(self.view, self.model, self.project_model)
+        timeline_model = self.project_model.get_timeline_model()
+        self.timeline_controller = TimelineController(self.view, timeline_model, self.project_model)
         self.view.set_timeline_controller(self.timeline_controller)
 
     def setup_callbacks(self):
@@ -73,21 +74,13 @@ class MainController:
                 error_message = str(e)
                 self.view.update_status(f"Error: {error_message}")
                 self.view.show_error("Error", error_message)
-
+        
     def save_project(self):
-        if not self.project_model.current_project:
-            self.view.show_warning("No Project", "No project is currently open.")
-            return
-        try:
-            self.project_model.save_project_metadata()
+        if hasattr(self, 'save_project_callback'):
+            self.save_project_callback()
             if self.timeline_controller:
                 self.timeline_controller.save_timeline_data()
-            self.view.update_status("Project saved successfully.")
-            self.view.show_info("Success", "Project saved successfully.")
-        except Exception as e:
-            error_message = f"Failed to save project: {str(e)}"
-            self.view.update_status(error_message)
-            self.view.show_error("Error", error_message)
+            self.project_model.save_project_metadata()
 
     def open_project(self, project_name):
         try:

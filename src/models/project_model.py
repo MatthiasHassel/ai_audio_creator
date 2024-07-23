@@ -2,6 +2,7 @@ import os
 import json
 import datetime
 import shutil
+from models.timeline_model import TimelineModel  
 
 class ProjectModel:
     def __init__(self, base_projects_dir):
@@ -9,7 +10,14 @@ class ProjectModel:
         self.current_project = None
         self.metadata = {}
         self.default_project_name = "Default Project"
-        self.timeline_data = []
+        self.timeline_model = TimelineModel()  
+        self.saved_audio_files = set()
+
+    def ensure_default_project(self):
+        default_project_path = os.path.join(self.base_projects_dir, self.default_project_name)
+        if not os.path.exists(default_project_path):
+            self.create_project(self.default_project_name)
+        self.load_project(self.default_project_name)
 
     def create_project(self, project_name):
         project_dir = os.path.join(self.base_projects_dir, project_name)
@@ -30,7 +38,7 @@ class ProjectModel:
             "last_modified": datetime.datetime.now().isoformat(),
             "last_opened_script": None
         }
-        self.timeline_data = []  # Initialize with an empty list
+        self.timeline_model.clear_tracks()  # Clear tracks for new project
         self.save_project_metadata()
         self.save_timeline_data()
 
@@ -43,17 +51,6 @@ class ProjectModel:
         self.load_project_metadata()
         self.load_timeline_data()
 
-    def ensure_default_project(self):
-        if not os.path.exists(os.path.join(self.base_projects_dir, self.default_project_name)):
-            self.create_project(self.default_project_name)
-        try:
-            self.load_project(self.default_project_name)
-        except Exception as e:
-            print(f"Error loading default project: {str(e)}")
-            # Create a new default project if loading fails
-            self.create_project(self.default_project_name)
-            self.load_project(self.default_project_name)
-
     def save_project_metadata(self):
         if not self.current_project:
             raise ValueError("No project is currently active")
@@ -63,7 +60,8 @@ class ProjectModel:
         metadata_file = os.path.join(self.get_project_dir(), "project_metadata.json")
         with open(metadata_file, 'w') as f:
             json.dump(self.metadata, f, indent=2)
-
+        self.update_saved_audio_files()
+    
     def load_project_metadata(self):
         metadata_file = os.path.join(self.get_project_dir(), "project_metadata.json")
         if os.path.exists(metadata_file):
@@ -81,26 +79,31 @@ class ProjectModel:
             raise ValueError("No project is currently active")
         
         timeline_file = os.path.join(self.get_project_dir(), "timeline_data.json")
+        serializable_tracks = self.timeline_model.get_serializable_tracks()
         with open(timeline_file, 'w') as f:
-            json.dump(self.timeline_data, f, indent=2)
+            json.dump(serializable_tracks, f, indent=2)
 
     def load_timeline_data(self):
         timeline_file = os.path.join(self.get_project_dir(), "timeline_data.json")
         if os.path.exists(timeline_file):
             try:
                 with open(timeline_file, 'r') as f:
-                    self.timeline_data = json.load(f)
+                    serializable_tracks = json.load(f)
+                self.timeline_model.load_from_serializable(serializable_tracks)
             except json.JSONDecodeError as e:
                 print(f"Error parsing timeline data: {str(e)}")
-                self.timeline_data = []
+                self.timeline_model.clear_tracks()
         else:
-            self.timeline_data = []
+            self.timeline_model.clear_tracks()
+
+    def get_timeline_model(self):
+        return self.timeline_model
 
     def get_timeline_data(self):
-        return self.timeline_data
+        return self.timeline_model.get_tracks()
 
     def update_timeline_data(self, new_timeline_data):
-        self.timeline_data = new_timeline_data
+        self.timeline_model.load_from_serializable(new_timeline_data)
         self.save_timeline_data()
 
     def get_last_opened_script(self):
@@ -125,11 +128,6 @@ class ProjectModel:
             raise ValueError("No project is currently active")
         return os.path.join(self.base_projects_dir, self.current_project)
     
-    def get_audio_files_dir(self):
-        if not self.current_project:
-            raise ValueError("No project is currently active")
-        return os.path.join(self.get_project_dir(), "audio_files")
-
     def import_audio_file(self, file_path):
         if not self.current_project:
             raise ValueError("No project is currently active")
@@ -138,10 +136,19 @@ class ProjectModel:
         file_name = os.path.basename(file_path)
         destination = os.path.join(audio_files_dir, file_name)
         
-        # Ensure the audio_files directory exists
         os.makedirs(audio_files_dir, exist_ok=True)
-        
-        # Copy the file to the project's audio files directory
         shutil.copy2(file_path, destination)
         
-        return destination  # Return the new file path within the project
+        return destination
+    
+    def update_saved_audio_files(self):
+        audio_files_dir = self.get_audio_files_dir()
+        self.saved_audio_files = set(os.path.join(audio_files_dir, f) for f in os.listdir(audio_files_dir) if f.endswith(('.mp3', '.wav')))
+
+    def get_saved_audio_files(self):
+        return self.saved_audio_files
+
+    def get_audio_files_dir(self):
+        if not self.current_project:
+            raise ValueError("No project is currently active")
+        return os.path.join(self.get_project_dir(), "audio_files")

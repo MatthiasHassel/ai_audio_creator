@@ -3,28 +3,38 @@ import os
 from utils.audio_clip import AudioClip
 from tkinterdnd2 import DND_FILES
 import logging 
+from tkinter import messagebox
 
 class TimelineController:
-    def __init__(self, master, model, project_model):
+    def __init__(self, master, timeline_model, project_model):
         self.master = master
-        self.model = model
-        self.timeline_model = model.get_timeline_model()
+        self.timeline_model = timeline_model
         self.project_model = project_model
         self.view = None
         self.update_interval = 50  # milliseconds
         self.ensure_one_track()
+        self.unsaved_changes = False
+        self.imported_audio_files = set()
 
     def show(self):
         if self.view is None or not self.view.winfo_exists():
             self.view = TimelineView(self.master, self.project_model)
             self.view.set_controller(self)
             self.setup_view_bindings()
-            self.load_timeline_data()
+        self.load_timeline_data()
         self.view.update_title(self.project_model.current_project)
         self.view.deiconify()
-        self.select_first_track()
     
     def hide(self):
+        if self.unsaved_changes:
+            response = messagebox.askyesnocancel("Unsaved Changes", "You have unsaved changes. Do you want to save before closing?")
+            if response is None:  # Cancel
+                return
+            elif response:  # Yes
+                self.save_timeline_data()
+            else:  # No
+                self.discard_unsaved_changes()
+        
         if self.view and self.view.winfo_exists():
             self.view.withdraw()
 
@@ -49,16 +59,17 @@ class TimelineController:
             self.view.set_add_clip_callback(self.add_clip_to_model)
 
     def load_timeline_data(self):
+        tracks = self.timeline_model.get_tracks()
+        self.ensure_one_track()
         if self.view:
-            timeline_data = self.project_model.get_timeline_data()
-            self.timeline_model.set_tracks(timeline_data)
-            self.ensure_one_track()
-            self.view.update_tracks(self.timeline_model.get_tracks())
-            for track_data in self.timeline_model.get_tracks():
+            self.view.update_tracks(tracks)
+            for track_index, track_data in enumerate(tracks):
                 for clip in track_data['clips']:
-                    self.view.draw_clip(clip, self.timeline_model.get_tracks().index(track_data))
+                    self.view.draw_clip(clip, track_index)
             self.view.redraw_timeline()
-            self.select_first_track()
+        self.select_first_track()
+        self.unsaved_changes = False
+        self.imported_audio_files.clear()
 
     def update_project_name(self, project_name):
         if self.view and self.view.winfo_exists():
@@ -69,9 +80,12 @@ class TimelineController:
         self.load_timeline_data()
 
     def save_timeline_data(self):
-        if self.model.is_modified:
-            self.project_model.update_timeline_data(self.model.get_tracks())
-            self.model.mark_as_saved()
+        if self.timeline_model.is_modified:
+            self.project_model.update_timeline_data(self.timeline_model.get_serializable_tracks())
+            self.timeline_model.mark_as_saved()
+            self.project_model.update_saved_audio_files()
+            self.imported_audio_files.clear()
+            self.unsaved_changes = False
 
     def add_track(self, track_name=None):
         if track_name is None:
@@ -80,6 +94,7 @@ class TimelineController:
         if self.view:
             self.view.update_tracks(self.timeline_model.get_tracks())
             self.view.select_track(self.timeline_model.get_tracks()[-1])
+        self.unsaved_changes = True
 
     def rename_track(self, track, new_name):
         try:
@@ -90,6 +105,7 @@ class TimelineController:
             logging.error(f"Track not found: {track}")
         except Exception as e:
             logging.error(f"Error renaming track: {str(e)}")
+        self.unsaved_changes = True
 
     def remove_track(self, track):
         try:
@@ -113,6 +129,7 @@ class TimelineController:
             logging.error(f"Track not found: {track}")
         except Exception as e:
             logging.error(f"Error removing track: {str(e)}")
+        self.unsaved_changes = True
 
     def add_audio_clip(self, file_path):
         if self.timeline_model.is_playing:
@@ -132,6 +149,8 @@ class TimelineController:
             self.timeline_model.add_clip_to_track(track_index, clip)
             self.view.add_clip(clip, track_index)
             self.view.redraw_timeline()
+            self.imported_audio_files.add(file_path)
+            self.unsaved_changes = True
         except Exception as e:
             self.view.show_error("Import Error", f"Failed to import audio clip: {str(e)}")
 
@@ -142,6 +161,7 @@ class TimelineController:
             if self.view:
                 self.view.remove_clip(clip)
             self.delete_audio_file(clip.file_path)
+        self.unsaved_changes = True
 
     def delete_audio_file(self, file_path):
         try:
@@ -169,6 +189,7 @@ class TimelineController:
         except Exception as e:
             logging.error(f"Error moving clip: {str(e)}")
             return False
+        self.unsaved_changes = True
 
     def update_track_solo_mute(self, track):
         self.timeline_model.update_track_solo_mute(track)
@@ -256,3 +277,16 @@ class TimelineController:
             'duration': clip.duration
         })
 
+    def discard_unsaved_changes(self):
+        saved_audio_files = self.project_model.get_saved_audio_files()
+        for file_path in self.imported_audio_files:
+            if file_path not in saved_audio_files:
+                try:
+                    os.remove(file_path)
+                    print(f"Removed unsaved audio file: {file_path}")
+                except OSError as e:
+                    print(f"Error removing file {file_path}: {e}")
+        
+        self.project_model.load_timeline_data()
+        self.timeline_model = self.project_model.get_timeline_model()
+        self.load_timeline_data()
