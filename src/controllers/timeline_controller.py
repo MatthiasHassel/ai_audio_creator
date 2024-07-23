@@ -79,6 +79,15 @@ class TimelineController:
         self.update_project_name(self.project_model.current_project)
         self.load_timeline_data()
 
+    def on_project_saved(self):
+        self.unsaved_changes = False
+        if self.view and self.view.winfo_exists():
+            self.view.update_status("Project saved successfully")
+
+    def update_status(self, message):
+        if self.view and self.view.winfo_exists():
+            self.view.update_status(message)
+
     def save_timeline_data(self):
         if self.timeline_model.is_modified:
             self.project_model.update_timeline_data(self.timeline_model.get_serializable_tracks())
@@ -181,15 +190,32 @@ class TimelineController:
     def move_clip(self, clip, new_x, old_track_index, new_track_index):
         try:
             new_x = max(0, new_x)  # Ensure clip doesn't go below 0s
-            self.timeline_model.move_clip(clip, new_x, old_track_index, new_track_index)
-            if self.view:
-                self.view.update_tracks(self.timeline_model.get_tracks())
-                self.view.redraw_timeline()
-            return True
+            tracks = self.timeline_model.get_tracks()
+            
+            if 0 <= old_track_index < len(tracks) and 0 <= new_track_index < len(tracks):
+                old_track = tracks[old_track_index]
+                new_track = tracks[new_track_index]
+                
+                # Remove the clip from the old track
+                old_track['clips'] = [c for c in old_track['clips'] if c.file_path != clip.file_path]
+                
+                # Update the clip's position
+                clip.x = new_x
+                
+                # Add the clip to the new track
+                new_track['clips'].append(clip)
+                
+                self.timeline_model.set_modified(True)
+                if self.view:
+                    self.view.update_tracks(tracks)
+                    self.view.redraw_timeline()
+                return True
+            else:
+                logging.warning(f"Invalid track indices: old={old_track_index}, new={new_track_index}")
+                return False
         except Exception as e:
             logging.error(f"Error moving clip: {str(e)}")
             return False
-        self.unsaved_changes = True
 
     def update_track_solo_mute(self, track):
         self.timeline_model.update_track_solo_mute(track)

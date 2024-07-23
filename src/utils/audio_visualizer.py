@@ -67,6 +67,11 @@ class AudioVisualizer(tk.Frame):
             x = position / self.audio_duration * self.canvas.winfo_width()
             self.canvas.coords(self.playhead_line, x, 0, x, self.canvas.winfo_height())
 
+    def hide_playhead(self):
+        if self.playhead_line:
+            self.canvas.delete(self.playhead_line)
+            self.playhead_line = None
+
     def clear(self):
         self.canvas.delete("all")
         self.waveform_image = None

@@ -22,6 +22,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.geometry("1200x600")
         self.protocol("WM_DELETE_WINDOW", self.withdraw)
         
+        
         # Initialize variables
         self.tracks = []
         self.selected_track = None
@@ -61,6 +62,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
         self.create_widgets()
+        self.create_status_bar()
         
         # Set up bindings
         self.bind("<Delete>", self.handle_delete)
@@ -107,6 +109,11 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.y_zoom_slider.set(self.y_zoom)
         self.y_zoom_slider.grid(row=0, column=8, padx=5)
 
+    def create_topbar(self):
+        self.topbar = tk.Canvas(self.timeline_frame, bg="gray40", height=30, highlightthickness=0)
+        self.topbar.grid(row=0, column=0, sticky="ew")
+        self.topbar.bind("<Button-1>", self.on_topbar_click)
+        
     def create_main_content(self):
         self.main_frame = ctk.CTkFrame(self)
         self.main_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
@@ -137,11 +144,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.create_topbar()
         self.create_timeline_canvas()
         
-    def create_topbar(self):
-        self.topbar = tk.Canvas(self.timeline_frame, bg="gray40", height=30, highlightthickness=0)
-        self.topbar.grid(row=0, column=0, sticky="ew")
-        self.topbar.bind("<Button-1>", self.on_topbar_click)
-
     def create_timeline_canvas(self):
         self.timeline_canvas = tk.Canvas(self.timeline_frame, bg="gray30", highlightthickness=0)
         self.timeline_canvas.grid(row=1, column=0, sticky="nsew")
@@ -158,6 +160,14 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
 
         self.timeline_canvas.drop_target_register(DND_FILES)
         self.timeline_canvas.dnd_bind('<<Drop>>', self.on_drop)
+
+    def create_status_bar(self):
+        self.status_var = tk.StringVar()
+        self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var, anchor="w")
+        self.status_bar.grid(row=2, column=0, sticky="ew", padx=5, pady=2)
+
+    def update_status(self, message):
+        self.status_var.set(message)
 
     def initialize_playhead(self):
         self.draw_playhead(0)
@@ -557,7 +567,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         if self.dragging and self.selected_clip:
             x = self.timeline_canvas.canvasx(event.x)
             y = self.timeline_canvas.canvasy(event.y)
-            # Calculate final position using the offset
             new_x = max(0, (x - self.drag_offset) * self.seconds_per_pixel)
             new_track_index = int(y / self.track_height)
             
@@ -566,9 +575,10 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
                 if old_track_index != -1:
                     success = self.controller.move_clip(self.selected_clip, new_x, old_track_index, new_track_index)
                     if success:
-                        self.tracks[old_track_index]['clips'].remove(self.selected_clip)
-                        self.tracks[new_track_index]['clips'].append(self.selected_clip)
-                        self.selected_clip.x = new_x
+                        # Let the controller handle the clip movement
+                        pass
+                    else:
+                        print("Failed to move clip")
         
         self.dragging = False
         self.drag_offset = 0  # Reset the offset

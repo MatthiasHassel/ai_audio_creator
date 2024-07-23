@@ -1,6 +1,7 @@
 import os
 import json
 import datetime
+import logging
 import shutil
 from models.timeline_model import TimelineModel  
 
@@ -51,16 +52,27 @@ class ProjectModel:
         self.load_project_metadata()
         self.load_timeline_data()
 
-    def save_project_metadata(self):
+    def save_project(self):
         if not self.current_project:
             raise ValueError("No project is currently active")
         
+        try:
+            self.save_project_metadata()
+            self.save_timeline_data()
+            self.update_saved_audio_files()
+            logging.info(f"Project '{self.current_project}' saved successfully.")
+            return True, "Project saved successfully."
+        except Exception as e:
+            error_msg = f"Failed to save project: {str(e)}"
+            logging.error(error_msg)
+            return False, error_msg
+
+    def save_project_metadata(self):
         self.metadata["last_modified"] = datetime.datetime.now().isoformat()
         
         metadata_file = os.path.join(self.get_project_dir(), "project_metadata.json")
         with open(metadata_file, 'w') as f:
             json.dump(self.metadata, f, indent=2)
-        self.update_saved_audio_files()
     
     def load_project_metadata(self):
         metadata_file = os.path.join(self.get_project_dir(), "project_metadata.json")
@@ -75,13 +87,11 @@ class ProjectModel:
             self.metadata = {}
 
     def save_timeline_data(self):
-        if not self.current_project:
-            raise ValueError("No project is currently active")
-        
         timeline_file = os.path.join(self.get_project_dir(), "timeline_data.json")
         serializable_tracks = self.timeline_model.get_serializable_tracks()
         with open(timeline_file, 'w') as f:
             json.dump(serializable_tracks, f, indent=2)
+
 
     def load_timeline_data(self):
         timeline_file = os.path.join(self.get_project_dir(), "timeline_data.json")

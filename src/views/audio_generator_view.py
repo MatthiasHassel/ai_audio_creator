@@ -264,7 +264,10 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.update_status("")
         self.audio_visualizer.clear()
         self.audio_file_selector.clear()
-        self.audio_visualizer.hide_playhead()
+        if hasattr(self.audio_visualizer, 'hide_playhead'):
+            self.audio_visualizer.hide_playhead()
+        else:
+            print("Warning: hide_playhead method not found in AudioVisualizer")
 
     def set_generate_command(self, command):
         self.generate_button.configure(command=command)

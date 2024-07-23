@@ -76,11 +76,15 @@ class MainController:
                 self.view.show_error("Error", error_message)
         
     def save_project(self):
-        if hasattr(self, 'save_project_callback'):
-            self.save_project_callback()
+        success, message = self.project_model.save_project()
+        if success:
             if self.timeline_controller:
-                self.timeline_controller.save_timeline_data()
-            self.project_model.save_project_metadata()
+                self.timeline_controller.on_project_saved()
+            self.view.show_info("Project Saved", message)
+            self.view.update_status("Project saved successfully")
+        else:
+            self.view.show_error("Save Error", message)
+            self.view.update_status("Failed to save project")
 
     def open_project(self, project_name):
         try:
