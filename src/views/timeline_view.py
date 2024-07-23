@@ -47,6 +47,8 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.dragging = False
         self.drag_start_x = 0
         self.drag_start_y = 0
+        self.drag_threshold = 5  # pixels
+        self.drag_offset = 0  # Store the click position relative to clip start
         self.track_volume_vars = {}
         self.solo_buttons = {}  # Initialize solo_buttons
         self.mute_buttons = {}  # Initialize mute_buttons
@@ -66,9 +68,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.bind("<KeyRelease-Alt_L>", self.option_key_release)
         self.bind_all("<MouseWheel>", self.on_mouse_scroll)
         self.bind_all("<Shift-MouseWheel>", self.on_shift_mouse_scroll)
-        if self.timeline_canvas:
-            self.timeline_canvas.bind("<Button-1>", self.on_canvas_click)
-            self.timeline_canvas.bind("<Button-3>", self.show_clip_context_menu)
 
     def set_controller(self, controller):
         self.controller = controller
@@ -126,6 +125,8 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
 
         self.track_label_canvas = tk.Canvas(self.track_label_frame, bg="gray20", highlightthickness=0)
         self.track_label_canvas.grid(row=0, column=0, sticky="nsew")
+        self.track_label_canvas.bind("<Button-2>", self.show_track_context_menu)
+        self.track_label_canvas.bind("<Button-1>", self.on_track_label_click)
 
     def create_timeline_frame(self):
         self.timeline_frame = ctk.CTkFrame(self.main_frame)
@@ -287,6 +288,13 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.tracks = new_tracks
         self.update_track_labels()
         self.redraw_timeline()
+        if self.tracks and not self.selected_track:
+            self.select_track(self.tracks[0])
+
+    def on_track_label_click(self, event):
+        track_index = event.y // self.track_height
+        if 0 <= track_index < len(self.tracks):
+            self.select_track(self.tracks[track_index])
 
     def select_track(self, track):
         if self.selected_track:
@@ -331,11 +339,14 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             if self.remove_track_callback:
                 self.remove_track_callback(track)
 
-    def show_track_context_menu(self, event, track):
-        context_menu = tk.Menu(self, tearoff=0)
-        context_menu.add_command(label="Rename", command=lambda: self.start_rename_track(track))
-        context_menu.add_command(label="Remove", command=lambda: self.remove_track(track))
-        context_menu.tk_popup(event.x_root, event.y_root)
+    def show_track_context_menu(self, event):
+        track_index = event.y // self.track_height
+        if 0 <= track_index < len(self.tracks):
+            track = self.tracks[track_index]
+            context_menu = tk.Menu(self, tearoff=0)
+            context_menu.add_command(label="Rename", command=lambda: self.start_rename_track(track))
+            context_menu.add_command(label="Remove", command=lambda: self.remove_track(track))
+            context_menu.tk_popup(event.x_root, event.y_root)
 
     def clear_tracks(self):
         self.tracks.clear()
@@ -405,7 +416,8 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             self.select_clip(clicked_clip)
             self.drag_start_x = x
             self.drag_start_y = y
-            self.dragging = True
+            # Calculate and store the offset
+            self.drag_offset = x - (clicked_clip.x / self.seconds_per_pixel)
         else:
             self.deselect_clip()
 
@@ -523,36 +535,43 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
                                          anchor="nw", tags="clip")
     
     def on_drag(self, event):
-        if self.dragging and self.selected_clip:
+        if self.selected_clip:
             x = self.timeline_canvas.canvasx(event.x)
             y = self.timeline_canvas.canvasy(event.y)
             
-            new_x = x * self.seconds_per_pixel
-            new_track_index = int(y / self.track_height)
+            if not self.dragging:
+                # Check if we've moved far enough to start dragging
+                if (abs(x - self.drag_start_x) > self.drag_threshold or
+                    abs(y - self.drag_start_y) > self.drag_threshold):
+                    self.dragging = True
             
-            if 0 <= new_track_index < len(self.tracks):
-                # Only update the view, actual move will happen on drag release
-                self.draw_dragged_clip(self.selected_clip, new_x, new_track_index)
+            if self.dragging:
+                # Calculate new position using the offset
+                new_x = max(0, (x - self.drag_offset) * self.seconds_per_pixel)
+                new_track_index = int(y / self.track_height)
+                
+                if 0 <= new_track_index < len(self.tracks):
+                    self.draw_dragged_clip(self.selected_clip, new_x, new_track_index)
 
     def on_drag_release(self, event):
         if self.dragging and self.selected_clip:
             x = self.timeline_canvas.canvasx(event.x)
             y = self.timeline_canvas.canvasy(event.y)
-            new_x = x * self.seconds_per_pixel
+            # Calculate final position using the offset
+            new_x = max(0, (x - self.drag_offset) * self.seconds_per_pixel)
             new_track_index = int(y / self.track_height)
             
             if 0 <= new_track_index < len(self.tracks):
                 old_track_index = self.find_clip_track_index(self.selected_clip)
                 if old_track_index != -1:
-                    # Move the clip in the controller
                     success = self.controller.move_clip(self.selected_clip, new_x, old_track_index, new_track_index)
                     if success:
-                        # Only remove from old track if move was successful
                         self.tracks[old_track_index]['clips'].remove(self.selected_clip)
                         self.tracks[new_track_index]['clips'].append(self.selected_clip)
                         self.selected_clip.x = new_x
         
         self.dragging = False
+        self.drag_offset = 0  # Reset the offset
         self.redraw_timeline()
                 
     def draw_dragged_clip(self, clip, new_x, new_track_index):

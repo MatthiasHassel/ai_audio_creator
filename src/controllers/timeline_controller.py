@@ -17,11 +17,12 @@ class TimelineController:
     def show(self):
         if self.view is None or not self.view.winfo_exists():
             self.view = TimelineView(self.master, self.project_model)
-            self.view.set_controller(self)  # Set the controller
+            self.view.set_controller(self)
             self.setup_view_bindings()
             self.load_timeline_data()
         self.view.update_title(self.project_model.current_project)
         self.view.deiconify()
+        self.select_first_track()
     
     def hide(self):
         if self.view and self.view.winfo_exists():
@@ -78,6 +79,7 @@ class TimelineController:
         self.timeline_model.add_track({'name': track_name, 'clips': []})
         if self.view:
             self.view.update_tracks(self.timeline_model.get_tracks())
+            self.view.select_track(self.timeline_model.get_tracks()[-1])
 
     def rename_track(self, track, new_name):
         try:
@@ -158,6 +160,7 @@ class TimelineController:
 
     def move_clip(self, clip, new_x, old_track_index, new_track_index):
         try:
+            new_x = max(0, new_x)  # Ensure clip doesn't go below 0s
             self.timeline_model.move_clip(clip, new_x, old_track_index, new_track_index)
             if self.view:
                 self.view.update_tracks(self.timeline_model.get_tracks())
