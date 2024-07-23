@@ -369,6 +369,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         if self.controller:
             self.controller.set_playhead_position(0)
         self.draw_playhead(0)
+        self.stop_button.configure(state="normal")
 
     def update_playhead(self):
         if self.is_playing:

@@ -165,8 +165,9 @@ class TimelineModel:
         self.playhead_position = max(0, position)
         if self.is_playing:
             self.start_time = time.time() - self.playhead_position
-            self.stop_clips()
-            self.play_clips()
+            self.stop_timeline()
+            active_tracks = self.get_active_tracks()
+            self.play_timeline(active_tracks)
 
     def get_playhead_position(self):
         if self.is_playing:
