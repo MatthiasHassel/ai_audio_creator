@@ -1,7 +1,7 @@
 from controllers.audio_controller import AudioController
 from controllers.script_editor_controller import ScriptEditorController
 from controllers.timeline_controller import TimelineController
-from tkinter import filedialog, simpledialog
+from tkinter import filedialog, simpledialog, messagebox
 import os
 import logging
 
@@ -166,6 +166,7 @@ class MainController:
                 # Add the audio clip to the timeline
                 if self.timeline_controller:
                     self.timeline_controller.add_audio_clip(new_file_path)
+                    self.timeline_controller.unsaved_changes = True
                 else:
                     logging.error("Timeline controller is not initialized")
                     self.view.show_error("Error", "Timeline controller is not initialized")
@@ -196,4 +197,15 @@ class MainController:
     def quit(self):
         if self.audio_controller:
             self.audio_controller.quit()
+        self.view.quit()
+
+    def on_close(self):
+        if self.timeline_controller and self.timeline_controller.unsaved_changes:
+            response = messagebox.askyesnocancel("Unsaved Changes", "You have unsaved changes. Do you want to save before closing?")
+            if response is None:  # Cancel
+                return
+            elif response:  # Yes
+                self.save_project()
+            else:  # No
+                self.timeline_controller.discard_unsaved_changes()
         self.view.quit()

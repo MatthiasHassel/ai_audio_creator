@@ -13,6 +13,7 @@ class ProjectModel:
         self.default_project_name = "Default Project"
         self.timeline_model = TimelineModel()  
         self.saved_audio_files = set()
+        self.new_audio_files = set()
 
     def ensure_default_project(self):
         default_project_path = os.path.join(self.base_projects_dir, self.default_project_name)
@@ -148,15 +149,27 @@ class ProjectModel:
         os.makedirs(audio_files_dir, exist_ok=True)
         shutil.copy2(file_path, destination)
         print(f"File copied to: {destination}")  # For debugging
-        
+        self.new_audio_files.add(destination)
         return destination
     
     def update_saved_audio_files(self):
-        audio_files_dir = self.get_audio_files_dir()
-        self.saved_audio_files = set(os.path.join(audio_files_dir, f) for f in os.listdir(audio_files_dir) if f.endswith(('.mp3', '.wav')))
+        self.saved_audio_files.update(self.new_audio_files)
+        self.new_audio_files.clear()
 
     def get_saved_audio_files(self):
         return self.saved_audio_files
+
+    def get_new_audio_files(self):
+        return self.new_audio_files
+
+    def remove_unsaved_audio_files(self):
+        for file_path in self.new_audio_files:
+            try:
+                os.remove(file_path)
+                print(f"Removed unsaved audio file: {file_path}")
+            except OSError as e:
+                print(f"Error removing file {file_path}: {e}")
+        self.new_audio_files.clear()
 
     def get_audio_files_dir(self):
         if not self.current_project:

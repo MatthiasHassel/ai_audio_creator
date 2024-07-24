@@ -18,7 +18,7 @@ class TimelineController:
 
     def show(self):
         if self.view is None or not self.view.winfo_exists():
-            self.view = TimelineView(self.master, self.project_model)
+            self.view = TimelineView(self.master, self.project_model, self.timeline_model)
             self.view.set_controller(self)
             self.setup_view_bindings()
         self.load_timeline_data()
@@ -37,7 +37,7 @@ class TimelineController:
         
         if self.view and self.view.winfo_exists():
             self.view.withdraw()
-
+            
     def ensure_one_track(self):
         if not self.timeline_model.get_tracks():
             self.add_track("Track 1")
@@ -91,9 +91,8 @@ class TimelineController:
     def save_timeline_data(self):
         if self.timeline_model.is_modified:
             self.project_model.update_timeline_data(self.timeline_model.get_serializable_tracks())
-            self.timeline_model.mark_as_saved()
+            self.timeline_model.set_modified(False)
             self.project_model.update_saved_audio_files()
-            self.imported_audio_files.clear()
             self.unsaved_changes = False
 
     def add_track(self, track_name=None):
@@ -154,12 +153,12 @@ class TimelineController:
         start_time = self.timeline_model.get_playhead_position()
 
         try:
+            start_time = self.view.find_next_available_position(track_index, start_time)
             clip = AudioClip(file_path, start_time)
             self.timeline_model.add_clip_to_track(track_index, clip)
             self.view.add_clip(clip, track_index)
             self.view.redraw_timeline()
-            self.imported_audio_files.add(file_path)
-            self.unsaved_changes = True
+            self.unsaved_changes = True 
         except Exception as e:
             self.view.show_error("Import Error", f"Failed to import audio clip: {str(e)}")
 
@@ -304,18 +303,11 @@ class TimelineController:
         })
 
     def discard_unsaved_changes(self):
-        saved_audio_files = self.project_model.get_saved_audio_files()
-        for file_path in self.imported_audio_files:
-            if file_path not in saved_audio_files:
-                try:
-                    os.remove(file_path)
-                    print(f"Removed unsaved audio file: {file_path}")
-                except OSError as e:
-                    print(f"Error removing file {file_path}: {e}")
-        
+        self.project_model.remove_unsaved_audio_files()
         self.project_model.load_timeline_data()
         self.timeline_model = self.project_model.get_timeline_model()
         self.load_timeline_data()
+        self.unsaved_changes = False
 
     def save_project(self):
         if self.project_model:

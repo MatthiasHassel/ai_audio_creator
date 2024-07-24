@@ -6,7 +6,6 @@ import logging
 import os 
 import time
 from tkinter import messagebox
-import shutil
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from utils.audio_clip import AudioClip
 from utils.audio_visualizer import AudioVisualizer
@@ -14,10 +13,11 @@ from utils.keyboard_shortcuts import KeyboardShortcuts
 
 
 class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
-    def __init__(self, master, project_model):
+    def __init__(self, master, project_model, timeline_model):
         super().__init__(master)
         self.TkdndVersion = TkinterDnD._require(self)
         self.project_model = project_model
+        self.timeline_model = timeline_model
         self.controller = None
         self.base_title = "Audio Timeline"
         self.current_project = "Untitled Project"
@@ -484,7 +484,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
 
     def on_drop(self, event):
         files = self.tk.splitlist(event.data)
-        # Get the mouse position relative to the canvas
         x = self.timeline_canvas.canvasx(event.x_root - self.timeline_canvas.winfo_rootx())
         y = self.timeline_canvas.canvasy(event.y_root - self.timeline_canvas.winfo_rooty())
         
@@ -494,14 +493,25 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
                     new_file_path = self.project_model.import_audio_file(file)
                     track_index = self.get_track_index_from_y(y)
                     x_position = x * self.seconds_per_pixel
+                    x_position = self.find_next_available_position(track_index, x_position)
                     clip = AudioClip(new_file_path, x_position)
                     self.add_clip(clip, track_index)
-                    print(f'File {file} imported and added to timeline at position ({x}, {y}) on track {track_index}.')
+                    if self.controller:
+                        self.controller.unsaved_changes = True
+                    print(f'File {file} imported and added to timeline at position ({x_position}, {y}) on track {track_index}.')
                 except Exception as e:
                     error_msg = f"Failed to import audio file: {str(e)}"
-                    print(error_msg)  # For debugging
+                    print(error_msg)
                     logging.error(error_msg, exc_info=True)
                     self.show_error("Error", error_msg)
+
+
+    def find_next_available_position(self, track_index, x_position):
+        if track_index < len(self.tracks):
+            for clip in self.tracks[track_index]['clips']:
+                if clip.x <= x_position < clip.x + clip.duration:
+                    x_position = clip.x + clip.duration
+        return x_position
 
     def get_track_index_from_y(self, y):
         return int(y // self.track_height)
@@ -511,6 +521,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             self.tracks[track_index]['clips'].append(clip)
             self.draw_clip(clip, track_index)
             self.redraw_timeline()
+            self.timeline_model.set_modified(True)  # Mark project as modified
         else:
             logging.warning(f"Attempted to add clip to non-existent track {track_index}")
 

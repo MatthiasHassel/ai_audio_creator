@@ -116,8 +116,16 @@ class TimelineModel:
             for _ in range(track_index - len(self.tracks) + 1):
                 self.tracks.append({"name": f"Track {len(self.tracks) + 1}", "clips": []})
         
-        self.tracks[track_index]['clips'].append(clip)
-        self.is_modified = True
+        # Find the correct position for the new clip
+        insert_position = 0
+        for i, existing_clip in enumerate(self.tracks[track_index]['clips']):
+            if existing_clip.x > clip.x:
+                break
+            insert_position = i + 1
+
+        # Insert the new clip at the correct position
+        self.tracks[track_index]['clips'].insert(insert_position, clip)
+        self.set_modified(True)
 
     def remove_clip_from_track(self, track_index, clip_index):
         if 0 <= track_index < len(self.tracks):
@@ -244,3 +252,6 @@ class TimelineModel:
             self.stream.stop_stream()
             self.stream.close()
         self.p.terminate()
+
+    def set_modified(self, value):
+        self.is_modified = value
