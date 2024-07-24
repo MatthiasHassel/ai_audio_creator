@@ -219,7 +219,9 @@ class TimelineController:
     def update_track_solo_mute(self, track):
         self.timeline_model.update_track_solo_mute(track)
         if self.view:
-            self.view.update_button_colors(track)
+            self.view.update_single_track_label(track)
+        if self.timeline_model.is_playing:
+            self.timeline_model.update_playing_tracks(self.get_active_tracks())
 
     def update_track_volume(self, track):
         self.timeline_model.update_track_volume(track)

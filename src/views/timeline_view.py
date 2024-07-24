@@ -25,7 +25,21 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.geometry("1200x600")
         self.protocol("WM_DELETE_WINDOW", self.withdraw)
         self.keyboard_shortcuts = KeyboardShortcuts(self)
+        self.audio_visualizer = AudioVisualizer(self)
         
+        self.initialize_variables()
+
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        self.create_widgets()
+        
+
+        self.setup_scrolling()
+
+        self.setup_bindings()
+        self.after(100, self.initial_update)  # Schedule initial update
+    
+    def initialize_variables(self):
         # Initialize variables
         self.tracks = []
         self.selected_track = None
@@ -33,6 +47,8 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.track_height = self.base_track_height
         self.min_track_height = 30
         self.max_track_height = 200
+        self.min_track_height_for_slider = 50  # Minimum height to show volume slider
+        self.topbar_height = 30  # Define the height of the topbar
         self.base_seconds_per_pixel = 0.01  # 100 pixels = 1 second at default zoom
         self.seconds_per_pixel = self.base_seconds_per_pixel
         self.x_zoom = 1.0
@@ -41,6 +57,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.max_x_zoom = 4.0
         self.option_key_pressed = False
         self.waveform_images = {}
+        self.waveform_cache = {}
         self.timeline_width = 10000  # Initial width, will be adjusted based on clips
         self.playhead_line = None
         self.playhead_position = 0
@@ -56,30 +73,40 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.track_volume_vars = {}
         self.solo_buttons = {}  # Initialize solo_buttons
         self.mute_buttons = {}  # Initialize mute_buttons
-
-        self.audio_visualizer = AudioVisualizer(self)
-        self.waveform_cache = {}
-
+        self.y_scrollbar = None
+        self.scroll_offset = 0;
         self.timeline_canvas = None
         self.track_label_canvas = None
-        self.grid_rowconfigure(1, weight=1)
-        self.grid_columnconfigure(0, weight=1)
-        self.create_widgets()
-        self.create_status_bar()
+        self.timeline_duration = 300  # Default timeline duration in seconds
+    
+    def setup_scrolling(self):
+        self.timeline_canvas.configure(xscrollcommand=self.x_scrollbar.set, 
+                                   yscrollcommand=self.y_scrollbar.set)
+        self.track_label_canvas.configure(yscrollcommand=self.y_scrollbar.set)
+        self.x_scrollbar.configure(command=self.on_horizontal_scroll)
+        self.y_scrollbar.configure(command=self.on_vertical_scroll)
         
+    def setup_bindings(self):
         # Set up bindings
+        self.timeline_canvas.bind("<Configure>", self.on_canvas_resize)
+        self.timeline_canvas.bind("<ButtonPress-1>", self.on_canvas_click)
+        self.timeline_canvas.bind("<B1-Motion>", self.on_drag)
+        self.timeline_canvas.bind("<ButtonRelease-1>", self.on_drag_release)
+        self.timeline_canvas.bind("<Button-2>", self.show_clip_context_menu)
+        self.timeline_canvas.drop_target_register(DND_FILES)
+        self.timeline_canvas.dnd_bind('<<Drop>>', self.on_drop)
+        
+        self.track_label_canvas.bind("<Button-2>", self.show_track_context_menu)
+        self.track_label_canvas.bind("<Button-1>", self.on_track_label_click)
+        
         self.bind("<Delete>", self.handle_delete)
         self.bind("<KeyPress-Alt_L>", self.option_key_press)
         self.bind("<KeyRelease-Alt_L>", self.option_key_release)
-        self.bind_all("<MouseWheel>", self.on_mouse_scroll)
-        self.bind_all("<Shift-MouseWheel>", self.on_shift_mouse_scroll)
-
-    def set_controller(self, controller):
-        self.controller = controller
 
     def create_widgets(self):
         self.create_toolbar()
         self.create_main_content()
+        self.create_status_bar()
 
     def create_toolbar(self):
         toolbar = ctk.CTkFrame(self)
@@ -112,62 +139,72 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.y_zoom_slider.set(self.y_zoom)
         self.y_zoom_slider.grid(row=0, column=8, padx=5)
 
-    def create_topbar(self):
-        self.topbar = tk.Canvas(self.timeline_frame, bg="gray40", height=30, highlightthickness=0)
-        self.topbar.grid(row=0, column=0, sticky="ew")
-        self.topbar.bind("<Button-1>", self.on_topbar_click)
+    def initial_update(self):
+        self.update_scrollregion()
+        self.update_grid_and_topbar()
 
     def create_main_content(self):
         self.main_frame = ctk.CTkFrame(self)
         self.main_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
         self.main_frame.grid_columnconfigure(1, weight=1)
-        self.main_frame.grid_rowconfigure(1, weight=1)
+        self.main_frame.grid_rowconfigure(0, weight=1)
 
         self.create_track_label_frame()
         self.create_timeline_frame()
 
     def create_track_label_frame(self):
         self.track_label_frame = ctk.CTkFrame(self.main_frame, width=200)
-        self.track_label_frame.grid(row=0, column=0, rowspan=2, sticky="ns")
+        self.track_label_frame.grid(row=0, column=0, sticky="ns")
         self.track_label_frame.grid_propagate(False)
-        self.track_label_frame.grid_rowconfigure(0, weight=1)
+        self.track_label_frame.grid_rowconfigure(1, weight=1)
         self.track_label_frame.grid_columnconfigure(0, weight=1)
 
+        self.track_label_topbar = ctk.CTkFrame(self.track_label_frame, height=self.topbar_height)
+        self.track_label_topbar.grid(row=0, column=0, sticky="ew")
+
         self.track_label_canvas = tk.Canvas(self.track_label_frame, bg="gray20", highlightthickness=0)
-        self.track_label_canvas.grid(row=0, column=0, sticky="nsew")
-        self.track_label_canvas.bind("<Button-2>", self.show_track_context_menu)
-        self.track_label_canvas.bind("<Button-1>", self.on_track_label_click)
+        self.track_label_canvas.grid(row=1, column=0, sticky="nsew")
 
     def create_timeline_frame(self):
         self.timeline_frame = ctk.CTkFrame(self.main_frame)
-        self.timeline_frame.grid(row=0, column=1, rowspan=2, sticky="nsew")
+        self.timeline_frame.grid(row=0, column=1, sticky="nsew")
         self.timeline_frame.grid_rowconfigure(1, weight=1)
         self.timeline_frame.grid_columnconfigure(0, weight=1)
 
         self.create_topbar()
         self.create_timeline_canvas()
-        
+
+    def create_topbar(self):
+        self.topbar = tk.Canvas(self.timeline_frame, bg="gray40", height=self.topbar_height, highlightthickness=0)
+        self.topbar.grid(row=0, column=0, sticky="ew")
+        self.topbar.bind("<Button-1>", self.on_topbar_click)
+
     def create_timeline_canvas(self):
         self.timeline_canvas = tk.Canvas(self.timeline_frame, bg="gray30", highlightthickness=0)
         self.timeline_canvas.grid(row=1, column=0, sticky="nsew")
 
-        self.x_scrollbar = ctk.CTkScrollbar(self.timeline_frame, orientation="horizontal", command=self.on_scroll)
+        self.x_scrollbar = ctk.CTkScrollbar(self.timeline_frame, orientation="horizontal", command=self.on_horizontal_scroll)
         self.x_scrollbar.grid(row=2, column=0, sticky="ew")
 
-        self.timeline_canvas.configure(xscrollcommand=self.x_scrollbar.set)
-        self.timeline_canvas.bind("<Configure>", self.on_canvas_resize)
-        self.timeline_canvas.bind("<ButtonPress-1>", self.on_canvas_click)
-        self.timeline_canvas.bind("<B1-Motion>", self.on_drag)
-        self.timeline_canvas.bind("<ButtonRelease-1>", self.on_drag_release)
-        self.timeline_canvas.bind("<Button-2>", self.show_clip_context_menu)
+        self.y_scrollbar = ctk.CTkScrollbar(self.main_frame, orientation="vertical", command=self.on_vertical_scroll)
+        self.y_scrollbar.grid(row=0, column=2, sticky="ns")
 
-        self.timeline_canvas.drop_target_register(DND_FILES)
-        self.timeline_canvas.dnd_bind('<<Drop>>', self.on_drop)
+        # self.timeline_canvas.bind("<Configure>", self.on_canvas_resize)
+        # self.timeline_canvas.bind("<ButtonPress-1>", self.on_canvas_click)
+        # self.timeline_canvas.bind("<B1-Motion>", self.on_drag)
+        # self.timeline_canvas.bind("<ButtonRelease-1>", self.on_drag_release)
+        # self.timeline_canvas.bind("<Button-2>", self.show_clip_context_menu)
+
+        # self.timeline_canvas.drop_target_register(DND_FILES)
+        # self.timeline_canvas.dnd_bind('<<Drop>>', self.on_drop)
 
     def create_status_bar(self):
         self.status_var = tk.StringVar()
         self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var, anchor="w")
         self.status_bar.grid(row=2, column=0, sticky="ew", padx=5, pady=2)
+
+    def set_controller(self, controller):
+        self.controller = controller
 
     def update_status(self, message):
         self.status_var.set(message)
@@ -179,8 +216,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.timeline_canvas.delete("all")
         self.draw_grid()
         self.draw_clips()
-        if self.playhead_line:
-            self.draw_playhead(self.playhead_position / self.seconds_per_pixel)
+        self.draw_playhead(self.playhead_position / self.seconds_per_pixel)
 
     def set_toggle_audio_creator_command(self, command):
         self.toggle_audio_creator_button.configure(command=command)
@@ -190,37 +226,60 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.redraw_timeline()
         self.update_track_labels()
 
-    def update_scrollregion(self):
-        if self.tracks and any(track['clips'] for track in self.tracks):
-            max_width = max(
-                (clip.x + clip.duration) / self.seconds_per_pixel 
-                for track in self.tracks 
-                for clip in track['clips']
-            )
-            self.timeline_width = max(self.timeline_canvas.winfo_width(), max_width)
-        else:
-            self.timeline_width = self.timeline_canvas.winfo_width()
+
+    def on_vertical_scroll(self, *args):
+        if args[0] == 'moveto':
+            self.timeline_canvas.yview_moveto(args[1])
+            self.track_label_canvas.yview_moveto(args[1])
+        elif args[0] == 'scroll':
+            self.timeline_canvas.yview_scroll(int(args[1]), args[2])
+            self.track_label_canvas.yview_scroll(int(args[1]), args[2])
         
-        self.timeline_canvas.configure(scrollregion=(0, 0, self.timeline_width, len(self.tracks) * self.track_height))
-    
+        self.scroll_offset = self.timeline_canvas.canvasy(0)
+        self.update_track_labels()
+        self.redraw_timeline()
+
+    def on_horizontal_scroll(self, *args):
+        if args[0] == 'moveto':
+            self.timeline_canvas.xview_moveto(args[1])
+            self.topbar.xview_moveto(args[1])
+        elif args[0] == 'scroll':
+            self.timeline_canvas.xview_scroll(int(args[1]), args[2])
+            self.topbar.xview_scroll(int(args[1]), args[2])
+        
+        self.update_grid_and_topbar()
+        
+    def update_scrollregion(self):
+        total_height = max(len(self.tracks) * self.track_height, self.timeline_canvas.winfo_height())
+        self.timeline_width = max(self.timeline_canvas.winfo_width(), self.timeline_duration / self.seconds_per_pixel)
+        
+        self.timeline_canvas.configure(scrollregion=(0, 0, self.timeline_width, total_height))
+        self.topbar.configure(scrollregion=(0, 0, self.timeline_width, self.topbar_height))
+        self.track_label_canvas.configure(scrollregion=(0, 0, self.track_label_canvas.winfo_width(), total_height))
+
     def draw_grid(self):
         self.timeline_canvas.delete("grid")
-        self.topbar.delete("all")
         
-        width = self.timeline_canvas.winfo_width()
-        height = self.timeline_canvas.winfo_height()
+        width = self.timeline_width
+        height = len(self.tracks) * self.track_height
+        visible_start_x = self.timeline_canvas.canvasx(0)
+        visible_end_x = self.timeline_canvas.canvasx(self.timeline_canvas.winfo_width())
+        visible_start_y = self.timeline_canvas.canvasy(0)
+        visible_end_y = self.timeline_canvas.canvasy(self.timeline_canvas.winfo_height())
         
         # Draw vertical lines (1 second apart at default zoom)
         seconds_per_line = max(1, round(100 * self.seconds_per_pixel))
-        for x in range(0, width, int(seconds_per_line / self.seconds_per_pixel)):
-            self.timeline_canvas.create_line(x, 0, x, height, fill="gray50", tags="grid")
-            time_text = f"{x * self.seconds_per_pixel:.1f}s"
-            self.topbar.create_text(x, 15, text=time_text, fill="white", anchor="center")
+        start_second = int(visible_start_x * self.seconds_per_pixel / seconds_per_line) * seconds_per_line
+        for x in range(start_second, int(visible_end_x * self.seconds_per_pixel) + seconds_per_line, seconds_per_line):
+            canvas_x = x / self.seconds_per_pixel
+            self.timeline_canvas.create_line(canvas_x, visible_start_y, canvas_x, visible_end_y, fill="gray50", tags="grid")
         
         # Draw horizontal lines
-        for i in range(len(self.tracks) + 1):
-            y = i * self.track_height
-            self.timeline_canvas.create_line(0, y, width, y, fill="gray50", tags="grid")
+        start_track = max(0, int(visible_start_y // self.track_height))
+        end_track = min(len(self.tracks), int(visible_end_y // self.track_height) + 1)
+        for i in range(start_track, end_track + 1):
+            y = i * self.track_height - self.scroll_offset
+            self.timeline_canvas.create_line(visible_start_x, y, visible_end_x, y, fill="gray50", tags="grid")
 
     def on_topbar_click(self, event):
         x = self.topbar.canvasx(event.x)
@@ -230,67 +289,78 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
 
     def update_track_labels(self):
         self.track_label_canvas.delete("all")
-        for i, track in enumerate(self.tracks):
-            y = i * self.track_height + self.topbar.winfo_height()
+        visible_start = int(self.track_label_canvas.canvasy(0))
+        visible_end = int(self.track_label_canvas.canvasy(self.track_label_canvas.winfo_height()))
+        
+        start_index = max(0, int(visible_start / self.track_height))
+        end_index = min(len(self.tracks), int(visible_end / self.track_height) + 1)
+
+        for i in range(start_index, end_index):
+            track = self.tracks[i]
+            y = i * self.track_height - self.scroll_offset
             fill_color = "gray35" if track == self.selected_track else "gray25"
             self.track_label_canvas.create_rectangle(0, y, 200, y + self.track_height, fill=fill_color, tags=f"track_{i}")
-            self.track_label_canvas.create_text(10, y + 15, text=track["name"], anchor="w", fill="white", tags=f"track_{i}")
+            self.track_label_canvas.create_text(10, y + self.track_height // 2, text=track["name"], anchor="w", fill="white", tags=f"track_{i}")
             
             # Add Solo button
             solo_button = ctk.CTkButton(self.track_label_canvas, text="S", width=20, height=20, 
-                                        fg_color="gray50", hover_color="green",
+                                        fg_color="green" if track.get("solo", False) else "gray50",
                                         command=lambda t=track: self.toggle_solo(t))
-            solo_button_window = self.track_label_canvas.create_window(140, y + 15, window=solo_button)
+            solo_button_window = self.track_label_canvas.create_window(140, y + self.track_height // 2 - 10, window=solo_button)
             self.solo_buttons[i] = solo_button
             
             # Add Mute button
             mute_button = ctk.CTkButton(self.track_label_canvas, text="M", width=20, height=20, 
-                                        fg_color="gray50", hover_color="red",
+                                        fg_color="red" if track.get("mute", False) else "gray50",
                                         command=lambda t=track: self.toggle_mute(t))
-            mute_button_window = self.track_label_canvas.create_window(170, y + 15, window=mute_button)
+            mute_button_window = self.track_label_canvas.create_window(170, y + self.track_height // 2 - 10, window=mute_button)
             self.mute_buttons[i] = mute_button
             
-            # Add volume slider
-            volume_var = tk.DoubleVar(value=track.get("volume", 1.0))
-            volume_slider = ctk.CTkSlider(self.track_label_canvas, from_=0, to=1, variable=volume_var, width=180)
-            volume_slider_window = self.track_label_canvas.create_window(100, y + 45, window=volume_slider)
-            
-            # Store references to the variables
-            self.track_volume_vars[i] = volume_var
-            
-            # Bind the volume slider to update function
-            volume_slider.configure(command=lambda value, t=track: self.update_volume(t, value))
-            
-            # Update button colors based on current state
-            self.update_button_colors(track)
+            # Add volume slider if track height is sufficient
+            if self.track_height >= self.min_track_height_for_slider:
+                volume_var = tk.DoubleVar(value=track.get("volume", 1.0))
+                volume_slider = ctk.CTkSlider(self.track_label_canvas, from_=0, to=1, variable=volume_var, width=180)
+                volume_slider_window = self.track_label_canvas.create_window(100, y + self.track_height - 15, window=volume_slider)
+                
+                # Store references to the variables
+                self.track_volume_vars[i] = volume_var
+                
+                # Bind the volume slider to update function
+                volume_slider.configure(command=lambda value, t=track: self.update_volume(t, value))
+
+    def update_single_track_label(self, track):
+        track_index = self.tracks.index(track)
+        y = track_index * self.track_height - self.scroll_offset
+        
+        # Update solo button
+        if track_index in self.solo_buttons:
+            self.solo_buttons[track_index].configure(fg_color="green" if track.get("solo", False) else "gray50")
+        
+        # Update mute button
+        if track_index in self.mute_buttons:
+            self.mute_buttons[track_index].configure(fg_color="red" if track.get("mute", False) else "gray50")
+        
+        # Update volume slider
+        if track_index in self.track_volume_vars:
+            self.track_volume_vars[track_index].set(track.get("volume", 1.0))
 
     def toggle_solo(self, track):
         track["solo"] = not track.get("solo", False)
         if self.controller:
             self.controller.update_track_solo_mute(track)
-        self.update_button_colors(track)
+        self.update_single_track_label(track)
 
     def toggle_mute(self, track):
         track["mute"] = not track.get("mute", False)
         if self.controller:
             self.controller.update_track_solo_mute(track)
-        self.update_button_colors(track)
-
-    def update_button_colors(self, track):
-        track_index = self.tracks.index(track)
-        solo_button = self.solo_buttons.get(track_index)
-        mute_button = self.mute_buttons.get(track_index)
-        
-        if solo_button:
-            solo_button.configure(fg_color="green" if track.get("solo", False) else "gray50")
-        
-        if mute_button:
-            mute_button.configure(fg_color="red" if track.get("mute", False) else "gray50")
+        self.update_single_track_label(track)
 
     def update_volume(self, track, value):
         track["volume"] = value
         if self.controller:
             self.controller.update_track_volume(track)
+        self.update_single_track_label(track)
                     
     def add_track(self, track_name=None):
         if self.controller:
@@ -301,11 +371,12 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.tracks = new_tracks
         self.update_track_labels()
         self.redraw_timeline()
+        self.update_scrollregion()
         if self.tracks and not self.selected_track:
             self.select_track(self.tracks[0])
 
     def on_track_label_click(self, event):
-        track_index = event.y // self.track_height
+        track_index = int(event.y // self.track_height)
         if 0 <= track_index < len(self.tracks):
             self.select_track(self.tracks[track_index])
 
@@ -351,9 +422,10 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         if track in self.tracks:
             if self.remove_track_callback:
                 self.remove_track_callback(track)
+        self.update_scrollregion()
 
     def show_track_context_menu(self, event):
-        track_index = event.y // self.track_height
+        track_index = int(event.y // self.track_height)
         if 0 <= track_index < len(self.tracks):
             track = self.tracks[track_index]
             context_menu = tk.Menu(self, tearoff=0)
@@ -404,7 +476,29 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
 
     def update_playhead_position(self, position):
         self.playhead_position = position
-        self.draw_playhead(position / self.seconds_per_pixel)
+        x = position / self.seconds_per_pixel
+        self.draw_playhead(x)
+        
+        # Check if playhead is near the edge of the view
+        canvas_width = self.timeline_canvas.winfo_width()
+        visible_start = self.timeline_canvas.canvasx(0)
+        visible_end = self.timeline_canvas.canvasx(canvas_width)
+        
+        # Define a margin (e.g., 20% of the canvas width)
+        margin = canvas_width * 0.2
+        
+        if x < visible_start + margin or x > visible_end - margin:
+            # Calculate new scroll position
+            new_start = max(0, x - canvas_width / 2)
+            self.timeline_canvas.xview_moveto(new_start / self.timeline_width)
+            self.topbar.xview_moveto(new_start / self.timeline_width)
+            self.update_grid_and_topbar()
+        
+        # Extend timeline if nearing the end
+        if position > self.timeline_duration - 60:  # Extend when within 60 seconds of the end
+            self.timeline_duration += 300  # Add 5 minutes
+            self.update_scrollregion()
+            self.update_grid_and_topbar()
 
     def draw_playhead(self, x):
         if self.timeline_canvas:
@@ -413,8 +507,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             height = self.timeline_canvas.winfo_height()
             if height > 0:
                 self.playhead_line = self.timeline_canvas.create_line(x, 0, x, height, fill="red", width=2)
-                # Ensure the playhead is visible by scrolling the canvas if necessary
-                self.timeline_canvas.xview_moveto(max(0, (x - self.timeline_canvas.winfo_width() / 2) / self.timeline_width))
             else:
                 self.after(100, lambda: self.draw_playhead(x))
         else:
@@ -440,20 +532,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
     def option_key_release(self, event):
         self.option_key_pressed = False
     
-    def on_mouse_scroll(self, event):
-        if self.option_key_pressed:
-            if event.delta > 0:
-                self.zoom_y(1.1)
-            else:
-                self.zoom_y(0.9)
-
-    def on_shift_mouse_scroll(self, event):
-        if self.option_key_pressed:
-            if event.delta > 0:
-                self.zoom_x(1.1)
-            else:
-                self.zoom_x(0.9)
-
     def zoom_x(self, factor):
         new_zoom = self.x_zoom * factor
         new_zoom = max(self.min_x_zoom, min(new_zoom, self.max_x_zoom))
@@ -470,12 +548,25 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.seconds_per_pixel = self.base_seconds_per_pixel / self.x_zoom
         self.update_scrollregion()
         self.redraw_timeline()
+        self.draw_playhead(self.playhead_position / self.seconds_per_pixel)
 
     def update_y_zoom(self, value):
         self.y_zoom = float(value)
         self.track_height = max(self.min_track_height, min(self.base_track_height * self.y_zoom, self.max_track_height))
+        
+        self.update_scrollregion()
         self.redraw_timeline()
         self.update_track_labels()
+
+        # Adjust scroll position to keep the view centered
+        visible_start = self.timeline_canvas.canvasy(0)
+        visible_center = visible_start + self.timeline_canvas.winfo_height() / 2
+        center_track = visible_center / self.track_height
+        new_visible_start = center_track * self.track_height - self.timeline_canvas.winfo_height() / 2
+        
+        if new_visible_start >= 0:
+            self.timeline_canvas.yview_moveto(new_visible_start / (len(self.tracks) * self.track_height))
+            self.track_label_canvas.yview_moveto(new_visible_start / (len(self.tracks) * self.track_height))
 
     def update_title(self, project_name=None):
         if project_name:
@@ -504,7 +595,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
                     print(error_msg)
                     logging.error(error_msg, exc_info=True)
                     self.show_error("Error", error_msg)
-
 
     def find_next_available_position(self, track_index, x_position):
         if track_index < len(self.tracks):
@@ -552,8 +642,14 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.add_clip_callback = callback
 
     def draw_clips(self):
-        for i, track in enumerate(self.tracks):
-            y = i * self.track_height
+        visible_start_y = self.timeline_canvas.canvasy(0)
+        visible_end_y = self.timeline_canvas.canvasy(self.timeline_canvas.winfo_height())
+        start_track = max(0, int(visible_start_y // self.track_height))
+        end_track = min(len(self.tracks), int(visible_end_y // self.track_height) + 1)
+
+        for i in range(start_track, end_track):
+            track = self.tracks[i]
+            y = i * self.track_height - self.scroll_offset
             for clip in track['clips']:
                 self.draw_clip(clip, y)
 
@@ -666,6 +762,26 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
     def on_scroll(self, *args):
         self.timeline_canvas.xview(*args)
         self.topbar.xview(*args)
+        self.update_grid_and_topbar()
+
+    def update_grid_and_topbar(self):
+        self.redraw_timeline()
+        self.update_topbar()
+
+    def update_topbar(self):
+        self.topbar.delete("all")
+        visible_start = self.timeline_canvas.canvasx(0)
+        visible_end = self.timeline_canvas.canvasx(self.timeline_canvas.winfo_width())
+
+        start_time = visible_start * self.seconds_per_pixel
+        end_time = visible_end * self.seconds_per_pixel
+
+        seconds_per_label = max(1, int((end_time - start_time) / 10))  # Adjust label density
+
+        for i in range(int(start_time), int(end_time) + 1, seconds_per_label):
+            x = (i / self.seconds_per_pixel)
+            self.topbar.create_text(x, 15, text=f"{i:.1f}s", fill="white", anchor="center")
 
     def show_error(self, title, message):
         messagebox.showerror(title, message)
+    
