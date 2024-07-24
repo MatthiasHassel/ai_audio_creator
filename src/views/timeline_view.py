@@ -103,6 +103,16 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.bind("<KeyPress-Alt_L>", self.option_key_press)
         self.bind("<KeyRelease-Alt_L>", self.option_key_release)
 
+        # Add these new bindings for mousewheel scrolling
+        self.bind("<MouseWheel>", self.on_mousewheel)
+        self.bind("<Shift-MouseWheel>", self.on_shift_mousewheel)
+
+        # For Linux and MacOS compatibility
+        self.bind("<Button-4>", self.on_mousewheel)
+        self.bind("<Button-5>", self.on_mousewheel)
+        self.bind("<Shift-Button-4>", self.on_shift_mousewheel)
+        self.bind("<Shift-Button-5>", self.on_shift_mousewheel)
+
     def create_widgets(self):
         self.create_toolbar()
         self.create_main_content()
@@ -189,15 +199,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.y_scrollbar = ctk.CTkScrollbar(self.main_frame, orientation="vertical", command=self.on_vertical_scroll)
         self.y_scrollbar.grid(row=0, column=2, sticky="ns")
 
-        # self.timeline_canvas.bind("<Configure>", self.on_canvas_resize)
-        # self.timeline_canvas.bind("<ButtonPress-1>", self.on_canvas_click)
-        # self.timeline_canvas.bind("<B1-Motion>", self.on_drag)
-        # self.timeline_canvas.bind("<ButtonRelease-1>", self.on_drag_release)
-        # self.timeline_canvas.bind("<Button-2>", self.show_clip_context_menu)
-
-        # self.timeline_canvas.drop_target_register(DND_FILES)
-        # self.timeline_canvas.dnd_bind('<<Drop>>', self.on_drop)
-
     def create_status_bar(self):
         self.status_var = tk.StringVar()
         self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var, anchor="w")
@@ -226,6 +227,43 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.redraw_timeline()
         self.update_track_labels()
 
+    def on_mousewheel(self, event):
+        if self.option_key_pressed:
+            self.handle_zoom(event, 'y')
+        else:
+            self.handle_scroll(event, 'vertical')
+        return "break"
+
+    def on_shift_mousewheel(self, event):
+        if self.option_key_pressed:
+            self.handle_zoom(event, 'x')
+        else:
+            self.handle_scroll(event, 'horizontal')
+        return "break"
+
+    def handle_scroll(self, event, direction):
+        if event.num == 5 or event.delta < 0:
+            scroll_amount = 1
+        else:
+            scroll_amount = -1
+
+        if direction == 'vertical':
+            self.timeline_canvas.yview_scroll(scroll_amount, "units")
+            self.track_label_canvas.yview_scroll(scroll_amount, "units")
+        else:
+            self.timeline_canvas.xview_scroll(scroll_amount, "units")
+            self.topbar.xview_scroll(scroll_amount, "units")
+
+        self.update_grid_and_topbar()
+
+    def handle_zoom(self, event, axis):
+        delta = event.delta if event.num not in (4, 5) else (120 if event.num == 4 else -120)
+        zoom_factor = 0.9 if delta < 0 else 1.1
+        if axis == 'x':
+            self.zoom_x(zoom_factor)
+            self.update_topbar()
+        else:
+            self.zoom_y(zoom_factor)
 
     def on_vertical_scroll(self, *args):
         if args[0] == 'moveto':
@@ -256,6 +294,18 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.timeline_canvas.configure(scrollregion=(0, 0, self.timeline_width, total_height))
         self.topbar.configure(scrollregion=(0, 0, self.timeline_width, self.topbar_height))
         self.track_label_canvas.configure(scrollregion=(0, 0, self.track_label_canvas.winfo_width(), total_height))
+
+        # Show or hide vertical scrollbar based on content height
+        if total_height <= self.timeline_canvas.winfo_height():
+            self.y_scrollbar.grid_remove()
+        else:
+            self.y_scrollbar.grid()
+
+        # Show or hide horizontal scrollbar based on content width
+        if self.timeline_width <= self.timeline_canvas.winfo_width():
+            self.x_scrollbar.grid_remove()
+        else:
+            self.x_scrollbar.grid()
 
     def draw_grid(self):
         self.timeline_canvas.delete("grid")
@@ -535,13 +585,13 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
     def zoom_x(self, factor):
         new_zoom = self.x_zoom * factor
         new_zoom = max(self.min_x_zoom, min(new_zoom, self.max_x_zoom))
-        self.x_zoom_slider.set(new_zoom)
+        self.update_x_zoom(new_zoom)
 
     def zoom_y(self, factor):
         new_zoom = self.y_zoom * factor
         new_track_height = self.base_track_height * new_zoom
         if self.min_track_height <= new_track_height <= self.max_track_height:
-            self.y_zoom_slider.set(new_zoom)
+            self.update_y_zoom(new_zoom)
 
     def update_x_zoom(self, value):
         self.x_zoom = float(value)
@@ -549,6 +599,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.update_scrollregion()
         self.redraw_timeline()
         self.draw_playhead(self.playhead_position / self.seconds_per_pixel)
+        self.update_topbar()
 
     def update_y_zoom(self, value):
         self.y_zoom = float(value)
