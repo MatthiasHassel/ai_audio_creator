@@ -6,6 +6,7 @@ import logging
 import os 
 import time
 from tkinter import messagebox
+import shutil
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from utils.audio_clip import AudioClip
 from utils.audio_visualizer import AudioVisualizer
@@ -482,26 +483,34 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.title(f"{self.base_title} - {self.current_project}")
 
     def on_drop(self, event):
-        file_path = event.data
-        if file_path.lower().endswith(('.mp3', '.wav')):
-            try:
-                new_file_path = self.project_model.import_audio_file(file_path)
-                track_index = self.get_track_index_from_y(event.y)
-                x_position = event.x * self.seconds_per_pixel
-                clip = AudioClip(new_file_path, x_position)
-                self.add_clip(clip, track_index)
-            except Exception as e:
-                error_msg = f"Failed to import audio file: {str(e)}"
-                logging.error(error_msg, exc_info=True)
-                self.show_error("Error", error_msg)
-    
+        files = self.tk.splitlist(event.data)
+        # Get the mouse position relative to the canvas
+        x = self.timeline_canvas.canvasx(event.x_root - self.timeline_canvas.winfo_rootx())
+        y = self.timeline_canvas.canvasy(event.y_root - self.timeline_canvas.winfo_rooty())
+        
+        for file in files:
+            if file.lower().endswith(('.mp3', '.wav')):
+                try:
+                    new_file_path = self.project_model.import_audio_file(file)
+                    track_index = self.get_track_index_from_y(y)
+                    x_position = x * self.seconds_per_pixel
+                    clip = AudioClip(new_file_path, x_position)
+                    self.add_clip(clip, track_index)
+                    print(f'File {file} imported and added to timeline at position ({x}, {y}) on track {track_index}.')
+                except Exception as e:
+                    error_msg = f"Failed to import audio file: {str(e)}"
+                    print(error_msg)  # For debugging
+                    logging.error(error_msg, exc_info=True)
+                    self.show_error("Error", error_msg)
+
     def get_track_index_from_y(self, y):
         return int(y // self.track_height)
 
     def add_clip(self, clip, track_index):
         if track_index < len(self.tracks):
             self.tracks[track_index]['clips'].append(clip)
-            self.after(0, lambda: self._process_clip(clip, track_index))
+            self.draw_clip(clip, track_index)
+            self.redraw_timeline()
         else:
             logging.warning(f"Attempted to add clip to non-existent track {track_index}")
 

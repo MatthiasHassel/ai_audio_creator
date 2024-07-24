@@ -33,3 +33,5 @@ project_structure.txt
 
 # python venv
 /ai_audio_creator_env
+
+.DS_Store

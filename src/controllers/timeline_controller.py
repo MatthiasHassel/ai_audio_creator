@@ -354,4 +354,11 @@ class TimelineController:
         if self.view:
             self.view.update_tracks(self.timeline_model.get_tracks())
             self.view.select_track(self.timeline_model.get_tracks()[-1])
+        self.unsaved_changes = True
     
+    def add_clip(self, clip, track_index):
+        self.timeline_model.add_clip_to_track(track_index, clip)
+        if self.view:
+            self.view.add_clip(clip, track_index)
+            self.view.redraw_timeline()
+        self.unsaved_changes = True

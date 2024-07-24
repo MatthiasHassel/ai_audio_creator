@@ -92,7 +92,6 @@ class ProjectModel:
         with open(timeline_file, 'w') as f:
             json.dump(serializable_tracks, f, indent=2)
 
-
     def load_timeline_data(self):
         timeline_file = os.path.join(self.get_project_dir(), "timeline_data.json")
         if os.path.exists(timeline_file):
@@ -148,6 +147,7 @@ class ProjectModel:
         
         os.makedirs(audio_files_dir, exist_ok=True)
         shutil.copy2(file_path, destination)
+        print(f"File copied to: {destination}")  # For debugging
         
         return destination
     

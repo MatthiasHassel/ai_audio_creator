@@ -125,7 +125,6 @@ class MainController:
                 self.project_model.get_scripts_dir()
             )
 
-
     def analyze_script(self):
         script_text = self.script_editor_controller.get_script_text()
         analysis_result = self.script_analyzer.analyze_script(script_text)
