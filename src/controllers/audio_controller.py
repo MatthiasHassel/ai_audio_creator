@@ -14,6 +14,7 @@ class AudioController:
         self.view = view
         self.config = config
         self.add_to_timeline_callback = None
+        self.add_to_new_audio_files_callback = None
         self.llama_service = None
         self.music_service = None
         self.sfx_service = None
@@ -78,6 +79,9 @@ class AudioController:
 
     def set_add_to_timeline_callback(self, callback):
             self.add_to_timeline_callback = callback
+
+    def set_add_to_new_audio_files_callback(self, callback):
+        self.add_to_new_audio_files_callback = callback
 
     def process_music_request(self):
         self._process_request(self.music_service.process_music_request, 
@@ -203,9 +207,12 @@ class AudioController:
             current_module = self.view.current_module.get().lower()
             track_index = {"music": 0, "sfx": 1, "speech": 2}.get(current_module, 0)
             
+            # Use the callback to add the file to new_audio_files
+            if self.add_to_new_audio_files_callback:
+                self.add_to_new_audio_files_callback(selected_file)
+
             # Use the callback to add the clip
             self.add_to_timeline_callback(selected_file, track_index)
-            
             self.view.update_status(f"Added audio to {current_module.capitalize()} track")
         else:
             self.view.update_status("No audio file selected or timeline not available")

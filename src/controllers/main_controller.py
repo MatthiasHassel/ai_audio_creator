@@ -43,6 +43,7 @@ class MainController:
         self.timeline_controller.set_toggle_audio_creator_command(self.view.toggle_visibility)
         self.audio_controller.set_show_timeline_command(self.timeline_controller.show)
         self.audio_controller.set_add_to_timeline_callback(self.add_audio_to_timeline)
+        self.audio_controller.set_add_to_new_audio_files_callback(self.add_to_new_audio_files)
 
         
     def load_default_project(self):
@@ -183,6 +184,9 @@ class MainController:
             self.timeline_controller.add_audio_clip(file_path, track_index)
         else:
             logging.warning("Timeline controller is not available")
+    
+    def add_to_new_audio_files(self, file_path):
+        self.project_model.new_audio_files.add(file_path)
 
     def show_open_project_dialog(self):
         self.view.open_project()

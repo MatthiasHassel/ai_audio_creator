@@ -54,16 +54,18 @@ class TimelineController:
             self.view.set_add_clip_callback(self.add_clip_to_model)
 
     def load_timeline_data(self):
-        tracks = self.timeline_model.get_tracks()
+        tracks = self.project_model.get_timeline_data()
+        self.timeline_model.set_tracks(tracks)
         if self.view:
             self.view.update_tracks(tracks)
             for track_index, track_data in enumerate(tracks):
                 for clip in track_data['clips']:
                     self.view.draw_clip(clip, track_index)
             self.view.redraw_timeline()
-        self.select_first_track()
-        self.unsaved_changes = False
-        self.imported_audio_files.clear()
+        self.project_model.clear_timeline_clips()
+        for track in tracks:
+            for clip in track['clips']:
+                self.project_model.add_clip_to_timeline(clip.file_path)
 
     def update_project_name(self, project_name):
         if self.view and self.view.winfo_exists():
@@ -166,6 +168,7 @@ class TimelineController:
             # Create a new AudioClip and add it to the timeline
             new_clip = AudioClip(file_path, start_time)
             self.timeline_model.add_clip_to_track(track_index, new_clip)
+            self.project_model.add_clip_to_timeline(file_path)
             
             # Update the view
             if self.view:
@@ -180,17 +183,10 @@ class TimelineController:
         track_index = self.timeline_model.get_track_index_for_clip(clip)
         if track_index != -1:
             self.timeline_model.remove_clip_from_track(track_index, clip)
+            self.project_model.remove_clip_from_timeline(clip.file_path)
             if self.view:
                 self.view.remove_clip(clip)
-            self.delete_audio_file(clip.file_path)
         self.unsaved_changes = True
-
-    def delete_audio_file(self, file_path):
-        try:
-            os.remove(file_path)
-            logging.info(f"Deleted audio file: {file_path}")
-        except Exception as e:
-            logging.error(f"Failed to delete audio file {file_path}: {str(e)}")
 
     def on_drop(self, event):
         file_path = event.data
@@ -324,8 +320,7 @@ class TimelineController:
 
     def discard_unsaved_changes(self):
         self.project_model.remove_unsaved_audio_files()
-        self.project_model.load_timeline_data()
-        self.timeline_model = self.project_model.get_timeline_model()
+        self.project_model.clear_timeline_clips()
         self.load_timeline_data()
         self.unsaved_changes = False
 

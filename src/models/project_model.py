@@ -14,6 +14,7 @@ class ProjectModel:
         self.timeline_model = TimelineModel()  
         self.saved_audio_files = set()
         self.new_audio_files = set()
+        self.timeline_clips = set()
 
     def ensure_default_project(self):
         default_project_path = os.path.join(self.base_projects_dir, self.default_project_name)
@@ -52,6 +53,7 @@ class ProjectModel:
         self.current_project = project_name
         self.load_project_metadata()
         self.load_timeline_data()
+        self.saved_audio_files.update(self.get_all_project_audio_files())
 
     def save_project(self):
         if not self.current_project:
@@ -61,6 +63,7 @@ class ProjectModel:
             self.save_project_metadata()
             self.save_timeline_data()
             self.update_saved_audio_files()
+            self.saved_audio_files.update(self.get_all_project_audio_files())
             logging.info(f"Project '{self.current_project}' saved successfully.")
             return True, "Project saved successfully."
         except Exception as e:
@@ -106,6 +109,23 @@ class ProjectModel:
         else:
             self.timeline_model.clear_tracks()
 
+    def is_file_in_output_directory(self, file_path):
+        output_dirs = [
+            os.path.join(self.get_project_dir(), "output", dir_name)
+            for dir_name in ['music', 'sfx', 'speech']
+        ]
+        return any(file_path.startswith(dir_path) for dir_path in output_dirs)
+    
+    def get_all_project_audio_files(self):
+        audio_files = []
+        for directory in ['music', 'sfx', 'speech']:
+            dir_path = os.path.join(self.get_project_dir(), "output", directory)
+            if os.path.exists(dir_path):
+                for file in os.listdir(dir_path):
+                    if file.endswith(('.mp3', '.wav')):
+                        audio_files.append(os.path.join(dir_path, file))
+        return audio_files
+    
     def get_timeline_model(self):
         return self.timeline_model
 
@@ -142,15 +162,20 @@ class ProjectModel:
         if not self.current_project:
             raise ValueError("No project is currently active")
         
-        audio_files_dir = self.get_audio_files_dir()
-        file_name = os.path.basename(file_path)
-        destination = os.path.join(audio_files_dir, file_name)
-        
-        os.makedirs(audio_files_dir, exist_ok=True)
-        shutil.copy2(file_path, destination)
-        print(f"File copied to: {destination}")  # For debugging
-        self.new_audio_files.add(destination)
-        return destination
+        if self.is_file_in_output_directory(file_path):
+            # If the file is already in an output directory, don't move it
+            return file_path
+        else:
+            # If it's an external file, import it to the audio_files directory
+            audio_files_dir = self.get_audio_files_dir()
+            file_name = os.path.basename(file_path)
+            destination = os.path.join(audio_files_dir, file_name)
+            
+            os.makedirs(audio_files_dir, exist_ok=True)
+            shutil.copy2(file_path, destination)
+            print(f"File copied to: {destination}")  # For debugging
+            self.new_audio_files.add(destination)
+            return destination
     
     def update_saved_audio_files(self):
         self.saved_audio_files.update(self.new_audio_files)
@@ -162,15 +187,29 @@ class ProjectModel:
     def get_new_audio_files(self):
         return self.new_audio_files
 
-    def remove_unsaved_audio_files(self):
-        for file_path in self.new_audio_files:
-            try:
-                os.remove(file_path)
-                print(f"Removed unsaved audio file: {file_path}")
-            except OSError as e:
-                print(f"Error removing file {file_path}: {e}")
-        self.new_audio_files.clear()
+    def add_clip_to_timeline(self, file_path):
+        self.timeline_clips.add(file_path)
 
+    def remove_clip_from_timeline(self, file_path):
+        self.timeline_clips.discard(file_path)
+
+    def clear_timeline_clips(self):
+        self.timeline_clips.clear()
+
+    def is_clip_in_timeline(self, file_path):
+        return file_path in self.timeline_clips
+
+    def remove_unsaved_audio_files(self):
+        audio_files_dir = self.get_audio_files_dir()
+        for file_path in list(self.new_audio_files):
+            if file_path.startswith(audio_files_dir) and file_path not in self.timeline_clips:
+                try:
+                    os.remove(file_path)
+                    print(f"Removed unsaved audio file: {file_path}")
+                except OSError as e:
+                    print(f"Error removing file {file_path}: {e}")
+            self.new_audio_files.remove(file_path)
+            
     def get_audio_files_dir(self):
         if not self.current_project:
             raise ValueError("No project is currently active")
