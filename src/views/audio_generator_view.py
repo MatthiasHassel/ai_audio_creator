@@ -126,6 +126,9 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.stop_button = ctk.CTkButton(control_frame, text="Stop", state="disabled", width=60)
         self.stop_button.grid(row=0, column=2, padx=2)
 
+        self.add_to_timeline_button = ctk.CTkButton(control_frame, text="Add to Timeline", state="disabled", width=120)
+        self.add_to_timeline_button.grid(row=0, column=3, padx=2)
+
     def create_progress_and_status_bar(self, parent):
         progress_status_frame = ctk.CTkFrame(parent)
         progress_status_frame.grid(row=8, column=0, sticky="ew")
@@ -180,8 +183,6 @@ class AudioGeneratorView(ctk.CTkFrame):
         # Update the audio file selector
         self.audio_file_selector.update_module(current_tab.lower())
 
-    
-
     def update_button_states(self, is_playing, is_paused):
         if is_playing:
             self.play_button.configure(state="disabled")
@@ -217,6 +218,9 @@ class AudioGeneratorView(ctk.CTkFrame):
     def hide_progress_bar(self):
         self.progress_bar.stop()
         self.progress_bar.grid_remove()
+
+    def set_add_to_timeline_command(self, command):
+        self.add_to_timeline_button.configure(command=command)
 
     def on_drag_start(self, event):
         if self.audio_file_selector.file_var.get() != "No files available":

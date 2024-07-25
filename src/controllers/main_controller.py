@@ -42,6 +42,8 @@ class MainController:
         # Set up the connection between Timeline and Audio Creator
         self.timeline_controller.set_toggle_audio_creator_command(self.view.toggle_visibility)
         self.audio_controller.set_show_timeline_command(self.timeline_controller.show)
+        self.audio_controller.set_add_to_timeline_callback(self.add_audio_to_timeline)
+
         
     def load_default_project(self):
         try:
@@ -175,6 +177,12 @@ class MainController:
             except Exception as e:
                 logging.error(f"Failed to import audio file: {str(e)}", exc_info=True)
                 self.view.show_error("Import Error", f"Failed to import audio file: {str(e)}")
+
+    def add_audio_to_timeline(self, file_path, track_index):
+        if self.timeline_controller:
+            self.timeline_controller.add_audio_clip(file_path, track_index)
+        else:
+            logging.warning("Timeline controller is not available")
 
     def show_open_project_dialog(self):
         self.view.open_project()

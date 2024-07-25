@@ -12,7 +12,6 @@ class TimelineController:
         self.project_model = project_model
         self.view = None
         self.update_interval = 50  # milliseconds
-        self.ensure_one_track()
         self.unsaved_changes = False
         self.imported_audio_files = set()
 
@@ -37,11 +36,7 @@ class TimelineController:
         
         if self.view and self.view.winfo_exists():
             self.view.withdraw()
-            
-    def ensure_one_track(self):
-        if not self.timeline_model.get_tracks():
-            self.add_track("Track 1")
-
+        
     def select_first_track(self):
         if self.view and self.timeline_model.get_tracks():
             first_track = self.timeline_model.get_tracks()[0]
@@ -60,7 +55,6 @@ class TimelineController:
 
     def load_timeline_data(self):
         tracks = self.timeline_model.get_tracks()
-        self.ensure_one_track()
         if self.view:
             self.view.update_tracks(tracks)
             for track_index, track_data in enumerate(tracks):
@@ -139,28 +133,48 @@ class TimelineController:
             logging.error(f"Error removing track: {str(e)}")
         self.unsaved_changes = True
 
-    def add_audio_clip(self, file_path):
-        if self.timeline_model.is_playing:
-            self.view.show_error("Playback in Progress", "Cannot import audio while playback is running. Stop playback and try again.")
-            return
+    # def add_audio_clip(self, file_path):
+    #     if self.timeline_model.is_playing:
+    #         self.view.show_error("Playback in Progress", "Cannot import audio while playback is running. Stop playback and try again.")
+    #         return
 
-        selected_track = self.view.selected_track
-        if selected_track is None:
-            self.view.show_error("No Track Selected", "Please select a track before importing audio.")
-            return
+    #     selected_track = self.view.selected_track
+    #     if selected_track is None:
+    #         self.view.show_error("No Track Selected", "Please select a track before importing audio.")
+    #         return
 
-        track_index = self.timeline_model.get_track_index(selected_track)
-        start_time = self.timeline_model.get_playhead_position()
+    #     track_index = self.timeline_model.get_track_index(selected_track)
+    #     start_time = self.timeline_model.get_playhead_position()
 
-        try:
-            start_time = self.view.find_next_available_position(track_index, start_time)
-            clip = AudioClip(file_path, start_time)
-            self.timeline_model.add_clip_to_track(track_index, clip)
-            self.view.add_clip(clip, track_index)
-            self.view.redraw_timeline()
-            self.unsaved_changes = True 
-        except Exception as e:
-            self.view.show_error("Import Error", f"Failed to import audio clip: {str(e)}")
+    #     try:
+    #         start_time = self.view.find_next_available_position(track_index, start_time)
+    #         clip = AudioClip(file_path, start_time)
+    #         self.timeline_model.add_clip_to_track(track_index, clip)
+    #         self.view.add_clip(clip, track_index)
+    #         self.view.redraw_timeline()
+    #         self.unsaved_changes = True 
+    #     except Exception as e:
+    #         self.view.show_error("Import Error", f"Failed to import audio clip: {str(e)}")
+
+    def add_audio_clip(self, file_path, track_index):
+        if 0 <= track_index < len(self.timeline_model.get_tracks()):
+            track = self.timeline_model.get_tracks()[track_index]
+            
+            # Use the current playhead position
+            start_time = self.timeline_model.get_playhead_position()
+            
+            # Create a new AudioClip and add it to the timeline
+            new_clip = AudioClip(file_path, start_time)
+            self.timeline_model.add_clip_to_track(track_index, new_clip)
+            
+            # Update the view
+            if self.view:
+                self.view.add_clip(new_clip, track_index)
+                self.view.redraw_timeline()
+            
+            self.unsaved_changes = True
+        else:
+            logging.warning(f"Invalid track index: {track_index}")
 
     def delete_clip(self, clip):
         track_index = self.timeline_model.get_track_index_for_clip(clip)

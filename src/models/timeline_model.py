@@ -8,7 +8,12 @@ from utils.audio_clip import AudioClip
 
 class TimelineModel:
     def __init__(self):
-        self.tracks = []
+        self.tracks = [
+            {'name': 'Music', 'clips': []},
+            {'name': 'SFX', 'clips': []},
+            {'name': 'Speaker1', 'clips': []}
+        ]
+        self.is_modified = False
         self.is_modified = False
         self.is_playing = False
         self.playhead_position = 0

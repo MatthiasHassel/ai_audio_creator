@@ -6,12 +6,14 @@ from services.music_service import MusicService
 from services.sfx_service import SFXService
 from services.speech_service import SpeechService
 import logging
+from utils.audio_clip import AudioClip
 
 class AudioController:
     def __init__(self, model: AudioModel, view, config):
         self.model = model
         self.view = view
         self.config = config
+        self.add_to_timeline_callback = None
         self.llama_service = None
         self.music_service = None
         self.sfx_service = None
@@ -34,6 +36,7 @@ class AudioController:
         self.view.set_play_command(self.play_audio)
         self.view.set_pause_resume_command(self.pause_resume_audio)
         self.view.set_stop_command(self.stop_audio)
+        self.view.set_add_to_timeline_command(self.add_audio_to_timeline)
         self.view.set_file_select_command(self.on_audio_file_select)
         self.view.set_visualizer_click_command(self.seek_audio)
 
@@ -72,6 +75,9 @@ class AudioController:
             self.view.user_input.insert("1.0", result)
         else:
             self.view.update_output("Error: Failed to process input with Llama3.")
+
+    def set_add_to_timeline_callback(self, callback):
+            self.add_to_timeline_callback = callback
 
     def process_music_request(self):
         self._process_request(self.music_service.process_music_request, 
@@ -166,9 +172,11 @@ class AudioController:
             self.view.audio_visualizer.update_waveform(file_path)
             self.view.update_button_states(False, False)  # Enable play button
             self.current_audio_file = file_path
+            self.view.add_to_timeline_button.configure(state="normal")  # Enable add_to_timeline button
             logging.info(f"Audio file loaded: {file_path}")
         else:
             logging.warning(f"Invalid file path: {file_path}")
+            self.view.add_to_timeline_button.configure(state="disabled")  # Disable add_to_timeline button
 
     def clear_input(self):
         self.view.clear_input()
@@ -188,6 +196,19 @@ class AudioController:
                 self.view.update_output("Warning: No voices available.")
         except Exception as e:
             self.view.update_output(f"Error: Failed to load voices: {str(e)}")
+
+    def add_audio_to_timeline(self):
+        selected_file = self.view.audio_file_selector.get_selected_file()
+        if selected_file and self.add_to_timeline_callback:
+            current_module = self.view.current_module.get().lower()
+            track_index = {"music": 0, "sfx": 1, "speech": 2}.get(current_module, 0)
+            
+            # Use the callback to add the clip
+            self.add_to_timeline_callback(selected_file, track_index)
+            
+            self.view.update_status(f"Added audio to {current_module.capitalize()} track")
+        else:
+            self.view.update_status("No audio file selected or timeline not available")
 
     def update_status(self, message):
         self.view.update_status(message)
