@@ -98,6 +98,10 @@ class TimelineModel:
                 active_clips.append((clip, track))
         return active_clips
         
+    def update_playing_tracks(self, active_tracks):
+        if self.is_playing:
+            self.active_clips = self.get_active_clips(active_tracks)
+
     def add_track(self, track_data):
         self.tracks.append(track_data)
         self.is_modified = True
@@ -158,8 +162,6 @@ class TimelineModel:
             self.tracks[track_index]["solo"] = track.get("solo", False)
             self.tracks[track_index]["mute"] = track.get("mute", False)
             self.is_modified = True
-        if self.is_playing:
-            self.active_clips = self.get_active_clips(self.get_active_tracks())
 
     def update_track_volume(self, track):
         track_index = self.get_track_index(track)

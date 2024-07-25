@@ -1,0 +1,12 @@
+- audioplayback in timeline not perfect:
+    * poor quality (slightly distorted)
+    * after importing a new clip and playing back the timline, the first milliseconds of the new clip are not played back
+    --> probably bad caching implementation
+
+- vertical scroll: 
+    * tracklabels not always aligned with grid
+    * tracklabels can be scrolled individually for a little bit, when all tracks fit in the frame and vertical scroll is meant to be disabled.
+
+- when deleting a selected clip the up and down keys can't switch through the tracks to select them. (TO DO: automatically select next track above or below the recently deleted track)
+
+- audio files that have been created in the generator and added to the timeline should not be deleted from the directory after deleting the audio clip in the timeline and not saving the project

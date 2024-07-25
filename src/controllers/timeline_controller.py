@@ -234,8 +234,8 @@ class TimelineController:
         self.timeline_model.update_track_solo_mute(track)
         if self.view:
             self.view.update_single_track_label(track)
-        if self.timeline_model.is_playing:
-            self.timeline_model.update_playing_tracks(self.get_active_tracks())
+        active_tracks = self.get_active_tracks()
+        self.timeline_model.update_playing_tracks(active_tracks)
 
     def update_track_volume(self, track):
         self.timeline_model.update_track_volume(track)
@@ -246,7 +246,11 @@ class TimelineController:
             self.timeline_model.update_playing_tracks(active_tracks)
 
     def get_active_tracks(self):
-        return self.timeline_model.get_active_tracks()
+        tracks = self.timeline_model.get_tracks()
+        solo_tracks = [track for track in tracks if track.get("solo", False)]
+        if solo_tracks:
+            return solo_tracks
+        return [track for track in tracks if not track.get("mute", False)]
 
     def play_timeline(self):
         active_tracks = self.get_active_tracks()

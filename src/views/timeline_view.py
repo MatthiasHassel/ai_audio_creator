@@ -395,15 +395,13 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             self.track_volume_vars[track_index].set(track.get("volume", 1.0))
 
     def toggle_solo(self, track):
-        track["solo"] = not track.get("solo", False)
         if self.controller:
-            self.controller.update_track_solo_mute(track)
+            self.controller.toggle_solo(track)
         self.update_single_track_label(track)
 
     def toggle_mute(self, track):
-        track["mute"] = not track.get("mute", False)
         if self.controller:
-            self.controller.update_track_solo_mute(track)
+            self.controller.toggle_mute(track)
         self.update_single_track_label(track)
 
     def update_volume(self, track, value):
