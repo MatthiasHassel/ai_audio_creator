@@ -460,6 +460,11 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
                 self.rename_track_callback(track, new_name)
             self.update_track_labels()
 
+    def deselect_all_tracks(self):
+        self.selected_track = None
+        self.update_track_labels()
+        self.redraw_timeline()
+
     def handle_delete(self, event):
         if self.selected_clip and self.controller:
             self.controller.delete_clip(self.selected_clip)

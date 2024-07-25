@@ -123,10 +123,26 @@ class TimelineController:
             # Remove the track from the model
             self.timeline_model.remove_track(track_index)
             
+            # Determine the next track to select
+            tracks = self.timeline_model.get_tracks()
+            if tracks:
+                if track_index > 0:
+                    next_track = tracks[track_index - 1]
+                elif track_index < len(tracks):
+                    next_track = tracks[track_index]
+                else:
+                    next_track = None
+            else:
+                next_track = None
+            
             # Update the view
             if self.view:
-                self.view.update_tracks(self.timeline_model.get_tracks())
+                self.view.update_tracks(tracks)
                 self.view.redraw_timeline()
+                if next_track:
+                    self.view.select_track(next_track)
+                else:
+                    self.view.deselect_all_tracks()
             
             logging.info(f"Track and associated clips removed: {track['name']}")
         except ValueError:
@@ -134,29 +150,6 @@ class TimelineController:
         except Exception as e:
             logging.error(f"Error removing track: {str(e)}")
         self.unsaved_changes = True
-
-    # def add_audio_clip(self, file_path):
-    #     if self.timeline_model.is_playing:
-    #         self.view.show_error("Playback in Progress", "Cannot import audio while playback is running. Stop playback and try again.")
-    #         return
-
-    #     selected_track = self.view.selected_track
-    #     if selected_track is None:
-    #         self.view.show_error("No Track Selected", "Please select a track before importing audio.")
-    #         return
-
-    #     track_index = self.timeline_model.get_track_index(selected_track)
-    #     start_time = self.timeline_model.get_playhead_position()
-
-    #     try:
-    #         start_time = self.view.find_next_available_position(track_index, start_time)
-    #         clip = AudioClip(file_path, start_time)
-    #         self.timeline_model.add_clip_to_track(track_index, clip)
-    #         self.view.add_clip(clip, track_index)
-    #         self.view.redraw_timeline()
-    #         self.unsaved_changes = True 
-    #     except Exception as e:
-    #         self.view.show_error("Import Error", f"Failed to import audio clip: {str(e)}")
 
     def add_audio_clip(self, file_path, track_index):
         if 0 <= track_index < len(self.timeline_model.get_tracks()):

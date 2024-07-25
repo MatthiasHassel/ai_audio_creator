@@ -62,7 +62,7 @@ class SpeechService:
                 optimize_streaming_latency="0",
                 output_format="mp3_22050_32",
                 text=text_prompt,
-                model_id="eleven_turbo_v2",
+                model_id="eleven_multilingual_v2",
                 voice_settings=VoiceSettings(
                     stability=0.0,
                     similarity_boost=1.0,

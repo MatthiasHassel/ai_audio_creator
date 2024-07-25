@@ -8,5 +8,4 @@
     * tracklabels not always aligned with grid
     * tracklabels can be scrolled individually for a little bit, when all tracks fit in the frame and vertical scroll is meant to be disabled.
 
-- when deleting a selected clip the up and down keys can't switch through the tracks to select them. (TO DO: automatically select next track above or below the recently deleted track)
-
+- not a bug but a consideration: input text gets cleared after audio generation -> maybe leave it or display the used prompt in the output area?
