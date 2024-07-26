@@ -44,8 +44,7 @@ class MainController:
         self.audio_controller.set_show_timeline_command(self.timeline_controller.show)
         self.audio_controller.set_add_to_timeline_callback(self.add_audio_to_timeline)
         self.audio_controller.set_add_to_new_audio_files_callback(self.add_to_new_audio_files)
-
-        
+    
     def load_default_project(self):
         try:
             self.project_model.ensure_default_project()

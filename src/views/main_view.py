@@ -13,23 +13,107 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
         
         self.config_data = config
         self.project_model = project_model
-        self.setup_window()
+        self.setup_audio_generator_window()
+        self.setup_timeline_window()
         self.create_components()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.timeline_controller = None
 
-    def setup_window(self):
+    def setup_audio_generator_window(self):
         self.base_title = "Audio Creator"
         self.update_title()
-        self.geometry(self.config_data['gui']['window_size'])
+        self.geometry(self.config_data['audio_generator_gui']['window_size'])
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
+
+    def setup_timeline_window(self):
+        #Implement later
+        pass
 
     def update_title(self, project_name=None):
         if project_name:
             self.title(f"{self.base_title} - {project_name}")
         else:
             self.title(self.base_title)
+
+    def hide(self):
+        self.withdraw()
+
+    def show(self):
+        self.deiconify()
+
+    def on_close(self):
+        self.withdraw()  # Hide the main window instead of destroying it
+
+    def set_timeline_controller(self, timeline_controller):
+        self.timeline_controller = timeline_controller
+        self.audio_generator_view.set_timeline_command(self.timeline_controller.show)
+
+    def get_audio_generator_view(self):
+        return self.audio_generator_view
+
+    def get_script_editor_view(self):
+        return self.script_editor_view
+
+    def set_new_project_callback(self, callback):
+        self.new_project_callback = callback
+
+    def set_open_project_callback(self, callback):
+        self.open_project_callback = callback
+
+    def set_save_project_callback(self, callback):
+        self.save_project_callback = callback
+    
+    def create_project_frame(self):
+        project_frame = ctk.CTkFrame(self)
+        project_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=5)
+        
+        ctk.CTkLabel(project_frame, text="Current Project:").pack(side="left", padx=(0, 5))
+        self.current_project_var = ctk.StringVar(value="No project open")
+        ctk.CTkLabel(project_frame, textvariable=self.current_project_var).pack(side="left")
+
+    def new_project(self):
+        if hasattr(self, 'new_project_callback'):
+            self.new_project_callback()
+
+    def open_project(self):
+        initial_dir = self.config_data['projects']['base_dir']
+        project_dir = filedialog.askdirectory(
+            title="Select Project Directory",
+            initialdir=initial_dir
+        )
+        if project_dir:
+            project_name = os.path.basename(project_dir)
+            self.open_project_callback(project_name)
+
+    def save_project(self):
+        if hasattr(self, 'save_project_callback'):
+            self.save_project_callback()
+
+    def update_current_project(self, project_name):
+        self.update_title(project_name)
+        if hasattr(self, 'timeline_controller'):
+            self.timeline_controller.update_project_name(project_name)
+            
+    def show_info(self, title, message):
+        messagebox.showinfo(title, message)
+
+    def show_error(self, title, message):
+        messagebox.showerror(title, message)
+
+    def show_warning(self, title, message):
+        messagebox.showwarning(title, message)
+
+    def import_audio(self):
+        if self.import_audio_callback:
+            self.import_audio_callback()
+
+    def set_import_audio_callback(self, callback):
+        self.import_audio_callback = callback
+        
+    def set_initial_sash_position(self):
+        width = self.paned_window.winfo_width()
+        self.paned_window.sash_place(0, width // 2, 0)
 
     def create_components(self):
         self.create_menu()
@@ -69,60 +153,6 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
 
         self.paned_window.after(10, self.set_initial_sash_position)
 
-    def toggle_timeline(self):
-        if self.timeline_controller:
-            self.timeline_controller.toggle_visibility()
-
-    def toggle_visibility(self):
-        if self.winfo_viewable():
-            self.hide()
-        else:
-            self.show()
-
-    def hide(self):
-        self.withdraw()
-
-    def show(self):
-        self.deiconify()
-
-    def set_timeline_controller(self, timeline_controller):
-        self.timeline_controller = timeline_controller
-        self.audio_generator_view.set_timeline_command(self.timeline_controller.show)
-
-    def on_close(self):
-        self.withdraw()  # Hide the main window instead of destroying it
-
-    def set_initial_sash_position(self):
-        width = self.paned_window.winfo_width()
-        self.paned_window.sash_place(0, width // 2, 0)
-
-    def get_audio_generator_view(self):
-        return self.audio_generator_view
-
-    def get_script_editor_view(self):
-        return self.script_editor_view
-
-    def set_new_project_callback(self, callback):
-        self.new_project_callback = callback
-
-    def set_open_project_callback(self, callback):
-        self.open_project_callback = callback
-
-    def set_save_project_callback(self, callback):
-        self.save_project_callback = callback
-    
-    def create_project_frame(self):
-        project_frame = ctk.CTkFrame(self)
-        project_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=5)
-        
-        ctk.CTkLabel(project_frame, text="Current Project:").pack(side="left", padx=(0, 5))
-        self.current_project_var = ctk.StringVar(value="No project open")
-        ctk.CTkLabel(project_frame, textvariable=self.current_project_var).pack(side="left")
-
-    def new_project(self):
-        if hasattr(self, 'new_project_callback'):
-            self.new_project_callback()
-
     def create_status_bar(self):
         self.status_var = tk.StringVar()
         self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var, anchor="w")
@@ -135,50 +165,24 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
     def open_timeline(self):
         self.timeline_controller.show()
 
-    def show_info(self, title, message):
-        messagebox.showinfo(title, message)
+    def toggle_timeline(self):
+        if self.timeline_controller:
+            self.timeline_controller.toggle_visibility()
 
-    def show_error(self, title, message):
-        messagebox.showerror(title, message)
-
-    def show_warning(self, title, message):
-        messagebox.showwarning(title, message)
-
-    def update_status(self, message):
-        if hasattr(self, 'status_var'):
-            self.status_var.set(message)
-
-    def open_project(self):
-        initial_dir = self.config_data['projects']['base_dir']
-        project_dir = filedialog.askdirectory(
-            title="Select Project Directory",
-            initialdir=initial_dir
-        )
-        if project_dir:
-            project_name = os.path.basename(project_dir)
-            self.open_project_callback(project_name)
-
-
-    def save_project(self):
-        if hasattr(self, 'save_project_callback'):
-            self.save_project_callback()
-
-    def import_audio(self):
-        if self.import_audio_callback:
-            self.import_audio_callback()
-
-    def set_import_audio_callback(self, callback):
-        self.import_audio_callback = callback
-        
-    def update_current_project(self, project_name):
-        self.update_title(project_name)
-        if hasattr(self, 'timeline_controller'):
-            self.timeline_controller.update_project_name(project_name)
+    def toggle_visibility(self):
+        if self.winfo_viewable():
+            self.hide()
+        else:
+            self.show()
 
     def update_analysis_results(self, analyzed_script, suggested_voices, element_counts, estimated_duration, categorized_sentences):
         self.script_editor_view.update_analysis_results(
             analyzed_script, suggested_voices, element_counts, estimated_duration, categorized_sentences
         )
+
+    def update_status(self, message):
+        if hasattr(self, 'status_var'):
+            self.status_var.set(message)
 
     def run(self):
         self.mainloop()

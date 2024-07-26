@@ -27,9 +27,12 @@ speech_gen:
   output_dir: './output/speech'
 
 # GUI Configuration
-gui:
+audio_generator_gui:
   window_title: 'AI Audio Creator'
   window_size: '1400x850'
+timeline_gui:
+  window_title: 'Audio Timeline'
+  window_size: '1200x600'
 
 # Logging Configuration
 logging:
