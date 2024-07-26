@@ -163,11 +163,48 @@ class AudioGeneratorView(ctk.CTkFrame):
     def create_speech_widgets(self, parent):
         frame = ctk.CTkFrame(parent)
         self.selected_voice = ctk.StringVar()
+        
+        # Existing voice selection
         label = ctk.CTkLabel(frame, text="Select Voice:")
         self.voice_dropdown = ctk.CTkOptionMenu(frame, variable=self.selected_voice, width=120)
-        label.pack(side="left", padx=(0, 5))
-        self.voice_dropdown.pack(side="left")
+        label.grid(row=0, column=0, padx=(0, 5), pady=5, sticky="w")
+        self.voice_dropdown.grid(row=0, column=1, pady=5, sticky="w")
+        
+        # Unique voice generation options
+        self.use_unique_voice = ctk.BooleanVar(value=False)
+        self.unique_voice_checkbox = ctk.CTkCheckBox(frame, text="Generate Unique Voice", variable=self.use_unique_voice, command=self.toggle_unique_voice_options)
+        self.unique_voice_checkbox.grid(row=1, column=0, columnspan=2, pady=5, sticky="w")
+        
+        self.gender_var = ctk.StringVar(value="female")
+        self.accent_var = ctk.StringVar(value="american")
+        self.age_var = ctk.StringVar(value="young")
+        self.accent_strength_var = ctk.DoubleVar(value=1.0)
+        
+        self.gender_dropdown = ctk.CTkOptionMenu(frame, variable=self.gender_var, values=["female", "male"], width=120)
+        self.accent_dropdown = ctk.CTkOptionMenu(frame, variable=self.accent_var, values=["american", "british", "african", "australian", "indian"], width=120)
+        self.age_dropdown = ctk.CTkOptionMenu(frame, variable=self.age_var, values=["young", "middle_aged", "old"], width=120)
+        self.accent_strength_slider = ctk.CTkSlider(frame, from_=0.3, to=2.0, variable=self.accent_strength_var, width=120)
+        
+        ctk.CTkLabel(frame, text="Gender:").grid(row=2, column=0, padx=(0, 5), pady=2, sticky="w")
+        self.gender_dropdown.grid(row=2, column=1, pady=2, sticky="w")
+        ctk.CTkLabel(frame, text="Accent:").grid(row=3, column=0, padx=(0, 5), pady=2, sticky="w")
+        self.accent_dropdown.grid(row=3, column=1, pady=2, sticky="w")
+        ctk.CTkLabel(frame, text="Age:").grid(row=4, column=0, padx=(0, 5), pady=2, sticky="w")
+        self.age_dropdown.grid(row=4, column=1, pady=2, sticky="w")
+        ctk.CTkLabel(frame, text="Accent Strength:").grid(row=5, column=0, padx=(0, 5), pady=2, sticky="w")
+        self.accent_strength_slider.grid(row=5, column=1, pady=2, sticky="w")
+        
+        self.toggle_unique_voice_options()
+        
         return frame
+
+    def toggle_unique_voice_options(self):
+        state = "normal" if self.use_unique_voice.get() else "disabled"
+        self.gender_dropdown.configure(state=state)
+        self.accent_dropdown.configure(state=state)
+        self.age_dropdown.configure(state=state)
+        self.accent_strength_slider.configure(state=state)
+        self.voice_dropdown.configure(state="disabled" if self.use_unique_voice.get() else "normal")
 
     def update_tab_widgets(self):
         current_tab = self.current_module.get()

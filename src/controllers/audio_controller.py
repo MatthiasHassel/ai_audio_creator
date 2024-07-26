@@ -92,13 +92,35 @@ class AudioController:
                               [self.view.user_input.get("1.0", "end-1c").strip(), self.view.duration_var.get()])
 
     def process_speech_request(self):
-        selected_voice_name = self.view.selected_voice.get()
-        voice_id = next((voice[1] for voice in self.speech_service.get_available_voices() if voice[0] == selected_voice_name), None)
-        if voice_id:
-            self._process_request(self.speech_service.process_speech_request, 
-                                  [self.view.user_input.get("1.0", "end-1c").strip(), voice_id])
+        text = self.view.user_input.get("1.0", "end-1c").strip()
+        if not text:
+            self.view.update_output("Error: Please enter some text.")
+            return
+
+        if self.view.use_unique_voice.get():
+            gender = self.view.gender_var.get()
+            accent = self.view.accent_var.get()
+            age = self.view.age_var.get()
+            accent_strength = self.view.accent_strength_var.get()
+            
+            # Ensure text meets the minimum length requirement
+            if len(text) < 100:
+                text = text * (100 // len(text) + 1)
+            
+            result = self.speech_service.process_unique_voice_request(gender, accent, age, accent_strength, text)
+            if result:
+                self.view.update_output(f"Unique voice generated successfully. File saved to: {result}")
+                self.view.audio_file_selector.refresh_files('speech')
+            else:
+                self.view.update_output("Error: Failed to generate unique voice. Please check the logs for more information.")
         else:
-            self.view.update_output("Error: Invalid voice selected.")
+            selected_voice_name = self.view.selected_voice.get()
+            voice_id = next((voice[1] for voice in self.speech_service.get_available_voices() if voice[0] == selected_voice_name), None)
+            if voice_id:
+                self._process_request(self.speech_service.process_speech_request, 
+                                    [text, voice_id])
+            else:
+                self.view.update_output("Error: Invalid voice selected.")
 
     def _process_request(self, service_method, args):
         if not args[0]:  # Check if user input is empty

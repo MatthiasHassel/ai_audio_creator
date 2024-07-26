@@ -1,5 +1,7 @@
 import os
 import re
+import time
+import requests
 from elevenlabs import VoiceSettings
 from elevenlabs.client import ElevenLabs
 import logging
@@ -97,3 +99,49 @@ class SpeechService:
     
     def process_speech_request(self, text_prompt: str, voice_id: str):
         return self.text_to_speech_file(text_prompt, voice_id)
+    
+    def generate_unique_voice(self, gender, accent, age, accent_strength, text):
+        url = "https://api.elevenlabs.io/v1/voice-generation/generate-voice"
+        
+        # Ensure text length is between 100 and 1000 characters
+        if len(text) < 100:
+            text = text * (100 // len(text) + 1)  # Repeat text to meet minimum length
+        text = text[:1000]  # Truncate if longer than 1000 characters
+        
+        payload = {
+            "gender": gender,
+            "accent": accent,
+            "age": age,
+            "accent_strength": float(accent_strength),  # Ensure this is a float
+            "text": text
+        }
+        headers = {
+            "xi-api-key": self.api_key,
+            "Content-Type": "application/json"
+        }
+
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+
+            if response.status_code == 200:
+                # Generate a unique filename
+                filename = f"unique_voice_{int(time.time())}.mp3"
+                file_path = os.path.join(self.output_dir, filename)
+
+                with open(file_path, 'wb') as f:
+                    f.write(response.content)
+
+                return file_path
+            else:
+                self.logger.error(f"Failed to generate unique voice: {response.text}")
+                return None
+
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"Error generating unique voice: {str(e)}")
+            if hasattr(e.response, 'text'):
+                self.logger.error(f"Response content: {e.response.text}")
+            return None
+
+    def process_unique_voice_request(self, gender, accent, age, accent_strength, text):
+        return self.generate_unique_voice(gender, accent, age, accent_strength, text)
