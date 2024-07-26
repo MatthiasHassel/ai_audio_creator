@@ -29,15 +29,13 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         
         self.initialize_variables()
 
-        self.grid_rowconfigure(1, weight=1)
-        self.grid_columnconfigure(0, weight=1)
         self.create_widgets()
         
-
         self.setup_scrolling()
 
         self.setup_bindings()
-        self.after(100, self.initial_update)  # Schedule initial update
+        self.update_scrollregion() 
+        self.after(100, self.initial_update)
     
     def initialize_variables(self):
         # Initialize variables
@@ -49,6 +47,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.max_track_height = 200
         self.min_track_height_for_slider = 50  # Minimum height to show volume slider
         self.topbar_height = 30  # Define the height of the topbar
+        self.timeline_duration = 600  # 10 minutes in seconds
         self.base_seconds_per_pixel = 0.01  # 100 pixels = 1 second at default zoom
         self.seconds_per_pixel = self.base_seconds_per_pixel
         self.x_zoom = 1.0
@@ -79,6 +78,10 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.track_label_canvas = None
         self.timeline_duration = 300  # Default timeline duration in seconds
     
+    def initial_update(self):
+        self.update_scrollregion()
+        self.update_grid_and_topbar()
+
     def setup_scrolling(self):
         self.timeline_canvas.configure(xscrollcommand=self.x_scrollbar.set, 
                                    yscrollcommand=self.y_scrollbar.set)
@@ -117,6 +120,9 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.create_toolbar()
         self.create_main_content()
         self.create_status_bar()
+        
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
 
     def create_toolbar(self):
         toolbar = ctk.CTkFrame(self)
@@ -149,46 +155,61 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.y_zoom_slider.set(self.y_zoom)
         self.y_zoom_slider.grid(row=0, column=8, padx=5)
 
-    def initial_update(self):
-        self.update_scrollregion()
-        self.update_grid_and_topbar()
-
     def create_main_content(self):
         self.main_frame = ctk.CTkFrame(self)
-        self.main_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        self.main_frame.grid(row=1, column=0, sticky="nsew")
         self.main_frame.grid_columnconfigure(1, weight=1)
-        self.main_frame.grid_rowconfigure(0, weight=1)
+        self.main_frame.grid_rowconfigure(1, weight=1)
 
-        self.create_track_label_frame()
-        self.create_timeline_frame()
+        # Create topbar
+        self.topbar_frame = ctk.CTkFrame(self.main_frame, height=self.topbar_height)
+        self.topbar_frame.grid(row=0, column=0, columnspan=2, sticky="ew")
+        self.topbar_frame.grid_columnconfigure(1, weight=1)
+        self.topbar_frame.grid_propagate(False)
 
-    def create_track_label_frame(self):
-        self.track_label_frame = ctk.CTkFrame(self.main_frame, width=200)
-        self.track_label_frame.grid(row=0, column=0, sticky="ns")
-        self.track_label_frame.grid_propagate(False)
-        self.track_label_frame.grid_rowconfigure(1, weight=1)
-        self.track_label_frame.grid_columnconfigure(0, weight=1)
+        # Blank part of the topbar (left side)
+        self.blank_topbar = ctk.CTkFrame(self.topbar_frame, width=200, height=self.topbar_height)
+        self.blank_topbar.grid(row=0, column=0, sticky="nsew")
 
-        self.track_label_topbar = ctk.CTkFrame(self.track_label_frame, height=self.topbar_height)
-        self.track_label_topbar.grid(row=0, column=0, sticky="ew")
-
-        self.track_label_canvas = tk.Canvas(self.track_label_frame, bg="gray20", highlightthickness=0)
-        self.track_label_canvas.grid(row=1, column=0, sticky="nsew")
-
-    def create_timeline_frame(self):
-        self.timeline_frame = ctk.CTkFrame(self.main_frame)
-        self.timeline_frame.grid(row=0, column=1, sticky="nsew")
-        self.timeline_frame.grid_rowconfigure(1, weight=1)
-        self.timeline_frame.grid_columnconfigure(0, weight=1)
-
-        self.create_topbar()
-        self.create_timeline_canvas()
-
-    def create_topbar(self):
-        self.topbar = tk.Canvas(self.timeline_frame, bg="gray40", height=self.topbar_height, highlightthickness=0)
-        self.topbar.grid(row=0, column=0, sticky="ew")
+        # Actual topbar with grid (right side)
+        self.topbar = tk.Canvas(self.topbar_frame, bg="gray40", height=self.topbar_height, highlightthickness=0)
+        self.topbar.grid(row=0, column=1, sticky="ew")
         self.topbar.bind("<Button-1>", self.on_topbar_click)
 
+        # Create track label frame
+        self.track_label_frame = ctk.CTkFrame(self.main_frame, width=200)
+        self.track_label_frame.grid(row=1, column=0, sticky="ns")
+        self.track_label_frame.grid_propagate(False)
+        self.track_label_frame.grid_rowconfigure(0, weight=1)
+        self.track_label_frame.grid_columnconfigure(0, weight=1)
+
+        self.track_label_canvas = tk.Canvas(self.track_label_frame, bg="gray20", highlightthickness=0)
+        self.track_label_canvas.grid(row=0, column=0, sticky="nsew")
+
+        # Create timeline frame
+        self.timeline_frame = ctk.CTkFrame(self.main_frame)
+        self.timeline_frame.grid(row=1, column=1, sticky="nsew")
+        self.timeline_frame.grid_rowconfigure(0, weight=1)
+        self.timeline_frame.grid_columnconfigure(0, weight=1)
+
+        # Create timeline canvas
+        self.timeline_canvas = tk.Canvas(self.timeline_frame, bg="gray30", highlightthickness=0)
+        self.timeline_canvas.grid(row=0, column=0, sticky="nsew")
+
+        # Create scrollbars
+        self.x_scrollbar = ctk.CTkScrollbar(self.timeline_frame, orientation="horizontal", command=self.on_horizontal_scroll)
+        self.x_scrollbar.grid(row=1, column=0, sticky="ew")
+
+        self.y_scrollbar = ctk.CTkScrollbar(self.main_frame, orientation="vertical", command=self.on_vertical_scroll)
+        self.y_scrollbar.grid(row=1, column=2, sticky="ns")
+
+        # Configure scrolling
+        self.timeline_canvas.configure(xscrollcommand=self.x_scrollbar.set, 
+                                    yscrollcommand=self.y_scrollbar.set)
+        self.track_label_canvas.configure(yscrollcommand=self.y_scrollbar.set)
+
+        self.main_frame.bind("<Configure>", self.on_main_frame_resize)
+        
     def create_timeline_canvas(self):
         self.timeline_canvas = tk.Canvas(self.timeline_frame, bg="gray30", highlightthickness=0)
         self.timeline_canvas.grid(row=1, column=0, sticky="nsew")
@@ -199,6 +220,97 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.y_scrollbar = ctk.CTkScrollbar(self.main_frame, orientation="vertical", command=self.on_vertical_scroll)
         self.y_scrollbar.grid(row=0, column=2, sticky="ns")
 
+    def on_main_frame_resize(self, event):
+        self.update_scrollregion()
+        self.redraw_timeline()
+        self.update_track_labels()
+
+    def format_time_label(self, seconds):
+        minutes, seconds = divmod(int(seconds), 60)
+        hours, minutes = divmod(minutes, 60)
+        if hours > 0:
+            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        else:
+            return f"{minutes:02d}:{seconds:02d}"
+        
+    def get_grid_interval(self):
+        pixels_per_second = 1 / self.seconds_per_pixel
+        if pixels_per_second >= 100:
+            return 1
+        elif pixels_per_second >= 20:
+            return 5
+        elif pixels_per_second >= 4:
+            return 30
+        else:
+            return 60
+
+    def update_timeline_duration(self):
+        max_duration = 0
+        for track in self.tracks:
+            for clip in track['clips']:
+                clip_end = clip.x + clip.duration
+                if clip_end > max_duration:
+                    max_duration = clip_end
+        self.timeline_duration = max(300, max_duration + 60)  # Add 60 seconds buffer
+        self.update_scrollregion()
+    
+    def update_grid_and_topbar(self):
+        self.update_topbar()
+        self.draw_grid()
+        self.draw_clips()
+        self.draw_playhead(self.playhead_position / self.seconds_per_pixel)
+
+    def update_topbar(self):
+        self.topbar.delete("all")
+    
+        visible_start = int(self.timeline_canvas.canvasx(0))
+        visible_end = int(self.timeline_canvas.canvasx(self.timeline_canvas.winfo_width()))
+        
+        interval = self.get_grid_interval()
+        
+        start_time = (visible_start * self.seconds_per_pixel) // interval * interval
+        end_time = (visible_end * self.seconds_per_pixel) + interval
+
+        for current_time in range(int(start_time), int(end_time) + interval, interval):
+            x = (current_time / self.seconds_per_pixel) - visible_start
+            self.topbar.create_text(x, self.topbar_height // 2, text=self.format_time_label(current_time), fill="white", anchor="center")
+            self.topbar.create_line(x, self.topbar_height - 5, x, self.topbar_height, fill="gray60")
+
+        self.topbar.create_line(0, self.topbar_height - 1, self.topbar.winfo_width(), self.topbar_height - 1, fill="gray60")
+
+    def draw_grid(self):
+        visible_start_x = int(self.timeline_canvas.canvasx(0))
+        visible_end_x = int(self.timeline_canvas.canvasx(self.timeline_canvas.winfo_width()))
+        visible_start_y = int(self.timeline_canvas.canvasy(0))
+        visible_end_y = int(self.timeline_canvas.canvasy(self.timeline_canvas.winfo_height()))
+        
+        interval = self.get_grid_interval()
+
+        # Draw vertical lines
+        start_time = (visible_start_x * self.seconds_per_pixel) // interval * interval
+        end_time = (visible_end_x * self.seconds_per_pixel) + interval
+
+        for current_time in range(int(start_time), int(end_time) + interval, interval):
+            x = (current_time / self.seconds_per_pixel)
+            self.timeline_canvas.create_line(x, visible_start_y, x, visible_end_y, fill="gray50", tags="grid")
+        
+        # Draw horizontal lines
+        for i in range(len(self.tracks) + 1):
+            y = i * self.track_height - self.scroll_offset
+            self.timeline_canvas.create_line(visible_start_x, y, visible_end_x, y, fill="gray50", tags="grid")
+
+    def draw_playhead(self, x):
+        if self.timeline_canvas:
+            if self.playhead_line:
+                self.timeline_canvas.delete(self.playhead_line)
+            height = self.timeline_canvas.winfo_height()
+            if height > 0:
+                self.playhead_line = self.timeline_canvas.create_line(x, 0, x, height, fill="red", width=2)
+            else:
+                self.after(100, lambda: self.draw_playhead(x))
+        else:
+            self.after(100, lambda: self.draw_playhead(x))
+
     def create_status_bar(self):
         self.status_var = tk.StringVar()
         self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var, anchor="w")
@@ -207,17 +319,18 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
     def set_controller(self, controller):
         self.controller = controller
 
-    def update_status(self, message):
-        self.status_var.set(message)
-
-    def initialize_playhead(self):
-        self.draw_playhead(0)
-
     def redraw_timeline(self):
         self.timeline_canvas.delete("all")
         self.draw_grid()
         self.draw_clips()
         self.draw_playhead(self.playhead_position / self.seconds_per_pixel)
+        self.update_topbar()
+
+    def update_status(self, message):
+        self.status_var.set(message)
+
+    def initialize_playhead(self):
+        self.draw_playhead(0)
 
     def set_toggle_audio_creator_command(self, command):
         self.toggle_audio_creator_button.configure(command=command)
@@ -264,6 +377,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             self.update_topbar()
         else:
             self.zoom_y(zoom_factor)
+        self.update_scrollregion()
 
     def on_vertical_scroll(self, *args):
         if args[0] == 'moveto':
@@ -288,48 +402,28 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.update_grid_and_topbar()
         
     def update_scrollregion(self):
-        total_height = max(len(self.tracks) * self.track_height, self.timeline_canvas.winfo_height())
-        self.timeline_width = max(self.timeline_canvas.winfo_width(), self.timeline_duration / self.seconds_per_pixel)
+        total_height = max(len(self.tracks) * self.track_height, 1)  # Ensure it's never 0
+        visible_height = self.timeline_canvas.winfo_height()
+        visible_width = self.timeline_canvas.winfo_width()
+        self.timeline_width = max(visible_width, self.timeline_duration / self.seconds_per_pixel)
         
         self.timeline_canvas.configure(scrollregion=(0, 0, self.timeline_width, total_height))
         self.topbar.configure(scrollregion=(0, 0, self.timeline_width, self.topbar_height))
         self.track_label_canvas.configure(scrollregion=(0, 0, self.track_label_canvas.winfo_width(), total_height))
 
-        # Show or hide vertical scrollbar based on content height
-        if total_height <= self.timeline_canvas.winfo_height():
+        # Update vertical scrollbar visibility
+        if total_height <= visible_height:
             self.y_scrollbar.grid_remove()
         else:
-            self.y_scrollbar.grid()
+            self.y_scrollbar.grid(row=1, column=2, sticky="ns")
 
-        # Show or hide horizontal scrollbar based on content width
-        if self.timeline_width <= self.timeline_canvas.winfo_width():
+        # Update horizontal scrollbar visibility
+        if self.timeline_width <= visible_width:
             self.x_scrollbar.grid_remove()
         else:
-            self.x_scrollbar.grid()
+            self.x_scrollbar.grid(row=1, column=0, sticky="ew")
 
-    def draw_grid(self):
-        self.timeline_canvas.delete("grid")
-        
-        width = self.timeline_width
-        height = len(self.tracks) * self.track_height
-        visible_start_x = self.timeline_canvas.canvasx(0)
-        visible_end_x = self.timeline_canvas.canvasx(self.timeline_canvas.winfo_width())
-        visible_start_y = self.timeline_canvas.canvasy(0)
-        visible_end_y = self.timeline_canvas.canvasy(self.timeline_canvas.winfo_height())
-        
-        # Draw vertical lines (1 second apart at default zoom)
-        seconds_per_line = max(1, round(100 * self.seconds_per_pixel))
-        start_second = int(visible_start_x * self.seconds_per_pixel / seconds_per_line) * seconds_per_line
-        for x in range(start_second, int(visible_end_x * self.seconds_per_pixel) + seconds_per_line, seconds_per_line):
-            canvas_x = x / self.seconds_per_pixel
-            self.timeline_canvas.create_line(canvas_x, visible_start_y, canvas_x, visible_end_y, fill="gray50", tags="grid")
-        
-        # Draw horizontal lines
-        start_track = max(0, int(visible_start_y // self.track_height))
-        end_track = min(len(self.tracks), int(visible_end_y // self.track_height) + 1)
-        for i in range(start_track, end_track + 1):
-            y = i * self.track_height - self.scroll_offset
-            self.timeline_canvas.create_line(visible_start_x, y, visible_end_x, y, fill="gray50", tags="grid")
+        self.redraw_timeline()
 
     def on_topbar_click(self, event):
         x = self.topbar.canvasx(event.x)
@@ -413,6 +507,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
     def add_track(self, track_name=None):
         if self.controller:
             self.controller.add_track(track_name)
+        self.update_scrollregion()
         # The view will be updated via update_tracks method
 
     def update_tracks(self, new_tracks):
@@ -553,18 +648,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             self.update_scrollregion()
             self.update_grid_and_topbar()
 
-    def draw_playhead(self, x):
-        if self.timeline_canvas:
-            if self.playhead_line:
-                self.timeline_canvas.delete(self.playhead_line)
-            height = self.timeline_canvas.winfo_height()
-            if height > 0:
-                self.playhead_line = self.timeline_canvas.create_line(x, 0, x, height, fill="red", width=2)
-            else:
-                self.after(100, lambda: self.draw_playhead(x))
-        else:
-            self.after(100, lambda: self.draw_playhead(x))
-
     def on_canvas_click(self, event):
         x = self.timeline_canvas.canvasx(event.x)
         y = self.timeline_canvas.canvasy(event.y)
@@ -601,8 +684,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.seconds_per_pixel = self.base_seconds_per_pixel / self.x_zoom
         self.update_scrollregion()
         self.redraw_timeline()
-        self.draw_playhead(self.playhead_position / self.seconds_per_pixel)
-        self.update_topbar()
 
     def update_y_zoom(self, value):
         self.y_zoom = float(value)
@@ -665,6 +746,8 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             self.tracks[track_index]['clips'].append(clip)
             self.draw_clip(clip, track_index)
             self.redraw_timeline()
+            self.update_timeline_duration()
+            self.update_scrollregion()
             self.timeline_model.set_modified(True)  # Mark project as modified
         else:
             logging.warning(f"Attempted to add clip to non-existent track {track_index}")
@@ -755,6 +838,8 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.dragging = False
         self.drag_offset = 0  # Reset the offset
         self.redraw_timeline()
+        self.update_timeline_duration()
+        self.update_scrollregion()
                 
     def draw_dragged_clip(self, clip, new_x, new_track_index):
         self.redraw_timeline()  # Redraw to clear the old position
@@ -812,29 +897,13 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
                 track['clips'].remove(clip)
                 break
         self.redraw_timeline()
+        self.update_timeline_duration()
+        self.update_scrollregion()
 
     def on_scroll(self, *args):
         self.timeline_canvas.xview(*args)
         self.topbar.xview(*args)
         self.update_grid_and_topbar()
-
-    def update_grid_and_topbar(self):
-        self.redraw_timeline()
-        self.update_topbar()
-
-    def update_topbar(self):
-        self.topbar.delete("all")
-        visible_start = self.timeline_canvas.canvasx(0)
-        visible_end = self.timeline_canvas.canvasx(self.timeline_canvas.winfo_width())
-
-        start_time = visible_start * self.seconds_per_pixel
-        end_time = visible_end * self.seconds_per_pixel
-
-        seconds_per_label = max(1, int((end_time - start_time) / 10))  # Adjust label density
-
-        for i in range(int(start_time), int(end_time) + 1, seconds_per_label):
-            x = (i / self.seconds_per_pixel)
-            self.topbar.create_text(x, 15, text=f"{i:.1f}s", fill="white", anchor="center")
 
     def show_error(self, title, message):
         messagebox.showerror(title, message)
