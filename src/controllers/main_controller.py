@@ -27,7 +27,6 @@ class MainController:
         script_model = self.model.get_script_model()
         script_view = self.view.get_script_editor_view()
         self.script_editor_controller = ScriptEditorController(script_model, script_view, self.config, self.project_model)
-
         timeline_model = self.project_model.get_timeline_model()
         self.timeline_controller = TimelineController(self.view, timeline_model, self.project_model)
         self.timeline_controller.master_controller = self
@@ -52,12 +51,21 @@ class MainController:
             self.update_output_directories()
             if self.timeline_controller:
                 self.timeline_controller.on_project_change()
+            self.load_last_opened_script()
         except Exception as e:
             error_message = f"Error loading default project: {str(e)}"
             print(error_message)  # Print to console for debugging
             self.view.update_status(error_message)
             self.view.show_error("Error", error_message)
 
+    def load_last_opened_script(self):
+        last_script = self.project_model.get_last_opened_script()
+        if last_script:
+            full_path = os.path.join(self.project_model.get_scripts_dir(), last_script)
+            if os.path.exists(full_path):
+                self.script_editor_controller.load_script(full_path)
+            else:
+                self.view.update_status(f"Last opened script not found: {last_script}")
     def update_current_project(self, project_name):
         self.view.update_current_project(project_name)
         if self.timeline_controller:
