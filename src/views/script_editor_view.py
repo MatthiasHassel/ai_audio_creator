@@ -89,12 +89,13 @@ class ScriptEditorView(ctk.CTkFrame):
     def create_widgets(self):
         self.create_toolbar()
         self.create_main_content()
+        self.create_bottom_toolbar()
         self.create_status_bar()
 
     def create_toolbar(self):
         toolbar = ctk.CTkFrame(self)
         toolbar.grid(row=0, column=0, sticky="ew", padx=5, pady=(5, 2))
-        toolbar.grid_columnconfigure(7, weight=1)  # Push buttons to the left
+        toolbar.grid_columnconfigure(6, weight=1)  # Push buttons to the left
 
         self.bold_button = ctk.CTkButton(toolbar, text="B", width=30, command=lambda: self.format_text('bold'))
         self.bold_button.grid(row=0, column=0, padx=2)
@@ -118,136 +119,62 @@ class ScriptEditorView(ctk.CTkFrame):
         self.music_button = ctk.CTkButton(toolbar, text="Music", width=50, command=lambda: self.format_text('music'))
         self.music_button.grid(row=0, column=5, padx=2)
 
-        self.save_button = ctk.CTkButton(toolbar, text="Save", command=self.save_script)
-        self.save_button.grid(row=0, column=6, padx=2)
-
-        self.load_button = ctk.CTkButton(toolbar, text="Load", command=self.load_script)
-        self.load_button.grid(row=0, column=7, padx=2)
-
     def create_main_content(self):
-        self.paned_window = tk.PanedWindow(self, orient=tk.VERTICAL, sashwidth=10, sashrelief=tk.RAISED, bg='#3E3E3E')
-        self.paned_window.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        self.text_area = tk.Text(self, wrap=tk.WORD, undo=True)
+        self.text_area.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
 
-        self.create_text_area()
-        self.create_analysis_area()
-
-        # Set initial position of the sash
-        self.paned_window.after(10, self.set_initial_sash_position)
-
-    def create_text_area(self):
-        text_frame = ctk.CTkFrame(self.paned_window)
-        self.text_area = tk.Text(text_frame, wrap=tk.WORD, undo=True)
-        self.text_area.grid(row=0, column=0, sticky="nsew")
-
-        scrollbar = ctk.CTkScrollbar(text_frame, command=self.text_area.yview)
-        scrollbar.grid(row=0, column=1, sticky="ns")
+        scrollbar = ctk.CTkScrollbar(self, command=self.text_area.yview)
+        scrollbar.grid(row=1, column=1, sticky="ns", pady=5)
         self.text_area.configure(yscrollcommand=scrollbar.set)
 
-        text_frame.grid_rowconfigure(0, weight=1)
-        text_frame.grid_columnconfigure(0, weight=1)
+    def create_bottom_toolbar(self):
+        bottom_toolbar = ctk.CTkFrame(self)
+        bottom_toolbar.grid(row=2, column=0, columnspan=2, sticky="ew", padx=5, pady=(2, 5))
+        bottom_toolbar.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
-        self.paned_window.add(text_frame)
+        self.save_button = ctk.CTkButton(bottom_toolbar, text="Save Script", command=self.save_script)
+        self.save_button.grid(row=0, column=0, padx=2, pady=2, sticky="ew")
 
-    def create_analysis_area(self):
-        analysis_frame = ctk.CTkFrame(self.paned_window)
-        analysis_frame.grid_columnconfigure(0, weight=1)
-        analysis_frame.grid_rowconfigure(1, weight=1)
+        self.load_button = ctk.CTkButton(bottom_toolbar, text="Load Script", command=self.load_script)
+        self.load_button.grid(row=0, column=1, padx=2, pady=2, sticky="ew")
 
-        button_frame = ctk.CTkFrame(analysis_frame)
-        button_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
-        button_frame.grid_columnconfigure((0, 1), weight=1)
+        self.import_pdf_button = ctk.CTkButton(bottom_toolbar, text="Import PDF", command=self.import_pdf)
+        self.import_pdf_button.grid(row=0, column=2, padx=2, pady=2, sticky="ew")
 
-        self.save_analysis_button = ctk.CTkButton(button_frame, text="Save Analysis")
-        self.save_analysis_button.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
-
-        self.load_analysis_button = ctk.CTkButton(button_frame, text="Load Analysis")
-        self.load_analysis_button.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-
-        self.analysis_text = ctk.CTkTextbox(analysis_frame, state="disabled")
-        self.analysis_text.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
-
-        self.paned_window.add(analysis_frame)
+        self.analyze_script_button = ctk.CTkButton(bottom_toolbar, text="Analyze Script", command=self.analyze_script)
+        self.analyze_script_button.grid(row=0, column=3, padx=2, pady=2, sticky="ew")
 
     def create_status_bar(self):
+        status_frame = ctk.CTkFrame(self)
+        status_frame.grid(row=3, column=0, columnspan=2, sticky="ew", padx=5, pady=(2, 5))
+        status_frame.grid_columnconfigure(0, weight=1)
+
+        self.progress_bar = ctk.CTkProgressBar(status_frame)
+        self.progress_bar.grid(row=0, column=0, sticky="ew", pady=(0, 5))
+        self.progress_bar.set(0)
+        self.progress_bar.grid_remove()  # Initially hidden
+
         self.status_var = tk.StringVar()
         self.status_var.set("")
-        self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var, anchor="w")
-        self.status_bar.grid(row=2, column=0, sticky="ew", padx=5, pady=2)
+        self.status_bar = ctk.CTkLabel(status_frame, textvariable=self.status_var, anchor="w")
+        self.status_bar.grid(row=1, column=0, sticky="ew")
 
-    def set_initial_sash_position(self):
-        height = self.paned_window.winfo_height()
-        self.paned_window.sash_place(0, 0, int(height * 0.7))  # 70% for text area, 30% for analysis
-        
-    def set_save_analysis_callback(self, callback):
-        self.save_analysis_button.configure(command=callback)
+    def show_progress_bar(self, determinate=True):
+        if determinate:
+            self.progress_bar.configure(mode="determinate")
+            self.progress_bar.set(0)
+        else:
+            self.progress_bar.configure(mode="indeterminate")
+        self.progress_bar.grid()
+        self.progress_bar.start()
 
-    def set_load_analysis_callback(self, callback):
-        self.load_analysis_button.configure(command=callback)
+    def hide_progress_bar(self):
+        self.progress_bar.stop()
+        self.progress_bar.grid_remove()
 
-    def update_analysis_results(self, analyzed_script, suggested_voices, element_counts, estimated_duration, categorized_sentences):
-        self.analysis_text.configure(state="normal")
-        self.analysis_text.delete("1.0", tk.END)
-        
-        self.analysis_text.insert(tk.END, "Script Analysis Results:\n\n")
-        
-        self.analysis_text.insert(tk.END, f"Estimated Duration: {estimated_duration:.2f} minutes\n\n")
-        
-        self.analysis_text.insert(tk.END, "Element Counts:\n")
-        for element_type, count in element_counts.items():
-            self.analysis_text.insert(tk.END, f"{element_type.capitalize()}: {count}\n")
-        
-        self.analysis_text.insert(tk.END, "\nSuggested Voices:\n")
-        for voice in suggested_voices:
-            self.analysis_text.insert(tk.END, f"- {voice}\n")
-        
-        self.analysis_text.insert(tk.END, "\nScript Overview:\n")
-        for element in analyzed_script[:10]:  # Show first 10 elements as an overview
-            if element['type'] == 'speech':
-                self.analysis_text.insert(tk.END, f"Speech ({element['speaker']}): {element['text'][:30]}...\n")
-            elif element['type'] in ['sfx', 'music']:
-                self.analysis_text.insert(tk.END, f"{element['type'].upper()}: {element['description'][:30]}...\n")
-            else:
-                self.analysis_text.insert(tk.END, f"Narration: {element['text'][:30]}...\n")
-        
-        if len(analyzed_script) > 10:
-            self.analysis_text.insert(tk.END, "...\n")
-
-        self.analysis_text.insert(tk.END, "\nCategorized Sentences:\n")
-        self.display_categorized_sentences(categorized_sentences)
-        
-        self.analysis_text.configure(state="disabled")
-
-    def display_categorized_sentences(self, categorized_sentences):
-        # Display Speech sentences
-        self.analysis_text.insert(tk.END, "\nSpeech:\n")
-        for speaker, sentences in categorized_sentences['speech'].items():
-            self.analysis_text.insert(tk.END, f"  {speaker}:\n")
-            for sentence in sentences[:3]:  # Show first 3 sentences for each speaker
-                self.analysis_text.insert(tk.END, f"    - {sentence[:50]}...\n")
-            if len(sentences) > 3:
-                self.analysis_text.insert(tk.END, f"    ... and {len(sentences) - 3} more\n")
-
-        # Display SFX descriptions
-        self.analysis_text.insert(tk.END, "\nSFX:\n")
-        for sfx in categorized_sentences['sfx'][:5]:  # Show first 5 SFX
-            self.analysis_text.insert(tk.END, f"  - {sfx[:50]}...\n")
-        if len(categorized_sentences['sfx']) > 5:
-            self.analysis_text.insert(tk.END, f"  ... and {len(categorized_sentences['sfx']) - 5} more\n")
-
-        # Display Music descriptions
-        self.analysis_text.insert(tk.END, "\nMusic:\n")
-        for music in categorized_sentences['music'][:5]:  # Show first 5 Music descriptions
-            self.analysis_text.insert(tk.END, f"  - {music[:50]}...\n")
-        if len(categorized_sentences['music']) > 5:
-            self.analysis_text.insert(tk.END, f"  ... and {len(categorized_sentences['music']) - 5} more\n")
-
-        # Display Narration sentences
-        self.analysis_text.insert(tk.END, "\nNarration:\n")
-        for narration in categorized_sentences['narration'][:5]:  # Show first 5 Narration sentences
-            self.analysis_text.insert(tk.END, f"  - {narration[:50]}...\n")
-        if len(categorized_sentences['narration']) > 5:
-            self.analysis_text.insert(tk.END, f"  ... and {len(categorized_sentences['narration']) - 5} more\n")
-
+    def update_status(self, message):
+        self.status_var.set(message)
+                                           
     def create_tags(self):
         bold_font = tkfont.Font(self.text_area, self.text_area.cget("font"))
         bold_font.configure(weight="bold")
@@ -494,6 +421,17 @@ class ScriptEditorView(ctk.CTkFrame):
     def set_text(self, text):
         self.text_area.delete("1.0", tk.END)
         self.text_area.insert(tk.END, text)
+    
+    def import_pdf(self):
+        if self.import_pdf_callback:
+            self.import_pdf_callback()
 
-    def update_status(self, message):
-        self.status_var.set(message)
+    def analyze_script(self):
+        if self.analyze_script_callback:
+            self.analyze_script_callback()
+
+    def set_import_pdf_callback(self, callback):
+        self.import_pdf_callback = callback
+
+    def set_analyze_script_callback(self, callback):
+        self.analyze_script_callback = callback

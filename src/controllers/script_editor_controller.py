@@ -1,7 +1,9 @@
 import os
+import threading
+import json
 import hashlib
 from tkinter import filedialog
-from utils.script_analyzer import ScriptAnalyzer
+from services.pdf_analysis_service import PDFAnalysisService
 
 class ScriptEditorController:
     def __init__(self, model, view, config, project_model):
@@ -10,61 +12,15 @@ class ScriptEditorController:
         self.config = config
         self.project_model = project_model
         self.current_script_path = None
-        self.script_analyzer = ScriptAnalyzer()
+        self.pdf_analysis_service = PDFAnalysisService(config)
         self.setup_view_commands()
 
     def setup_view_commands(self):
         self.view.save_button.configure(command=self.save_script)
         self.view.load_button.configure(command=self.load_script)
-        self.view.set_save_analysis_callback(self.save_analysis)
-        self.view.set_load_analysis_callback(self.load_analysis)
-        self.view.on_text_changed = self.on_text_changed
+        self.view.set_import_pdf_callback(self.import_pdf)
+        self.view.set_analyze_script_callback(self.analyze_script)
 
-    def on_text_changed(self, event):
-        self.view.text_area.edit_modified(False)  # Reset the modified flag
-        self.analyze_script()
-
-    def analyze_script(self):
-        script_text = self.get_script_text()
-        analysis_result = self.script_analyzer.analyze_script(script_text)
-        analyzed_script = analysis_result['analyzed_script']
-        categorized_sentences = analysis_result['categorized_sentences']
-        suggested_voices = self.script_analyzer.suggest_voices(analyzed_script)
-        element_counts = self.script_analyzer.count_elements(analysis_result)
-        estimated_duration = self.script_analyzer.estimate_duration(analysis_result)
-        
-        self.view.update_analysis_results(analyzed_script, suggested_voices, element_counts, estimated_duration, categorized_sentences)
-
-    def save_analysis(self):
-        if not self.current_script_path:
-            self.view.update_status("No script loaded. Please save the script first.")
-            return
-
-        analysis_file_path = self.current_script_path + ".analysis.json"
-        script_text = self.get_script_text()
-        analysis_result = self.script_analyzer.analyze_script(script_text)
-        self.script_analyzer.save_analysis(analysis_result, analysis_file_path)
-        self.view.update_status(f"Analysis saved to {analysis_file_path}")
-
-    def load_analysis(self):
-        if not self.current_script_path:
-            self.view.update_status("No script loaded. Please load a script first.")
-            return
-
-        analysis_file_path = self.current_script_path + ".analysis.json"
-        if os.path.exists(analysis_file_path):
-            analysis_result = self.script_analyzer.load_analysis(analysis_file_path)
-            analyzed_script = analysis_result['analyzed_script']
-            categorized_sentences = analysis_result['categorized_sentences']
-            suggested_voices = self.script_analyzer.suggest_voices(analyzed_script)
-            element_counts = self.script_analyzer.count_elements(analysis_result)
-            estimated_duration = self.script_analyzer.estimate_duration(analysis_result)
-            
-            self.view.update_analysis_results(analyzed_script, suggested_voices, element_counts, estimated_duration, categorized_sentences)
-            self.view.update_status(f"Analysis loaded from {analysis_file_path}")
-        else:
-            self.view.update_status("No saved analysis found. Analyzing current script...")
-            self.analyze_script()
 
     def format_text(self, style):
         self.view.format_text(style)
@@ -118,7 +74,6 @@ class ScriptEditorController:
                 relative_path = os.path.relpath(file_path, self.project_model.get_scripts_dir())
                 self.project_model.set_last_opened_script(relative_path)
                 self.view.update_status(f"Script loaded from {file_path}")
-                self.analyze_script()  # Analyze the loaded script
             except Exception as e:
                 error_message = f"Error loading script: {str(e)}"
                 self.view.update_status(error_message)
@@ -138,3 +93,52 @@ class ScriptEditorController:
     def update_scripts_directory(self, directory):
         # This method might not be necessary anymore, but keep it for potential future use
         pass
+
+    def import_pdf(self):
+        file_path = filedialog.askopenfilename(
+            filetypes=[("PDF files", "*.pdf")]
+        )
+        if file_path:
+            try:
+                text = self.pdf_analysis_service.extract_text_from_pdf(file_path)
+                self.view.set_text(text)
+                self.view.update_status(f"PDF imported: {file_path}")
+            except Exception as e:
+                self.view.update_status(f"Error importing PDF: {str(e)}")
+
+    def analyze_script(self):
+        script_text = self.view.get_text()
+        if not script_text:
+            self.view.update_status("Error: No script text to analyze")
+            return
+
+        self.view.show_progress_bar(determinate=False)  # Use indeterminate mode
+        self.view.analyze_script_button.configure(state="disabled")
+
+        def analysis_thread():
+            try:
+                analysis = self.pdf_analysis_service.analyze_script(script_text)
+                if analysis:
+                    output_path = self.get_next_analysis_filename()
+                    with open(output_path, 'w') as file:
+                        json.dump(analysis, file, indent=2)
+                    self.view.after(0, lambda: self.view.update_status(f"Analysis saved to: {output_path}"))
+                else:
+                    self.view.after(0, lambda: self.view.update_status("Error: Failed to analyze script"))
+            except Exception as e:
+                self.view.after(0, lambda: self.view.update_status(f"Error analyzing script: {str(e)}"))
+            finally:
+                self.view.after(0, self.view.hide_progress_bar)
+                self.view.after(0, lambda: self.view.analyze_script_button.configure(state="normal"))
+
+        threading.Thread(target=analysis_thread, daemon=True).start()
+
+    def get_next_analysis_filename(self):
+        scripts_dir = self.project_model.get_scripts_dir()
+        index = 1
+        while True:
+            filename = f"script_analysis{index}.json"
+            full_path = os.path.join(scripts_dir, filename)
+            if not os.path.exists(full_path):
+                return full_path
+            index += 1

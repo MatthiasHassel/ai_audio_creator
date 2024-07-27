@@ -66,6 +66,7 @@ class MainController:
                 self.script_editor_controller.load_script(full_path)
             else:
                 self.view.update_status(f"Last opened script not found: {last_script}")
+                
     def update_current_project(self, project_name):
         self.view.update_current_project(project_name)
         if self.timeline_controller:
@@ -134,17 +135,6 @@ class MainController:
             self.script_editor_controller.update_scripts_directory(
                 self.project_model.get_scripts_dir()
             )
-
-    def analyze_script(self):
-        script_text = self.script_editor_controller.get_script_text()
-        analysis_result = self.script_analyzer.analyze_script(script_text)
-        analyzed_script = analysis_result['analyzed_script']
-        categorized_sentences = analysis_result['categorized_sentences']
-        suggested_voices = self.script_analyzer.suggest_voices(analyzed_script)
-        element_counts = self.script_analyzer.count_elements(analysis_result)
-        estimated_duration = self.script_analyzer.estimate_duration(analysis_result)
-        
-        self.view.update_analysis_results(analyzed_script, suggested_voices, element_counts, estimated_duration, categorized_sentences)
 
     def toggle_timeline(self):
         self.timeline_controller.toggle_visibility()

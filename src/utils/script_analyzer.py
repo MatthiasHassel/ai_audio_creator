@@ -1,6 +1,8 @@
 import re
 import json
 from typing import List, Dict, Any
+import openai
+import PyPDF2
 
 class ScriptAnalyzer:
     def __init__(self):
