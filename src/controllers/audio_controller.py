@@ -114,18 +114,26 @@ class AudioController:
         def process_thread():
             result = service_method(*args)
             if result:
-                self.view.update_output(f"Audio generated successfully. File saved to: {result}")
-                self.view.update_status("Ready")
-                self.view.audio_file_selector.refresh_files(self.view.current_module.get().lower())
-                self.model.load_audio(result)
-                self.view.audio_visualizer.update_waveform(result)
+                self.view.after(0, lambda: self.handle_successful_generation(result))
             else:
-                self.view.update_output("Error: An error occurred during audio generation.")
-            self.view.generate_button.configure(state="normal")
-            self.view.hide_progress_bar()
+                self.view.after(0, lambda: self.view.update_output("Error: An error occurred during audio generation."))
+            self.view.after(0, lambda: self.view.generate_button.configure(state="normal"))
+            self.view.after(0, self.view.hide_progress_bar)
+            if self.generation_complete_callback:
+                self.view.after(0, self.generation_complete_callback)
 
         threading.Thread(target=process_thread, daemon=True).start()
         
+    def handle_successful_generation(self, result):
+        self.view.update_output(f"Audio generated successfully. File saved to: {result}")
+        self.view.update_status("Ready")
+        self.view.audio_file_selector.refresh_files(self.view.current_module.get().lower())
+        self.model.load_audio(result)
+        self.view.audio_visualizer.update_waveform(result)
+        self.current_audio_file = result
+        self.view.update_button_states(False, False)
+        self.on_audio_file_select(result)  # Manually trigger file selection
+
     def seek_audio(self, position):
         if self.model.seek(position):
             self.stop_playhead_update()  # Stop any existing playhead updates

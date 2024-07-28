@@ -54,11 +54,12 @@ class AudioFileSelector(ctk.CTkFrame):
         if files:
             self.file_dropdown.configure(values=files)
             if self.file_var.get() == "Select audio file" or self.file_var.get() not in files:
-                self.file_var.set("Select audio file")
+                self.file_var.set(files[-1])  # Select the last file (likely the newly generated one)
+                self.on_file_select(files[-1])  # Manually trigger file selection
         else:
             self.file_dropdown.configure(values=["No files available"])
             self.file_var.set("No files available")
-
+            
     def on_file_select(self, choice):
         if choice != "No files available" and self.current_directory:
             file_path = os.path.join(self.current_directory, choice)
