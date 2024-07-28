@@ -1,16 +1,21 @@
 import os
 import threading
+import time
 import json
+import random # will not be needed after proper implementation of voice selection
 import hashlib
 from tkinter import filedialog
 from services.pdf_analysis_service import PDFAnalysisService
 
 class ScriptEditorController:
-    def __init__(self, model, view, config, project_model):
+    def __init__(self, model, view, config, project_model, audio_controller, timeline_controller):
         self.model = model
         self.view = view
         self.config = config
         self.project_model = project_model
+        self.audio_controller = audio_controller
+        self.timeline_controller = timeline_controller
+        self.view.set_create_audio_callback(self.create_audio)
         self.current_script_path = None
         self.pdf_analysis_service = PDFAnalysisService(config)
         self.setup_view_commands()
@@ -142,3 +147,111 @@ class ScriptEditorController:
             if not os.path.exists(full_path):
                 return full_path
             index += 1
+
+    def create_audio(self):
+        analysis_file = self.get_latest_analysis_file()
+        if not analysis_file:
+            self.view.update_status("No analysis file found. Please analyze the script first.")
+            return
+
+        with open(analysis_file, 'r') as file:
+            analysis = json.load(file)
+
+        self.view.show_progress_bar(determinate=False)
+        self.view.create_audio_button.configure(state="disabled")
+
+        def audio_creation_thread():
+            try:
+                audio_clips = []
+                
+                # Process speech
+                for speaker, sentences in analysis['speech'].items():
+                    voice_char = analysis['voice_characteristics'].get(speaker, {})
+                    suitable_voices = self.get_suitable_voices(voice_char)
+                    chosen_voice = random.choice(suitable_voices) if suitable_voices else random.choice(self.audio_controller.speech_service.get_available_voices())
+                    
+                    for index, sentence in sentences.items():
+                        self.audio_controller.view.user_input.delete("1.0", "end")
+                        self.audio_controller.view.user_input.insert("1.0", sentence)
+                        self.audio_controller.view.selected_voice.set(chosen_voice[0])
+                        self.audio_controller.process_speech_request()
+                        
+                        # Wait for the audio to be generated
+                        while self.audio_controller.view.generate_button.cget("state") == "disabled":
+                            time.sleep(0.1)
+                        
+                        # Get the last generated audio file
+                        audio_file = self.audio_controller.view.audio_file_selector.get_selected_file()
+                        if audio_file:
+                            audio_clips.append(('speech', speaker, int(index), audio_file))
+
+                # Process SFX
+                for index, description in analysis['sfx'].items():
+                    self.audio_controller.view.user_input.delete("1.0", "end")
+                    self.audio_controller.view.user_input.insert("1.0", description)
+                    self.audio_controller.view.duration_var.set("0")  # Use automatic duration
+                    self.audio_controller.process_sfx_request()
+                    
+                    # Wait for the audio to be generated
+                    while self.audio_controller.view.generate_button.cget("state") == "disabled":
+                        time.sleep(0.1)
+                    
+                    audio_file = self.audio_controller.view.audio_file_selector.get_selected_file()
+                    if audio_file:
+                        audio_clips.append(('sfx', 'SFX', int(index), audio_file))
+
+                # Process music
+                for index, description in analysis['music'].items():
+                    self.audio_controller.view.user_input.delete("1.0", "end")
+                    self.audio_controller.view.user_input.insert("1.0", description)
+                    self.audio_controller.view.instrumental_var.set(False)  # Assuming we want vocals
+                    self.audio_controller.process_music_request()
+                    
+                    # Wait for the audio to be generated
+                    while self.audio_controller.view.generate_button.cget("state") == "disabled":
+                        time.sleep(0.1)
+                    
+                    audio_file = self.audio_controller.view.audio_file_selector.get_selected_file()
+                    if audio_file:
+                        audio_clips.append(('music', 'Music', int(index), audio_file))
+
+                # Sort clips by index
+                audio_clips.sort(key=lambda x: x[2])
+
+                # Add clips to timeline
+                current_position = 0
+                for clip_type, track_name, index, file_path in audio_clips:
+                    track_index = self.timeline_controller.get_or_create_track(track_name)
+                    clip_duration = self.timeline_controller.get_clip_duration(file_path)
+                    self.timeline_controller.add_audio_clip(file_path, track_index, current_position)
+                    current_position += clip_duration
+
+                self.view.after(0, lambda: self.view.update_status("Audio creation completed and added to timeline."))
+            except Exception as e:
+                self.view.after(0, lambda: self.view.update_status(f"Error creating audio: {str(e)}"))
+            finally:
+                self.view.after(0, self.view.hide_progress_bar)
+                self.view.after(0, lambda: self.view.create_audio_button.configure(state="normal"))
+
+        threading.Thread(target=audio_creation_thread, daemon=True).start()
+
+    def get_suitable_voices(self, voice_char):
+        suitable_voices = []
+        all_voices = self.audio_controller.speech_service.get_available_voices()
+        
+        for voice in all_voices:
+            # This is a simplified matching. You might want to implement a more sophisticated matching system.
+            if (voice_char.get('Gender', '').lower() in voice[0].lower() and
+                voice_char.get('Age', '').lower() in voice[0].lower() and
+                voice_char.get('Accent', '').lower() in voice[0].lower()):
+                suitable_voices.append(voice)
+        
+        return suitable_voices if suitable_voices else all_voices
+
+    def get_latest_analysis_file(self):
+        scripts_dir = self.project_model.get_scripts_dir()
+        analysis_files = [f for f in os.listdir(scripts_dir) if f.startswith("script_analysis") and f.endswith(".json")]
+        if not analysis_files:
+            return None
+        latest_file = max(analysis_files, key=lambda f: int(f.split("script_analysis")[1].split(".json")[0]))
+        return os.path.join(scripts_dir, latest_file)

@@ -26,7 +26,14 @@ class MainController:
 
         script_model = self.model.get_script_model()
         script_view = self.view.get_script_editor_view()
-        self.script_editor_controller = ScriptEditorController(script_model, script_view, self.config, self.project_model)
+        self.script_editor_controller = ScriptEditorController(
+            script_model, 
+            script_view, 
+            self.config, 
+            self.project_model, 
+            self.audio_controller,
+            self.timeline_controller
+        )
         timeline_model = self.project_model.get_timeline_model()
         self.timeline_controller = TimelineController(self.view, timeline_model, self.project_model)
         self.timeline_controller.master_controller = self

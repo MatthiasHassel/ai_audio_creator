@@ -4,6 +4,7 @@ from utils.audio_clip import AudioClip
 from tkinterdnd2 import DND_FILES
 import logging 
 from tkinter import messagebox
+from pydub import AudioSegment
 
 class TimelineController:
     def __init__(self, master, timeline_model, project_model):
@@ -362,3 +363,22 @@ class TimelineController:
             self.view.add_clip(clip, track_index)
             self.view.redraw_timeline()
         self.unsaved_changes = True
+
+    def get_or_create_track(self, track_name):
+        tracks = self.timeline_model.get_tracks()
+        for index, track in enumerate(tracks):
+            if track['name'] == track_name:
+                return index
+        
+        # If the track doesn't exist, create it
+        new_track = {'name': track_name, 'clips': []}
+        self.timeline_model.add_track(new_track)
+        return len(tracks)  # Return the index of the new track
+
+    def get_clip_duration(self, file_path):
+        try:
+            audio = AudioSegment.from_file(file_path)
+            return len(audio) / 1000.0  # Convert milliseconds to seconds
+        except Exception as e:
+            print(f"Error getting clip duration: {str(e)}")
+            return 0  # Return 0 duration if there's an error
