@@ -24,6 +24,11 @@ class MainController:
         audio_view = self.view.get_audio_generator_view()
         self.audio_controller = AudioController(audio_model, audio_view, self.config)
 
+        timeline_model = self.project_model.get_timeline_model()
+        self.timeline_controller = TimelineController(self.view, timeline_model, self.project_model)
+        self.timeline_controller.master_controller = self
+        self.view.set_timeline_controller(self.timeline_controller)
+
         script_model = self.model.get_script_model()
         script_view = self.view.get_script_editor_view()
         self.script_editor_controller = ScriptEditorController(
@@ -32,8 +37,9 @@ class MainController:
             self.config, 
             self.project_model, 
             self.audio_controller,
-            self.timeline_controller
+            self.timeline_controller  # Pass the timeline_controller here
         )
+        
         timeline_model = self.project_model.get_timeline_model()
         self.timeline_controller = TimelineController(self.view, timeline_model, self.project_model)
         self.timeline_controller.master_controller = self

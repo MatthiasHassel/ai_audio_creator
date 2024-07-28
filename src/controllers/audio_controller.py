@@ -83,27 +83,10 @@ class AudioController:
     def set_add_to_new_audio_files_callback(self, callback):
         self.add_to_new_audio_files_callback = callback
 
-    def process_speech_request(self):
-        selected_voice_name = self.view.selected_voice.get()
-        voice_id = next((voice[1] for voice in self.speech_service.get_available_voices() if voice[0] == selected_voice_name), None)
-        if voice_id:
-            self._process_request(self.speech_service.process_speech_request, 
-                                  [self.view.user_input.get("1.0", "end-1c").strip(), voice_id])
-        else:
-            self.view.update_output("Error: Invalid voice selected.")
-
-    def process_sfx_request(self):
-        self._process_request(self.sfx_service.process_sfx_request, 
-                              [self.view.user_input.get("1.0", "end-1c").strip(), self.view.duration_var.get()])
-
-    def process_music_request(self):
-        self._process_request(self.music_service.process_music_request, 
-                              [self.view.user_input.get("1.0", "end-1c").strip(), self.view.instrumental_var.get()])
-
-    def _process_request(self, service_method, args):
+    def _process_request(self, service_method, args, synchronous=False):
         if not args[0]:  # Check if user input is empty
             self.view.update_output("Error: Please enter some text.")
-            return
+            return None
 
         self.view.generate_button.configure(state="disabled")
         self.model.stop()
@@ -111,6 +94,25 @@ class AudioController:
         
         self.view.show_progress_bar(determinate=False)  # Use indeterminate mode
 
+        if synchronous:
+            return self._process_synchronous(service_method, args)
+        else:
+            self._process_asynchronous(service_method, args)
+
+    def _process_synchronous(self, service_method, args):
+        try:
+            result = service_method(*args)
+            if result:
+                self.handle_successful_generation(result)
+                return result
+            else:
+                self.view.update_output("Error: An error occurred during audio generation.")
+                return None
+        finally:
+            self.view.generate_button.configure(state="normal")
+            self.view.hide_progress_bar()
+
+    def _process_asynchronous(self, service_method, args):
         def process_thread():
             result = service_method(*args)
             if result:
@@ -119,10 +121,29 @@ class AudioController:
                 self.view.after(0, lambda: self.view.update_output("Error: An error occurred during audio generation."))
             self.view.after(0, lambda: self.view.generate_button.configure(state="normal"))
             self.view.after(0, self.view.hide_progress_bar)
-            if self.generation_complete_callback:
-                self.view.after(0, self.generation_complete_callback)
 
         threading.Thread(target=process_thread, daemon=True).start()
+
+    def process_speech_request(self, synchronous=False):
+        selected_voice_name = self.view.selected_voice.get()
+        voice_id = next((voice[1] for voice in self.speech_service.get_available_voices() if voice[0] == selected_voice_name), None)
+        if voice_id:
+            return self._process_request(self.speech_service.process_speech_request, 
+                                    [self.view.user_input.get("1.0", "end-1c").strip(), voice_id],
+                                    synchronous)
+        else:
+            self.view.update_output("Error: Invalid voice selected.")
+            return None
+
+    def process_sfx_request(self, synchronous=False):
+        return self._process_request(self.sfx_service.process_sfx_request, 
+                                [self.view.user_input.get("1.0", "end-1c").strip(), self.view.duration_var.get()],
+                                synchronous)
+
+    def process_music_request(self, synchronous=False):
+        return self._process_request(self.music_service.process_music_request, 
+                                [self.view.user_input.get("1.0", "end-1c").strip(), self.view.instrumental_var.get()],
+                                synchronous)
         
     def handle_successful_generation(self, result):
         self.view.update_output(f"Audio generated successfully. File saved to: {result}")

@@ -59,7 +59,7 @@ class AudioFileSelector(ctk.CTkFrame):
         else:
             self.file_dropdown.configure(values=["No files available"])
             self.file_var.set("No files available")
-            
+
     def on_file_select(self, choice):
         if choice != "No files available" and self.current_directory:
             file_path = os.path.join(self.current_directory, choice)
@@ -81,3 +81,4 @@ class AudioFileSelector(ctk.CTkFrame):
 
     def update_module(self, module):
         self.refresh_files(module)
+
