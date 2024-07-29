@@ -103,15 +103,15 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.bind("<KeyPress-Alt_L>", self.option_key_press)
         self.bind("<KeyRelease-Alt_L>", self.option_key_release)
 
-        # Add these new bindings for mousewheel scrolling
+        # Scrolling - For Windows + MacOS compatibility:
         self.bind("<MouseWheel>", self.on_mousewheel)
         self.bind("<Shift-MouseWheel>", self.on_shift_mousewheel)
 
-        # For Linux and MacOS compatibility
-        self.bind("<Button-4>", self.on_mousewheel)
-        self.bind("<Button-5>", self.on_mousewheel)
-        self.bind("<Shift-Button-4>", self.on_shift_mousewheel)
-        self.bind("<Shift-Button-5>", self.on_shift_mousewheel)
+        # Scrolling - For Linux compatibility
+        # self.bind("<Button-4>", self.on_mousewheel)
+        # self.bind("<Button-5>", self.on_mousewheel)
+        # self.bind("<Shift-Button-4>", self.on_shift_mousewheel)
+        # self.bind("<Shift-Button-5>", self.on_shift_mousewheel)
 
     def create_widgets(self):
         self.create_toolbar()

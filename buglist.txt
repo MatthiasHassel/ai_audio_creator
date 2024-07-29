@@ -14,5 +14,4 @@
     * Apostrophe in script analysis is displayed as \u2019 in json file
     * Index is just consecutive but not in correct order --> adjust gpt prompt
 
-- in audio generator: clip should be automatically selected after generation
 
