@@ -39,7 +39,7 @@ class MainController:
             self.audio_controller,
             self.timeline_controller  # Pass the timeline_controller here
         )
-        
+
         timeline_model = self.project_model.get_timeline_model()
         self.timeline_controller = TimelineController(self.view, timeline_model, self.project_model)
         self.timeline_controller.master_controller = self
@@ -99,6 +99,8 @@ class MainController:
                 error_message = str(e)
                 self.view.update_status(f"Error: {error_message}")
                 self.view.show_error("Error", error_message)
+        else:
+            self.view.update_status("Project creation cancelled.")
         
     def save_project(self):
         success, message = self.project_model.save_project()
