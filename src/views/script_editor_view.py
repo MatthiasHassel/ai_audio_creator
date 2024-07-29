@@ -144,6 +144,9 @@ class ScriptEditorView(ctk.CTkFrame):
         self.analyze_script_button = ctk.CTkButton(bottom_toolbar, text="Analyze Script", command=self.analyze_script)
         self.analyze_script_button.grid(row=0, column=3, padx=2, pady=2, sticky="ew")
 
+        self.create_audio_button = ctk.CTkButton(bottom_toolbar, text="Create Audio", command=self.create_audio)
+        self.create_audio_button.grid(row=0, column=4, padx=2, pady=2, sticky="ew")
+
     def create_status_bar(self):
         status_frame = ctk.CTkFrame(self)
         status_frame.grid(row=3, column=0, columnspan=2, sticky="ew", padx=5, pady=(2, 5))
@@ -435,3 +438,10 @@ class ScriptEditorView(ctk.CTkFrame):
 
     def set_analyze_script_callback(self, callback):
         self.analyze_script_callback = callback
+
+    def create_audio(self):
+        if self.create_audio_callback:
+            self.create_audio_callback()
+
+    def set_create_audio_callback(self, callback):
+        self.create_audio_callback = callback

@@ -21,8 +21,8 @@ class PDFAnalysisService:
     def analyze_script(self, script_text):
         try:
             formatting_instructions = """
-Please analyze the following script and provide a structured JSON output. Sort all sentences by their speakers and give them an index indicating where they are in the script.
-Recognize instructions for sound effects and music and list them with an index. The index should later be used to restore the exact order of the sentences, SFX and music. 
+Please analyze the following script and provide a structured JSON output. Sort all sentences by their speakers and give them an index indicating at what place the sentence is in the script.
+Recognize instructions for sound effects and music and list them with an index. The index should later be used to restore the exact order of the sentences in the script.
 Therefore, each index number may only occur once. If sentences are spoken at the same time, give them a consecutive index number. Output the analysis as JSON text in the following format:
 
 "speech": {

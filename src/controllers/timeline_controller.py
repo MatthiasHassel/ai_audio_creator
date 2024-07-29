@@ -4,6 +4,7 @@ from utils.audio_clip import AudioClip
 from tkinterdnd2 import DND_FILES
 import logging 
 from tkinter import messagebox
+from pydub import AudioSegment
 
 class TimelineController:
     def __init__(self, master, timeline_model, project_model):
@@ -151,24 +152,23 @@ class TimelineController:
             logging.error(f"Error removing track: {str(e)}")
         self.unsaved_changes = True
 
-    def add_audio_clip(self, file_path, track_index):
+    def add_audio_clip(self, file_path, track_index, start_time=None):
         if 0 <= track_index < len(self.timeline_model.get_tracks()):
-            track = self.timeline_model.get_tracks()[track_index]
+            if start_time is None:
+                # Use the current playhead position if no start_time is specified
+                start_time = self.timeline_model.get_playhead_position()
             
-            # Use the current playhead position
-            start_time = self.timeline_model.get_playhead_position()
-            
-            # Create a new AudioClip and add it to the timeline
             new_clip = AudioClip(file_path, start_time)
             self.timeline_model.add_clip_to_track(track_index, new_clip)
             self.project_model.add_clip_to_timeline(file_path)
             
-            # Update the view
             if self.view:
                 self.view.add_clip(new_clip, track_index)
                 self.view.redraw_timeline()
+                self.view.update_playhead_position(start_time + new_clip.duration)
             
             self.unsaved_changes = True
+            logging.info(f"Added audio clip to track {track_index} at position {start_time}")
         else:
             logging.warning(f"Invalid track index: {track_index}")
 
@@ -362,3 +362,32 @@ class TimelineController:
             self.view.add_clip(clip, track_index)
             self.view.redraw_timeline()
         self.unsaved_changes = True
+
+    def get_or_create_track(self, track_name):
+        tracks = self.timeline_model.get_tracks()
+        for index, track in enumerate(tracks):
+            if track['name'] == track_name:
+                return index
+        
+        # If the track doesn't exist, create it
+        new_track = {'name': track_name, 'clips': []}
+        self.timeline_model.add_track(new_track)
+        if self.view:
+            self.view.update_tracks(self.timeline_model.get_tracks())
+        return len(tracks)  # Return the index of the new track
+
+    def get_clip_duration(self, file_path):
+        try:
+            audio = AudioSegment.from_file(file_path)
+            return len(audio) / 1000.0  # Convert milliseconds to seconds
+        except Exception as e:
+            logging.error(f"Error getting clip duration: {str(e)}")
+            return 0  # Return 0 duration if there's an error
+
+    def get_track_end_time(self, track_index):
+        if 0 <= track_index < len(self.timeline_model.get_tracks()):
+            track = self.timeline_model.get_tracks()[track_index]
+            if track['clips']:
+                last_clip = max(track['clips'], key=lambda clip: clip.x + clip.duration)
+                return last_clip.x + last_clip.duration
+        return 0  # Return 0 if the track is empty or doesn't exist

@@ -83,70 +83,77 @@ class AudioController:
     def set_add_to_new_audio_files_callback(self, callback):
         self.add_to_new_audio_files_callback = callback
 
-    def process_music_request(self):
-        self._process_request(self.music_service.process_music_request, 
-                              [self.view.user_input.get("1.0", "end-1c").strip(), self.view.instrumental_var.get()])
-
-    def process_sfx_request(self):
-        self._process_request(self.sfx_service.process_sfx_request, 
-                              [self.view.user_input.get("1.0", "end-1c").strip(), self.view.duration_var.get()])
-
-    def process_speech_request(self):
-        text = self.view.user_input.get("1.0", "end-1c").strip()
-        if not text:
-            self.view.update_output("Error: Please enter some text.")
-            return
-
-        if self.view.use_unique_voice.get():
-            gender = self.view.gender_var.get()
-            accent = self.view.accent_var.get()
-            age = self.view.age_var.get()
-            accent_strength = self.view.accent_strength_var.get()
-            
-            # Ensure text meets the minimum length requirement
-            if len(text) < 100:
-                text = text * (100 // len(text) + 1)
-            
-            result = self.speech_service.process_unique_voice_request(gender, accent, age, accent_strength, text)
-            if result:
-                self.view.update_output(f"Unique voice generated successfully. File saved to: {result}")
-                self.view.audio_file_selector.refresh_files('speech')
-            else:
-                self.view.update_output("Error: Failed to generate unique voice. Please check the logs for more information.")
-        else:
-            selected_voice_name = self.view.selected_voice.get()
-            voice_id = next((voice[1] for voice in self.speech_service.get_available_voices() if voice[0] == selected_voice_name), None)
-            if voice_id:
-                self._process_request(self.speech_service.process_speech_request, 
-                                    [text, voice_id])
-            else:
-                self.view.update_output("Error: Invalid voice selected.")
-
-    def _process_request(self, service_method, args):
+    def _process_request(self, service_method, args, synchronous=False):
         if not args[0]:  # Check if user input is empty
             self.view.update_output("Error: Please enter some text.")
-            return
+            return None
 
         self.view.generate_button.configure(state="disabled")
         self.model.stop()
         self.view.clear_input()
         
-        self.view.show_progress_bar(determinate=False)  # Use indeterminate mode for unknown duration
+        self.view.show_progress_bar(determinate=False)  # Use indeterminate mode
 
-        def process_thread():
+        if synchronous:
+            return self._process_synchronous(service_method, args)
+        else:
+            self._process_asynchronous(service_method, args)
+
+    def _process_synchronous(self, service_method, args):
+        try:
             result = service_method(*args)
             if result:
-                self.view.update_output(f"Audio generated successfully. File saved to: {result}")
-                self.view.update_status("Ready")
-                self.view.audio_file_selector.refresh_files(self.view.current_module.get().lower())
-                self.model.load_audio(result)
-                self.view.audio_visualizer.update_waveform(result)
+                self.handle_successful_generation(result)
+                return result
             else:
                 self.view.update_output("Error: An error occurred during audio generation.")
+                return None
+        finally:
             self.view.generate_button.configure(state="normal")
             self.view.hide_progress_bar()
 
+    def _process_asynchronous(self, service_method, args):
+        def process_thread():
+            result = service_method(*args)
+            if result:
+                self.view.after(0, lambda: self.handle_successful_generation(result))
+            else:
+                self.view.after(0, lambda: self.view.update_output("Error: An error occurred during audio generation."))
+            self.view.after(0, lambda: self.view.generate_button.configure(state="normal"))
+            self.view.after(0, self.view.hide_progress_bar)
+
         threading.Thread(target=process_thread, daemon=True).start()
+
+    def process_speech_request(self, synchronous=False):
+        selected_voice_name = self.view.selected_voice.get()
+        voice_id = next((voice[1] for voice in self.speech_service.get_available_voices() if voice[0] == selected_voice_name), None)
+        if voice_id:
+            return self._process_request(self.speech_service.process_speech_request, 
+                                    [self.view.user_input.get("1.0", "end-1c").strip(), voice_id],
+                                    synchronous)
+        else:
+            self.view.update_output("Error: Invalid voice selected.")
+            return None
+
+    def process_sfx_request(self, synchronous=False):
+        return self._process_request(self.sfx_service.process_sfx_request, 
+                                [self.view.user_input.get("1.0", "end-1c").strip(), self.view.duration_var.get()],
+                                synchronous)
+
+    def process_music_request(self, synchronous=False):
+        return self._process_request(self.music_service.process_music_request, 
+                                [self.view.user_input.get("1.0", "end-1c").strip(), self.view.instrumental_var.get()],
+                                synchronous)
+        
+    def handle_successful_generation(self, result):
+        self.view.update_output(f"Audio generated successfully. File saved to: {result}")
+        self.view.update_status("Ready")
+        self.view.audio_file_selector.refresh_files(self.view.current_module.get().lower())
+        self.model.load_audio(result)
+        self.view.audio_visualizer.update_waveform(result)
+        self.current_audio_file = result
+        self.view.update_button_states(False, False)
+        self.on_audio_file_select(result)  # Manually trigger file selection
 
     def seek_audio(self, position):
         if self.model.seek(position):

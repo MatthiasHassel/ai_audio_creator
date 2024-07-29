@@ -24,9 +24,22 @@ class MainController:
         audio_view = self.view.get_audio_generator_view()
         self.audio_controller = AudioController(audio_model, audio_view, self.config)
 
+        timeline_model = self.project_model.get_timeline_model()
+        self.timeline_controller = TimelineController(self.view, timeline_model, self.project_model)
+        self.timeline_controller.master_controller = self
+        self.view.set_timeline_controller(self.timeline_controller)
+
         script_model = self.model.get_script_model()
         script_view = self.view.get_script_editor_view()
-        self.script_editor_controller = ScriptEditorController(script_model, script_view, self.config, self.project_model)
+        self.script_editor_controller = ScriptEditorController(
+            script_model, 
+            script_view, 
+            self.config, 
+            self.project_model, 
+            self.audio_controller,
+            self.timeline_controller  # Pass the timeline_controller here
+        )
+
         timeline_model = self.project_model.get_timeline_model()
         self.timeline_controller = TimelineController(self.view, timeline_model, self.project_model)
         self.timeline_controller.master_controller = self
@@ -86,6 +99,8 @@ class MainController:
                 error_message = str(e)
                 self.view.update_status(f"Error: {error_message}")
                 self.view.show_error("Error", error_message)
+        else:
+            self.view.update_status("Project creation cancelled.")
         
     def save_project(self):
         success, message = self.project_model.save_project()

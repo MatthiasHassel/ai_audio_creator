@@ -1,6 +1,7 @@
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import filedialog, messagebox
+import tkinter.simpledialog as simpledialog
 from tkinterdnd2 import DND_FILES, TkinterDnD
 import os
 from views.audio_generator_view import AudioGeneratorView
@@ -186,3 +187,6 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
 
     def run(self):
         self.mainloop()
+
+    def ask_string(self, title, prompt):
+        return simpledialog.askstring(title, prompt, parent=self)
