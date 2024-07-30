@@ -21,43 +21,59 @@ class PDFAnalysisService:
     def analyze_script(self, script_text):
         try:
             formatting_instructions = """
-Please analyze the following script and provide a structured JSON output. Sort all sentences by their speakers and give them an index indicating at what place the sentence is in the script.
-Recognize instructions for sound effects and music and list them with an index. The index should later be used to restore the exact order of the sentences in the script.
-Therefore, each index number may only occur once. If sentences are spoken at the same time, give them a consecutive index number. Output the analysis as JSON text in the following format:
+I have a script for an audio drama that I would like to analyze and categorize. Please analyze each line in the script and categorize it as follows:
 
-"speech": {
-    "Narrator": {
-        "(index)": "(sentence)", 
-        "(index)": "(next-character-sentence)",
-         ... 
-        }, 
-    "(speaker name)": {
-        "(index)": "(sentence)",
-        ...
-        },
+1. Determine if the line is a spoken sentence by a character, a description of a sound effect (SFX), or a description of music.
+2. If it is a spoken sentence by a character, identify the character's name.
+3. If it is an SFX, estimate the duration of the sound (between 0.5 and 22 seconds).
+4. If it is music, specify whether it is instrumental or with vocals. Use "instrumental": "yes" for instrumental music and "instrumental": "no" for music with vocals.
+5. Maintain the order of the lines as they appear in the script, and assign an index to each line.
+6. Include two additional parts in the JSON:
+    - Needed Speaker Tracks: List all the characternames in the script. 
+    - Voice Characteristics: Analyze the emotional content of the sentence and describe the voice characteristics of each speaker.
+
+Without any additional text, output the analysis in the following JSON format:
+
+{
+  "script_analysis": [
+    {
+      "index": 1,
+      "type": "character_line",
+      "character": "CharacterName",
+      "content": "Spoken sentence by the character."
+    },
+    {
+      "index": 2,
+      "type": "sfx",
+      "content": "Description of the sound effect.",
+      "duration": 3.0
+    },
+    {
+      "index": 3,
+      "type": "music",
+      "content": "Description of the music.",
+      "instrumental": "yes"
+    },
     ...
-    }
+  ],
+  "needed_tracks": {
+    "sfx",
+    "music",
+    "character1",
+	 ...
+  },
+  "voice_characteristics": {
+    "CharacterName": {
+      "Gender": "(male/female)",
+      "Age": "(young/middle_aged/old)",
+      "Accent": "(none/american/british/african/australian/indian)",
+      "Voice Description": "(1 adjective)"
+    },
+    ...
+  }
 }
-"sfx:" {
-    "(index)": "(precise sound effect description)",
-    ...
-    }
-"music:" {
-    "(index)": "(music description)",
-    ...
-    }
 
-Also analyze the emotional content of the sentence and describe the voice characteristics of each speaker and add it to the JSON file using this format:
-
-"voice_characteristics": {
-    "(speaker-name/narrator)": {
-        "Gender": "(male/female)",
-        "Age": "(young/middle_aged,/old)",
-        "Accent": "(none/american/british/african/australian/indian)",
-        "Voice Description": "(1 adjective)"
-        },
-    ...
-    }
+Here is the script to be analyzed:
 """
 
             response = self.client.chat.completions.create(
@@ -74,3 +90,4 @@ Also analyze the emotional content of the sentence and describe the voice charac
         except Exception as e:
             print(f"Error analyzing script: {str(e)}")
             return None
+        

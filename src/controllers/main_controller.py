@@ -23,7 +23,8 @@ class MainController:
         audio_model = self.model.get_audio_model()
         audio_view = self.view.get_audio_generator_view()
         self.audio_controller = AudioController(audio_model, audio_view, self.config)
-
+        self.audio_controller.load_voices()
+        
         timeline_model = self.project_model.get_timeline_model()
         self.timeline_controller = TimelineController(self.view, timeline_model, self.project_model)
         self.timeline_controller.master_controller = self

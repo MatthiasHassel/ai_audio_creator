@@ -94,43 +94,69 @@ class AudioController:
         
         self.view.show_progress_bar(determinate=False)  # Use indeterminate mode
 
-        if synchronous:
-            return self._process_synchronous(service_method, args)
-        else:
-            self._process_asynchronous(service_method, args)
-
-    def _process_synchronous(self, service_method, args):
         try:
-            result = service_method(*args)
-            if result:
-                self.handle_successful_generation(result)
+            if synchronous:
+                result = service_method(*args)
+                if result:
+                    self.handle_successful_generation(result)
                 return result
             else:
-                self.view.update_output("Error: An error occurred during audio generation.")
+                def process_thread():
+                    result = service_method(*args)
+                    if result:
+                        self.view.after(0, lambda: self.handle_successful_generation(result))
+                    else:
+                        self.view.after(0, lambda: self.view.update_output("Error: An error occurred during audio generation."))
+                    self.view.after(0, lambda: self.view.generate_button.configure(state="normal"))
+                    self.view.after(0, self.view.hide_progress_bar)
+
+                threading.Thread(target=process_thread, daemon=True).start()
                 return None
+        except Exception as e:
+            self.view.update_output(f"Error: {str(e)}")
+            return None
         finally:
-            self.view.generate_button.configure(state="normal")
-            self.view.hide_progress_bar()
+            if synchronous:
+                self.view.generate_button.configure(state="normal")
+                self.view.hide_progress_bar()
 
-    def _process_asynchronous(self, service_method, args):
-        def process_thread():
-            result = service_method(*args)
-            if result:
-                self.view.after(0, lambda: self.handle_successful_generation(result))
-            else:
-                self.view.after(0, lambda: self.view.update_output("Error: An error occurred during audio generation."))
-            self.view.after(0, lambda: self.view.generate_button.configure(state="normal"))
-            self.view.after(0, self.view.hide_progress_bar)
+    # def _process_synchronous(self, service_method, args):
+    #     try:
+    #         result = service_method(*args)
+    #         if result:
+    #             self.handle_successful_generation(result)
+    #             return result
+    #         else:
+    #             self.view.update_output("Error: An error occurred during audio generation.")
+    #             return None
+    #     finally:
+    #         self.view.generate_button.configure(state="normal")
+    #         self.view.hide_progress_bar()
 
-        threading.Thread(target=process_thread, daemon=True).start()
+    # def _process_asynchronous(self, service_method, args):
+    #     def process_thread():
+    #         result = service_method(*args)
+    #         if result:
+    #             self.view.after(0, lambda: self.handle_successful_generation(result))
+    #         else:
+    #             self.view.after(0, lambda: self.view.update_output("Error: An error occurred during audio generation."))
+    #         self.view.after(0, lambda: self.view.generate_button.configure(state="normal"))
+    #         self.view.after(0, self.view.hide_progress_bar)
 
-    def process_speech_request(self, synchronous=False):
-        selected_voice_name = self.view.selected_voice.get()
-        voice_id = next((voice[1] for voice in self.speech_service.get_available_voices() if voice[0] == selected_voice_name), None)
+    #     threading.Thread(target=process_thread, daemon=True).start()
+
+    def process_speech_request(self, text_prompt=None, voice_id=None, synchronous=False):
+        if text_prompt is None:
+            text_prompt = self.view.user_input.get("1.0", "end-1c").strip()
+        if voice_id is None:
+            selected_voice_name = self.view.selected_voice.get()
+            user_voices = self.speech_service.get_user_voices()
+            voice_id = next((voice_id for name, voice_id in user_voices if name == selected_voice_name), None)
+        
         if voice_id:
             return self._process_request(self.speech_service.process_speech_request, 
-                                    [self.view.user_input.get("1.0", "end-1c").strip(), voice_id],
-                                    synchronous)
+                                    [text_prompt, voice_id],
+                                    synchronous=synchronous)
         else:
             self.view.update_output("Error: Invalid voice selected.")
             return None
@@ -163,6 +189,7 @@ class AudioController:
                 self.start_playhead_update()
             else:
                 self.play_audio()
+            self.view.update_button_states(True, False)  # Enable stop button
 
     def play_audio(self):
         if self.current_audio_file:
@@ -172,17 +199,18 @@ class AudioController:
         else:
             logging.warning("No audio file loaded")
 
+    def stop_audio(self):
+        self.model.stop()
+        self.view.update_button_states(False, False)
+        self.view.audio_visualizer.update_playhead(0)
+        self.stop_playhead_update()
+
     def pause_resume_audio(self):
         if self.model.is_playing and not self.model.is_paused:
             self.model.pause()
         elif self.model.is_paused:
             self.model.resume()
         self.view.update_button_states(self.model.is_playing, self.model.is_paused)
-
-    def stop_audio(self):
-        self.model.stop()
-        self.view.update_button_states(False, False)
-        self.view.audio_visualizer.update_playhead(0)
 
     def start_playhead_update(self):
         self.stop_playhead_update()  # Ensure no existing update is running
@@ -219,16 +247,8 @@ class AudioController:
         self.view.audio_visualizer.hide_playhead()
 
     def load_voices(self):
-        try:
-            voices = self.speech_service.get_available_voices()
-            if voices:
-                voice_names = [voice[0] for voice in voices]
-                self.view.selected_voice.set(voice_names[0])
-                self.view.voice_dropdown.configure(values=voice_names)
-            else:
-                self.view.update_output("Warning: No voices available.")
-        except Exception as e:
-            self.view.update_output(f"Error: Failed to load voices: {str(e)}")
+        voices = self.speech_service.get_user_voices()
+        self.view.update_voice_dropdown(voices)
 
     def add_audio_to_timeline(self):
         selected_file = self.view.audio_file_selector.get_selected_file()

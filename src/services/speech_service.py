@@ -24,28 +24,66 @@ class SpeechService:
         if self.status_update_callback:
             self.status_update_callback(message)
 
-    def get_available_voices(self):
+    def ensure_voice_in_library(self, voice_id, voice_name):
+        # First, check if the voice is already in the user's library
+        user_voices = self.get_user_voices()
+        if any(id == voice_id for _, id in user_voices):
+            return True  # Voice is already in the library
+
+        # If not, get the public_owner_id from available voices
+        available_voices = self.get_available_voices()
+        voice_info = next((v for v in available_voices if v['voice_id'] == voice_id), None)
+        
+        if not voice_info:
+            self.logger.error(f"Voice {voice_id} not found in available voices.")
+            return False
+
+        public_owner_id = voice_info['public_owner_id']
+        
+        # Now add the voice to the library
+        url = f"https://api.elevenlabs.io/v1/voices/add/{public_owner_id}/{voice_id}"
+        payload = {"new_name": voice_name}
+        headers = {
+            "xi-api-key": self.api_key,
+            "Content-Type": "application/json"
+        }
+
         try:
-            response = self.client.voices.get_all()
-            
-            if hasattr(response, 'voices'):
-                voices = response.voices
-            else:
-                raise AttributeError("The API response does not contain a 'voices' attribute")
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            self.logger.info(f"Voice '{voice_name}' (ID: {voice_id}) added to the library successfully.")
+            return True
+        except requests.RequestException as e:
+            self.logger.error(f"Failed to add voice to library: {str(e)}")
+            return False
+    
+    def get_available_voices(self):
+        url = "https://api.elevenlabs.io/v1/shared-voices"
+        querystring = {"category": "professional", "use_cases": "narrative_story", "language": "en"}
+        headers = {"xi-api-key": self.api_key}
 
-            voice_list = []
-            for voice in voices:
-                if hasattr(voice, 'voice_id') and hasattr(voice, 'name'):
-                    voice_list.append((voice.name, voice.voice_id))
-                else:
-                    self.logger.warning(f"Voice object missing 'voice_id' or 'name' attribute: {voice}")
-
-            return voice_list
-
-        except Exception as e:
-            self.logger.error(f"Failed to get available voices: {str(e)}")
+        try:
+            response = requests.get(url, headers=headers, params=querystring)
+            response.raise_for_status()
+            data = response.json()
+            return data.get('voices', [])
+        except requests.RequestException as e:
+            self.logger.error(f"Failed to fetch available voices: {str(e)}")
             return []
+    
+    def get_user_voices(self):
+        url = "https://api.elevenlabs.io/v1/voices"
+        headers = {"xi-api-key": self.api_key}
 
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            voices = response.json().get('voices', [])
+            return [(voice['name'], voice['voice_id']) for voice in voices]
+        except requests.RequestException as e:
+            self.logger.error(f"Failed to fetch user voices: {str(e)}")
+            return []
+        
     def get_next_file_number(self, voice_name):
         pattern = re.compile(fr"^{re.escape(voice_name)}_(\d+)\.mp3$")
         existing_numbers = [
@@ -76,8 +114,9 @@ class SpeechService:
             self.logger.info("Ensuring output directory exists...")
             os.makedirs(self.output_dir, exist_ok=True)
 
-            # Get the voice name from the voice_id
-            voice_name = next((voice[0] for voice in self.get_available_voices() if voice[1] == voice_id), "Unknown")
+            # Get the voice name from the user's voices
+            user_voices = self.get_user_voices()
+            voice_name = next((name for name, id in user_voices if id == voice_id), "Unknown")
             sanitized_voice_name = sanitize_filename(voice_name)
 
             # Get the next available number for this voice
@@ -94,7 +133,7 @@ class SpeechService:
                         f.write(chunk)
             return save_file_path
         except Exception as e:
-            self.logger.error(f"Failed to generate speech: {str(e)}")
+            self.logger.error(f"Failed to generate speech: {str(e)}", exc_info=True)
             return None
     
     def process_speech_request(self, text_prompt: str, voice_id: str):

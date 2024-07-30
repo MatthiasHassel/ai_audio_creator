@@ -3,7 +3,8 @@ import logging
 import threading
 import time
 import json
-import random # will not be needed after proper implementation of voice selection
+import random 
+import requests
 import hashlib
 from tkinter import filedialog, messagebox
 from services.pdf_analysis_service import PDFAnalysisService
@@ -168,14 +169,14 @@ class ScriptEditorController:
 
         def audio_creation_thread():
             try:
-                all_elements = self.get_sorted_elements(analysis)
-                total_elements = len(all_elements)
+                script_analysis = analysis.get('script_analysis', [])
+                total_elements = len(script_analysis)
                 
-                for i, element in enumerate(all_elements, 1):
+                for i, element in enumerate(script_analysis, 1):
                     self.view.update_status(f"Processing element {i} of {total_elements}")
                     self.view.progress_bar.set(i / total_elements)
                     
-                    if element['type'] == 'speech':
+                    if element['type'] == 'character_line':
                         self.process_speech_element(element)
                     elif element['type'] == 'sfx':
                         self.process_sfx_element(element)
@@ -197,35 +198,48 @@ class ScriptEditorController:
         threading.Thread(target=audio_creation_thread, daemon=True).start()
 
     def process_speech_element(self, element):
-        speaker = element['speaker']
-        sentence = element['text']
+        speaker = element['character']
+        sentence = element['content']
         
         self.view.update_status(f"Generating speech for {speaker}: {sentence[:30]}...")
         
-        self.audio_controller.view.current_module.set("Speech")
         voice_char = self.get_voice_characteristics(speaker)
-        chosen_voice = self.get_suitable_voice(voice_char)
+        chosen_voice_name, chosen_voice_id = self.get_suitable_voice(voice_char)
         
-        self.audio_controller.view.user_input.delete("1.0", "end")
-        self.audio_controller.view.user_input.insert("1.0", sentence)
-        self.audio_controller.view.selected_voice.set(chosen_voice[0])
-        
-        audio_file = self.audio_controller.process_speech_request(synchronous=True)
+        # Ensure the chosen voice is in the user's library
+        if not self.audio_controller.speech_service.ensure_voice_in_library(chosen_voice_id, chosen_voice_name):
+            self.view.update_status(f"Failed to add voice '{chosen_voice_name}' to library. Using default voice.")
+            chosen_voice_name, chosen_voice_id = self.get_default_voice(voice_char['Gender'])
+
+        # Now that we've ensured the voice is in the library, generate the speech
+        audio_file = self.audio_controller.process_speech_request(
+            text_prompt=sentence,
+            voice_id=chosen_voice_id,
+            synchronous=True
+        )
         
         if audio_file:
-            track_name = "Speaker1" if speaker == "Narrator" else speaker
+            track_name = speaker
             track_index = self.timeline_controller.get_or_create_track(track_name)
             self.add_clip_to_timeline(audio_file, track_index)
 
+    def get_default_voice(self, gender):
+        default_voices = {
+            'male': ('George', 'jsCqWAovK2LkecY7zXl4'),
+            'female': ('Matilda', 'XrExE9yKIg1WjnnlVkGX')
+        }
+        return default_voices.get(gender.lower(), default_voices['male'])
+
     def process_sfx_element(self, element):
-        description = element['description']
+        description = element['content']
+        duration = element.get('duration', 0)
         
         self.view.update_status(f"Generating SFX: {description[:30]}...")
         
         self.audio_controller.view.current_module.set("SFX")
         self.audio_controller.view.user_input.delete("1.0", "end")
         self.audio_controller.view.user_input.insert("1.0", description)
-        self.audio_controller.view.duration_var.set("0")  # Use automatic duration
+        self.audio_controller.view.duration_var.set(str(duration))
         
         audio_file = self.audio_controller.process_sfx_request(synchronous=True)
         
@@ -234,20 +248,22 @@ class ScriptEditorController:
             self.add_clip_to_timeline(audio_file, track_index)
 
     def process_music_element(self, element):
-        description = element['description']
+        description = element['content']
+        instrumental = element.get('instrumental', 'yes') == 'yes'
         
         self.view.update_status(f"Generating Music: {description[:30]}...")
         
         self.audio_controller.view.current_module.set("Music")
         self.audio_controller.view.user_input.delete("1.0", "end")
         self.audio_controller.view.user_input.insert("1.0", description)
-        self.audio_controller.view.instrumental_var.set(False)  # Assuming we want vocals
+        self.audio_controller.view.instrumental_var.set(instrumental)
         
         audio_file = self.audio_controller.process_music_request(synchronous=True)
         
         if audio_file:
             track_index = self.timeline_controller.get_or_create_track("Music")
             self.add_clip_to_timeline(audio_file, track_index)
+
 
     def add_clip_to_timeline(self, file_path, track_index):
         if file_path:
@@ -259,31 +275,7 @@ class ScriptEditorController:
     def get_audio_duration(self, file_path):
         return self.timeline_controller.get_clip_duration(file_path)
 
-    def get_sorted_elements(self, analysis):
-        elements = []
-        
-        for element_type in ['speech', 'sfx', 'music']:
-            if element_type == 'speech':
-                for speaker, sentences in analysis[element_type].items():
-                    for index, text in sentences.items():
-                        elements.append({
-                            'type': element_type,
-                            'index': int(index),
-                            'speaker': speaker,
-                            'text': text
-                        })
-            else:
-                for index, description in analysis.get(element_type, {}).items():
-                    elements.append({
-                        'type': element_type,
-                        'index': int(index),
-                        'description': description
-                    })
-        
-        return sorted(elements, key=lambda x: x['index'])
-    
     def get_voice_characteristics(self, speaker):
-        # Get voice characteristics from the analysis file
         analysis_file = self.get_latest_analysis_file()
         with open(analysis_file, 'r') as file:
             analysis = json.load(file)
@@ -291,16 +283,39 @@ class ScriptEditorController:
         return analysis.get('voice_characteristics', {}).get(speaker, {})
 
     def get_suitable_voice(self, voice_char):
-        # Implement logic to select a suitable voice based on characteristics
-        # For now, return a random voice
+        # Get available voices from ElevenLabs API
         available_voices = self.audio_controller.speech_service.get_available_voices()
-        return random.choice(available_voices) if available_voices else None
 
-    def wait_for_audio_generation(self):
-        while self.audio_controller.view.generate_button.cget("state") == "disabled":
-            time.sleep(0.1)
-        return self.audio_controller.view.audio_file_selector.get_selected_file()
-  
+        gender = voice_char.get('Gender', '').lower()
+        age = voice_char.get('Age', '').lower()
+        accent = voice_char.get('Accent', '').lower()
+        description = voice_char.get('Voice Description', '').lower()
+
+        # Filter voices based on characteristics
+        matching_voices = [
+            voice for voice in available_voices
+            if gender in voice['gender'].lower()
+            and age in voice['age'].lower()
+            and (accent == 'none' or accent in voice['accent'].lower())
+        ]
+
+        # Try to find a voice with matching description
+        for voice in matching_voices:
+            if description in voice['descriptive'].lower():
+                return voice['name'], voice['voice_id']
+
+        # If no matching description, choose a random voice with correct attributes
+        if matching_voices:
+            chosen_voice = random.choice(matching_voices)
+            return chosen_voice['name'], chosen_voice['voice_id']
+
+        # If no fitting voice at all, use default voices
+        default_voices = {
+            'male': ('George', 'jsCqWAovK2LkecY7zXl4'),
+            'female': ('Matilda', 'XrExE9yKIg1WjnnlVkGX')
+        }
+        return default_voices.get(gender, default_voices['male'])
+
     def get_latest_analysis_file(self):
         scripts_dir = self.project_model.get_scripts_dir()
         analysis_files = [f for f in os.listdir(scripts_dir) if f.startswith("script_analysis") and f.endswith(".json")]

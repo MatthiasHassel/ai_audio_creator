@@ -339,3 +339,8 @@ class AudioGeneratorView(ctk.CTkFrame):
 
     def set_visualizer_click_command(self, command):
         self.audio_visualizer.set_on_click_seek(command)
+
+    def update_voice_dropdown(self, voices):
+        self.voice_dropdown.configure(values=[voice[0] for voice in voices])
+        if voices:
+            self.selected_voice.set(voices[0][0])
