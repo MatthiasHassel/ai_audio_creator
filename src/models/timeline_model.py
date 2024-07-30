@@ -121,19 +121,15 @@ class TimelineModel:
 
     def add_clip_to_track(self, track_index, clip):
         if track_index >= len(self.tracks):
-            # Add new tracks if necessary
-            for _ in range(track_index - len(self.tracks) + 1):
-                self.tracks.append({"name": f"Track {len(self.tracks) + 1}", "clips": []})
+            # This shouldn't happen now, but keep it as a safeguard
+            self.tracks.append({"name": f"Track {len(self.tracks) + 1}", "clips": []})
         
-        # Find the correct position for the new clip
-        insert_position = 0
-        for i, existing_clip in enumerate(self.tracks[track_index]['clips']):
-            if existing_clip.x > clip.x:
-                break
-            insert_position = i + 1
-
-        # Insert the new clip at the correct position
-        self.tracks[track_index]['clips'].insert(insert_position, clip)
+        # Insert the clip at the correct position in the track
+        track = self.tracks[track_index]
+        insert_position = next((i for i, existing_clip in enumerate(track['clips']) 
+                                if getattr(existing_clip, 'index', float('inf')) > clip.index), 
+                            len(track['clips']))
+        track['clips'].insert(insert_position, clip)
         self.set_modified(True)
 
     def remove_clip_from_track(self, track_index, clip_index):

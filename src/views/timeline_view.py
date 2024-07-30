@@ -758,9 +758,9 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         fill_color = "blue" if clip == self.selected_clip else "lightblue"
         self.timeline_canvas.create_rectangle(x, y, x + width, y + self.track_height, 
                                               fill=fill_color, outline="blue", tags="clip")
-        self.timeline_canvas.create_text(x + 5, y + 5, text=os.path.basename(clip.file_path), 
+        self.timeline_canvas.create_text(x + 5, y + 5, text=f"{os.path.basename(clip.file_path)} (Index: {clip.index})", 
                                          anchor="nw", tags="clip")
-    
+        
     def on_drag(self, event):
         if self.selected_clip:
             x = self.timeline_canvas.canvasx(event.x)

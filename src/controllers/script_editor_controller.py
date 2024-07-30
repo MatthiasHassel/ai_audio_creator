@@ -4,10 +4,10 @@ import threading
 import time
 import json
 import random 
-import requests
 import hashlib
 from tkinter import filedialog, messagebox
 from services.pdf_analysis_service import PDFAnalysisService
+from utils.audio_clip import AudioClip
 
 class ScriptEditorController:
     def __init__(self, model, view, config, project_model, audio_controller, timeline_controller):
@@ -21,6 +21,8 @@ class ScriptEditorController:
         self.current_script_path = None
         self.setup_view_commands()
         self.pdf_analysis_service = PDFAnalysisService(config)
+        self.character_voices = {}  # Store selected voices for each character
+
 
     def setup_view_commands(self):
         self.view.save_button.configure(command=self.save_script)
@@ -177,13 +179,12 @@ class ScriptEditorController:
                     self.view.progress_bar.set(i / total_elements)
                     
                     if element['type'] == 'character_line':
-                        self.process_speech_element(element)
+                        self.process_speech_element(element, i)
                     elif element['type'] == 'sfx':
-                        self.process_sfx_element(element)
+                        self.process_sfx_element(element, i)
                     elif element['type'] == 'music':
-                        self.process_music_element(element)
+                        self.process_music_element(element, i)
                     
-                    # Small delay to allow GUI to update
                     time.sleep(0.1)
 
                 self.view.after(0, lambda: self.view.update_status("Audio creation completed and added to timeline."))
@@ -197,21 +198,23 @@ class ScriptEditorController:
 
         threading.Thread(target=audio_creation_thread, daemon=True).start()
 
-    def process_speech_element(self, element):
+    def process_speech_element(self, element, index):
         speaker = element['character']
         sentence = element['content']
         
         self.view.update_status(f"Generating speech for {speaker}: {sentence[:30]}...")
         
-        voice_char = self.get_voice_characteristics(speaker)
-        chosen_voice_name, chosen_voice_id = self.get_suitable_voice(voice_char)
+        if speaker not in self.character_voices:
+            voice_char = self.get_voice_characteristics(speaker)
+            chosen_voice_name, chosen_voice_id = self.get_suitable_voice(voice_char)
+            self.character_voices[speaker] = (chosen_voice_name, chosen_voice_id)
+        else:
+            chosen_voice_name, chosen_voice_id = self.character_voices[speaker]
         
-        # Ensure the chosen voice is in the user's library
         if not self.audio_controller.speech_service.ensure_voice_in_library(chosen_voice_id, chosen_voice_name):
             self.view.update_status(f"Failed to add voice '{chosen_voice_name}' to library. Using default voice.")
             chosen_voice_name, chosen_voice_id = self.get_default_voice(voice_char['Gender'])
 
-        # Now that we've ensured the voice is in the library, generate the speech
         audio_file = self.audio_controller.process_speech_request(
             text_prompt=sentence,
             voice_id=chosen_voice_id,
@@ -220,8 +223,7 @@ class ScriptEditorController:
         
         if audio_file:
             track_name = speaker
-            track_index = self.timeline_controller.get_or_create_track(track_name)
-            self.add_clip_to_timeline(audio_file, track_index)
+            self.add_clip_to_timeline(audio_file, track_name, index)
 
     def get_default_voice(self, gender):
         default_voices = {
@@ -230,47 +232,82 @@ class ScriptEditorController:
         }
         return default_voices.get(gender.lower(), default_voices['male'])
 
-    def process_sfx_element(self, element):
+    def process_sfx_element(self, element, index):
         description = element['content']
         duration = element.get('duration', 0)
         
         self.view.update_status(f"Generating SFX: {description[:30]}...")
         
+        # Set the input fields in the audio controller view
         self.audio_controller.view.current_module.set("SFX")
         self.audio_controller.view.user_input.delete("1.0", "end")
         self.audio_controller.view.user_input.insert("1.0", description)
         self.audio_controller.view.duration_var.set(str(duration))
         
+        # Call process_sfx_request without keyword arguments
         audio_file = self.audio_controller.process_sfx_request(synchronous=True)
         
         if audio_file:
-            track_index = self.timeline_controller.get_or_create_track("SFX")
-            self.add_clip_to_timeline(audio_file, track_index)
+            self.add_clip_to_timeline(audio_file, "SFX", index)
 
-    def process_music_element(self, element):
+    def process_music_element(self, element, index):
         description = element['content']
         instrumental = element.get('instrumental', 'yes') == 'yes'
         
         self.view.update_status(f"Generating Music: {description[:30]}...")
         
-        self.audio_controller.view.current_module.set("Music")
-        self.audio_controller.view.user_input.delete("1.0", "end")
-        self.audio_controller.view.user_input.insert("1.0", description)
-        self.audio_controller.view.instrumental_var.set(instrumental)
-        
-        audio_file = self.audio_controller.process_music_request(synchronous=True)
+        audio_file = self.audio_controller.process_music_request(
+            text_prompt=description,
+            make_instrumental=instrumental,
+            synchronous=True
+        )
         
         if audio_file:
-            track_index = self.timeline_controller.get_or_create_track("Music")
-            self.add_clip_to_timeline(audio_file, track_index)
+            self.add_clip_to_timeline(audio_file, "Music", index)
 
-
-    def add_clip_to_timeline(self, file_path, track_index):
+    def add_clip_to_timeline(self, file_path, track_name, index):
         if file_path:
-            start_time = self.timeline_controller.get_track_end_time(track_index)
-            self.timeline_controller.add_audio_clip(file_path, track_index, start_time)
+            track_index = self.timeline_controller.get_or_create_track(track_name)
+            start_time = self.calculate_global_start_time(index)
+            
+            # Create the new clip with the index
+            new_clip = AudioClip(file_path, start_time, index)
+            
+            # Add the clip to the timeline
+            self.timeline_controller.add_audio_clip(new_clip, track_index, track_name)
         else:
             logging.warning(f"Skipping addition of non-existent audio clip to timeline")
+
+    def calculate_global_start_time(self, index):
+        all_clips = []
+        for track in self.timeline_controller.timeline_model.get_tracks():
+            all_clips.extend(track['clips'])
+        
+        # Filter clips with lower indices
+        previous_clips = [clip for clip in all_clips if getattr(clip, 'index', float('inf')) < index]
+        
+        if previous_clips:
+            last_clip = max(previous_clips, key=lambda c: c.x + c.duration)
+            return last_clip.x + last_clip.duration
+        else:
+            return 0  # Start at the beginning if no previous clips
+    
+    def calculate_start_time(self, track_index, index):
+        tracks = self.timeline_controller.timeline_model.get_tracks()
+        if track_index >= len(tracks):
+            return 0  # If the track doesn't exist yet, start at the beginning
+        
+        track_clips = tracks[track_index]['clips']
+        
+        # Filter clips with lower indices, including those without an index (existing clips)
+        previous_clips = [clip for clip in track_clips if getattr(clip, 'index', float('inf')) < index]
+        
+        if previous_clips:
+            last_clip = max(previous_clips, key=lambda c: c.x + c.duration)
+            return last_clip.x + last_clip.duration
+        else:
+            return 0  # Start at the beginning if no previous clips
+
         
     def get_audio_duration(self, file_path):
         return self.timeline_controller.get_clip_duration(file_path)

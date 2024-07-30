@@ -152,26 +152,27 @@ class TimelineController:
             logging.error(f"Error removing track: {str(e)}")
         self.unsaved_changes = True
 
-    def add_audio_clip(self, file_path, track_index, start_time=None):
-        if 0 <= track_index < len(self.timeline_model.get_tracks()):
-            if start_time is None:
-                # Use the current playhead position if no start_time is specified
-                start_time = self.timeline_model.get_playhead_position()
+    def add_audio_clip(self, clip, track_index, track_name):
+        tracks = self.timeline_model.get_tracks()
+        
+        # Find the correct track by name
+        target_track_index = next((i for i, track in enumerate(tracks) if track['name'] == track_name), None)
+        
+        if target_track_index is None:
+            # If the track doesn't exist, create it
+            new_track = {'name': track_name, 'clips': []}
+            self.timeline_model.add_track(new_track)
+            target_track_index = len(tracks)
+        
+        # Add the clip to the correct track
+        self.timeline_model.add_clip_to_track(target_track_index, clip)
+        
+        if self.view:
+            self.view.add_clip(clip, target_track_index)
+            self.view.redraw_timeline()
+        self.unsaved_changes = True
+        logging.info(f"Added audio clip to track {target_track_index} ({track_name}) at position {clip.x}")
             
-            new_clip = AudioClip(file_path, start_time)
-            self.timeline_model.add_clip_to_track(track_index, new_clip)
-            self.project_model.add_clip_to_timeline(file_path)
-            
-            if self.view:
-                self.view.add_clip(new_clip, track_index)
-                self.view.redraw_timeline()
-                self.view.update_playhead_position(start_time + new_clip.duration)
-            
-            self.unsaved_changes = True
-            logging.info(f"Added audio clip to track {track_index} at position {start_time}")
-        else:
-            logging.warning(f"Invalid track index: {track_index}")
-
     def delete_clip(self, clip):
         track_index = self.timeline_model.get_track_index_for_clip(clip)
         if track_index != -1:

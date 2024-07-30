@@ -3,11 +3,12 @@ import logging
 import os
 
 class AudioClip:
-    def __init__(self, file_path, x):
+    def __init__(self, file_path, x, index=None):
         self.file_path = file_path
         self.x = x
         self.duration = 0
         self.audio = None
+        self.index = index  # New attribute
 
         try:
             if not os.path.exists(file_path):
@@ -16,7 +17,7 @@ class AudioClip:
             self.audio = AudioSegment.from_file(file_path)
             self.duration = len(self.audio) / 1000.0  # Duration in seconds
 
-            logging.info(f"AudioClip created: file={file_path}, x={x}, duration={self.duration}")
+            logging.info(f"AudioClip created: file={file_path}, x={x}, duration={self.duration}, index={index}")
         except Exception as e:
             logging.error(f"Error initializing AudioClip: {str(e)}", exc_info=True)
             raise

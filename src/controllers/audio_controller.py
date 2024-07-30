@@ -143,9 +143,11 @@ class AudioController:
             return None
 
     def process_sfx_request(self, synchronous=False):
+        text_prompt = self.view.user_input.get("1.0", "end-1c").strip()
+        duration = self.view.duration_var.get()
         return self._process_request(self.sfx_service.process_sfx_request, 
-                                [self.view.user_input.get("1.0", "end-1c").strip(), self.view.duration_var.get()],
-                                synchronous)
+                                     [text_prompt, duration],
+                                     synchronous)
 
     def process_music_request(self, synchronous=False):
         return self._process_request(self.music_service.process_music_request, 
