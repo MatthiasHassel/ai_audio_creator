@@ -181,6 +181,27 @@ class TimelineController:
                 self.view.remove_clip(clip)
         self.unsaved_changes = True
 
+    def remove_clip_from_all_tracks(self, file_path):
+        tracks = self.timeline_model.get_tracks()
+        for track_index, track in enumerate(tracks):
+            clips_to_remove = [clip for clip in track['clips'] if clip.file_path == file_path]
+            for clip in clips_to_remove:
+                self.timeline_model.remove_clip_from_track(track_index, clip)
+        
+        # Update the view
+        if self.view:
+            self.view.redraw_timeline()
+        
+        # Update project model
+        self.project_model.remove_clip_from_timeline(file_path)
+        
+        # Update active tracks
+        self.update_active_tracks()
+
+    def is_clip_in_timeline(self, file_path):
+        tracks = self.timeline_model.get_tracks()
+        return any(any(clip.file_path == file_path for clip in track['clips']) for track in tracks)
+
     def on_drop(self, event):
         file_path = event.data
         if file_path.lower().endswith(('.mp3', '.wav')):
@@ -231,8 +252,7 @@ class TimelineController:
 
     def update_active_tracks(self):
         active_tracks = self.get_active_tracks()
-        if self.timeline_model.is_playing:
-            self.timeline_model.update_playing_tracks(active_tracks)
+        self.timeline_model.update_playing_tracks(active_tracks)
 
     def get_active_tracks(self):
         tracks = self.timeline_model.get_tracks()

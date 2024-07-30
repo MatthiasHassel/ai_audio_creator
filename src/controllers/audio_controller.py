@@ -5,6 +5,7 @@ from services.llama_service import LlamaService
 from services.music_service import MusicService
 from services.sfx_service import SFXService
 from services.speech_service import SpeechService
+from tkinter import messagebox
 import logging
 from utils.audio_clip import AudioClip
 
@@ -13,6 +14,7 @@ class AudioController:
         self.model = model
         self.view = view
         self.config = config
+        self.timeline_controller = None 
         self.add_to_timeline_callback = None
         self.add_to_new_audio_files_callback = None
         self.llama_service = None
@@ -41,6 +43,9 @@ class AudioController:
         self.view.set_file_select_command(self.on_audio_file_select)
         self.view.set_visualizer_click_command(self.seek_audio)
         self.view.audio_visualizer.set_delete_callback(self.delete_audio_file) 
+
+    def set_timeline_controller(self, timeline_controller):
+        self.timeline_controller = timeline_controller
 
     def update_output_directories(self, music_dir, sfx_dir, speech_dir):
         self.music_service.update_output_directory(music_dir)
@@ -254,8 +259,30 @@ class AudioController:
     def delete_audio_file(self, file_path):
         try:
             if os.path.exists(file_path):
+                is_in_timeline = False
+                
+                # Check if the file is in the timeline, if timeline_controller is available
+                if self.timeline_controller:
+                    is_in_timeline = self.timeline_controller.is_clip_in_timeline(file_path)
+                
+                if is_in_timeline:
+                    # Show confirmation dialog
+                    confirm = messagebox.askyesno(
+                        "Confirm Deletion",
+                        f"The file {os.path.basename(file_path)} is used in the timeline. "
+                        "Deleting it will also remove it from the timeline. Are you sure you want to proceed?",
+                        icon='warning'
+                    )
+                    if not confirm:
+                        return
+
+                # Delete the file
                 os.remove(file_path)
                 logging.info(f"Deleted audio file: {file_path}")
+                
+                # Remove from timeline if necessary
+                if is_in_timeline and self.timeline_controller:
+                    self.timeline_controller.remove_clip_from_all_tracks(file_path)
                 
                 # Clear the audio visualizer
                 self.view.audio_visualizer.clear()
@@ -275,5 +302,6 @@ class AudioController:
                 logging.warning(f"File not found: {file_path}")
                 self.view.update_status("Error: File not found")
         except Exception as e:
-            logging.error(f"Error deleting file {file_path}: {str(e)}")
+            logging.error(f"Error deleting file {file_path}: {str(e)}", exc_info=True)
             self.view.update_status(f"Error deleting file: {str(e)}")
+
