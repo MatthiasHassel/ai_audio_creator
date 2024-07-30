@@ -206,7 +206,7 @@ class ScriptEditorController:
         
         if speaker not in self.character_voices:
             voice_char = self.get_voice_characteristics(speaker)
-            chosen_voice_name, chosen_voice_id = self.get_suitable_voice(voice_char)
+            chosen_voice_name, chosen_voice_id = self.get_suitable_voice(speaker, voice_char)
             self.character_voices[speaker] = (chosen_voice_name, chosen_voice_id)
         else:
             chosen_voice_name, chosen_voice_id = self.character_voices[speaker]
@@ -307,8 +307,7 @@ class ScriptEditorController:
             return last_clip.x + last_clip.duration
         else:
             return 0  # Start at the beginning if no previous clips
-
-        
+ 
     def get_audio_duration(self, file_path):
         return self.timeline_controller.get_clip_duration(file_path)
 
@@ -319,7 +318,7 @@ class ScriptEditorController:
         
         return analysis.get('voice_characteristics', {}).get(speaker, {})
 
-    def get_suitable_voice(self, voice_char):
+    def get_suitable_voice(self, speaker, voice_char):
         # Get available voices from ElevenLabs API
         available_voices = self.audio_controller.speech_service.get_available_voices()
 
@@ -328,22 +327,28 @@ class ScriptEditorController:
         accent = voice_char.get('Accent', '').lower()
         description = voice_char.get('Voice Description', '').lower()
 
+        logging.info(f"Searching voice for {speaker}: gender={gender}, age={age}, accent={accent}, description={description}")
+
         # Filter voices based on characteristics
         matching_voices = [
             voice for voice in available_voices
-            if gender in voice['gender'].lower()
+            if gender == voice['gender'].lower()
             and age in voice['age'].lower()
             and (accent == 'none' or accent in voice['accent'].lower())
         ]
 
+        logging.info(f"Found {len(matching_voices)} matching voices for {speaker}")
+
         # Try to find a voice with matching description
         for voice in matching_voices:
             if description in voice['descriptive'].lower():
+                logging.info(f"Selected voice for {speaker}: {voice['name']} (matches description)")
                 return voice['name'], voice['voice_id']
 
         # If no matching description, choose a random voice with correct attributes
         if matching_voices:
             chosen_voice = random.choice(matching_voices)
+            logging.info(f"Selected random voice for {speaker}: {chosen_voice['name']} (from {len(matching_voices)} options)")
             return chosen_voice['name'], chosen_voice['voice_id']
 
         # If no fitting voice at all, use default voices
@@ -351,7 +356,9 @@ class ScriptEditorController:
             'male': ('George', 'jsCqWAovK2LkecY7zXl4'),
             'female': ('Matilda', 'XrExE9yKIg1WjnnlVkGX')
         }
-        return default_voices.get(gender, default_voices['male'])
+        default_voice = default_voices.get(gender, default_voices['male'])
+        logging.warning(f"No matching voice found for {speaker}. Using default {gender} voice: {default_voice[0]}")
+        return default_voice
 
     def get_latest_analysis_file(self):
         scripts_dir = self.project_model.get_scripts_dir()
