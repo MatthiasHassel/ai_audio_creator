@@ -131,6 +131,8 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
         file_menu.add_command(label="Open Project", command=self.open_project)
         file_menu.add_command(label="Save Project", command=self.save_project)
         file_menu.add_separator()
+        file_menu.add_command(label="Edit/Delete Project", command=self.edit_delete_project)
+        file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.quit)
 
         edit_menu = tk.Menu(self.menu, tearoff=0)
@@ -190,3 +192,10 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
 
     def ask_string(self, title, prompt):
         return simpledialog.askstring(title, prompt, parent=self)
+    
+    def edit_delete_project(self):
+        if self.edit_delete_project_callback:
+            self.edit_delete_project_callback()
+
+    def set_edit_delete_project_callback(self, callback):
+        self.edit_delete_project_callback = callback

@@ -2,6 +2,7 @@ from controllers.audio_controller import AudioController
 from controllers.script_editor_controller import ScriptEditorController
 from controllers.timeline_controller import TimelineController
 from tkinter import filedialog, simpledialog, messagebox
+import tkinter as tk
 import os
 import logging
 
@@ -51,6 +52,7 @@ class MainController:
         self.view.set_open_project_callback(self.open_project)
         self.view.set_save_project_callback(self.save_project)
         self.view.set_import_audio_callback(self.import_audio)
+        self.view.set_edit_delete_project_callback(self.edit_delete_project)
         
         # Set up the connection between Timeline and Audio Creator
         self.timeline_controller.set_toggle_audio_creator_command(self.view.toggle_visibility)
@@ -234,3 +236,73 @@ class MainController:
             else:  # No
                 self.timeline_controller.discard_unsaved_changes()
         self.view.quit()
+
+    def edit_delete_project(self):
+        if not self.project_model.current_project:
+            messagebox.showerror("Error", "No project is currently open.")
+            return
+
+        choice = self.show_project_options_dialog()
+        
+        if choice == "Rename Project":
+            self.rename_project()
+        elif choice == "Delete Project":
+            self.delete_project()
+
+    def show_project_options_dialog(self):
+        dialog = tk.Toplevel(self.view)
+        dialog.title("Edit/Delete Project")
+        dialog.geometry("300x150")
+        dialog.resizable(False, False)
+
+        tk.Label(dialog, text="What would you like to do with the current project?").pack(pady=10)
+
+        choice = tk.StringVar()
+
+        def make_choice(option):
+            choice.set(option)
+            dialog.destroy()
+
+        tk.Button(dialog, text="Rename Project", command=lambda: make_choice("Rename Project")).pack(fill=tk.X, padx=20, pady=5)
+        tk.Button(dialog, text="Delete Project", command=lambda: make_choice("Delete Project")).pack(fill=tk.X, padx=20, pady=5)
+        tk.Button(dialog, text="Cancel", command=dialog.destroy).pack(fill=tk.X, padx=20, pady=5)
+
+        self.view.wait_window(dialog)
+        return choice.get()
+
+    def rename_project(self):
+        current_name = self.project_model.current_project
+        new_name = simpledialog.askstring("Rename Project", 
+                                          f"Enter new name for project '{current_name}':",
+                                          parent=self.view,
+                                          initialvalue=current_name)
+        if new_name and new_name != current_name:
+            try:
+                self.project_model.rename_project(new_name)
+                self.view.update_current_project(new_name)
+                if self.timeline_controller:
+                    self.timeline_controller.on_project_change()
+                messagebox.showinfo("Success", f"Project renamed to '{new_name}'.")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to rename project: {str(e)}")
+
+    def delete_project(self):
+        current_name = self.project_model.current_project
+        confirm = messagebox.askyesno("Confirm Deletion", 
+                                      f"Are you sure you want to delete the project '{current_name}'?\n"
+                                      "This action cannot be undone.",
+                                      icon='warning')
+        if confirm:
+            try:
+                self.project_model.delete_project()
+                messagebox.showinfo("Success", f"Project '{current_name}' has been deleted.")
+                
+                # Reset to default project
+                self.project_model.ensure_default_project()
+                self.update_current_project(self.project_model.current_project)
+                self.update_output_directories()
+                if self.timeline_controller:
+                    self.timeline_controller.on_project_change()
+                self.load_last_opened_script()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to delete project: {str(e)}")

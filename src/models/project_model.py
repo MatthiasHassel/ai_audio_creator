@@ -214,3 +214,30 @@ class ProjectModel:
         if not self.current_project:
             raise ValueError("No project is currently active")
         return os.path.join(self.get_project_dir(), "audio_files")
+    
+    def rename_project(self, new_name):
+        if not self.current_project:
+            raise ValueError("No project is currently active")
+        
+        old_path = self.get_project_dir()
+        new_path = os.path.join(self.base_projects_dir, new_name)
+        
+        if os.path.exists(new_path):
+            raise ValueError("A project with this name already exists")
+        
+        os.rename(old_path, new_path)
+        self.current_project = new_name
+        self.metadata["name"] = new_name
+        self.save_project_metadata()
+
+    def delete_project(self):
+        if not self.current_project:
+            raise ValueError("No project is currently active")
+        
+        project_path = self.get_project_dir()
+        shutil.rmtree(project_path)
+        self.current_project = None
+        self.metadata = {}
+        self.timeline_model.clear_tracks()
+        self.saved_audio_files.clear()
+        self.new_audio_files.clear()
