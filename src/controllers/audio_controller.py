@@ -40,6 +40,7 @@ class AudioController:
         self.view.set_add_to_timeline_command(self.add_audio_to_timeline)
         self.view.set_file_select_command(self.on_audio_file_select)
         self.view.set_visualizer_click_command(self.seek_audio)
+        self.view.audio_visualizer.set_delete_callback(self.delete_audio_file) 
 
     def update_output_directories(self, music_dir, sfx_dir, speech_dir):
         self.music_service.update_output_directory(music_dir)
@@ -119,31 +120,6 @@ class AudioController:
             if synchronous:
                 self.view.generate_button.configure(state="normal")
                 self.view.hide_progress_bar()
-
-    # def _process_synchronous(self, service_method, args):
-    #     try:
-    #         result = service_method(*args)
-    #         if result:
-    #             self.handle_successful_generation(result)
-    #             return result
-    #         else:
-    #             self.view.update_output("Error: An error occurred during audio generation.")
-    #             return None
-    #     finally:
-    #         self.view.generate_button.configure(state="normal")
-    #         self.view.hide_progress_bar()
-
-    # def _process_asynchronous(self, service_method, args):
-    #     def process_thread():
-    #         result = service_method(*args)
-    #         if result:
-    #             self.view.after(0, lambda: self.handle_successful_generation(result))
-    #         else:
-    #             self.view.after(0, lambda: self.view.update_output("Error: An error occurred during audio generation."))
-    #         self.view.after(0, lambda: self.view.generate_button.configure(state="normal"))
-    #         self.view.after(0, self.view.hide_progress_bar)
-
-    #     threading.Thread(target=process_thread, daemon=True).start()
 
     def process_speech_request(self, text_prompt=None, voice_id=None, synchronous=False):
         if text_prompt is None:
@@ -274,3 +250,30 @@ class AudioController:
 
     def quit(self):
         self.model.quit()
+
+    def delete_audio_file(self, file_path):
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                logging.info(f"Deleted audio file: {file_path}")
+                
+                # Clear the audio visualizer
+                self.view.audio_visualizer.clear()
+                
+                # Clear the current audio file
+                self.current_audio_file = None
+                
+                # Refresh the audio file selector
+                current_module = self.view.current_module.get().lower()
+                self.view.audio_file_selector.refresh_files(current_module)
+                
+                # Update the view
+                self.view.update_status(f"Deleted audio file: {os.path.basename(file_path)}")
+                self.view.update_button_states(False, False)
+                self.view.add_to_timeline_button.configure(state="disabled")
+            else:
+                logging.warning(f"File not found: {file_path}")
+                self.view.update_status("Error: File not found")
+        except Exception as e:
+            logging.error(f"Error deleting file {file_path}: {str(e)}")
+            self.view.update_status(f"Error deleting file: {str(e)}")

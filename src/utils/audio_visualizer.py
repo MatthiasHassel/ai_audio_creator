@@ -16,8 +16,18 @@ class AudioVisualizer(tk.Frame):
         self.playhead_line = None
         self.waveform_image = None
         self.audio_duration = 0
+        self.current_audio_file = None
+        self.delete_callback = None  # Initialize delete_callback
+        
+        # Bind right-click event to the canvas
+        self.canvas.bind("<Button-2>", self.show_context_menu)
+
+        # Create context menu
+        self.context_menu = tk.Menu(self, tearoff=0)
+        self.context_menu.add_command(label="Delete", command=self.delete_audio)
 
     def update_waveform(self, audio_file):
+        self.current_audio_file = audio_file
         try:
             width = self.canvas.winfo_width()
             height = self.canvas.winfo_height()
@@ -85,3 +95,14 @@ class AudioVisualizer(tk.Frame):
                 time = fraction * self.audio_duration
                 callback(time)
         self.canvas.bind("<Button-1>", on_click)
+    
+    def show_context_menu(self, event):
+        if self.current_audio_file:
+            self.context_menu.tk_popup(event.x_root, event.y_root)
+
+    def delete_audio(self):
+        if self.delete_callback:
+            self.delete_callback(self.current_audio_file)
+
+    def set_delete_callback(self, callback):
+        self.delete_callback = callback
