@@ -15,6 +15,8 @@ class KeyboardShortcuts:
         self.timeline_view.bind("<Up>", self.select_track_up)
         self.timeline_view.bind("<Down>", self.select_track_down)
         self.timeline_view.bind("n", self.add_new_track)
+        self.timeline_view.bind("<Command-z>", self.undo)
+        self.timeline_view.bind("<Command-Shift-Z>", self.redo)
 
     def save_project(self, event):
         if self.timeline_view.controller:
@@ -58,3 +60,11 @@ class KeyboardShortcuts:
     def add_new_track(self, event):
         if self.timeline_view.controller:
             self.timeline_view.controller.add_track()
+
+    def undo(self, event):
+        if self.timeline_view.controller:
+            self.timeline_view.controller.undo_action()
+
+    def redo(self, event):
+        if self.timeline_view.controller:
+            self.timeline_view.controller.redo_action()

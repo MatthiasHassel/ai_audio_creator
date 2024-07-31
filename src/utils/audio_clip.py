@@ -8,12 +8,13 @@ class AudioClip:
         self.x = x
         self.duration = 0
         self.audio = None
-        self.index = index  # New attribute
+        self.index = index
 
         try:
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"Audio file not found: {file_path}")
 
+            # Use pydub to load both MP3 and WAV files
             self.audio = AudioSegment.from_file(file_path)
             self.duration = len(self.audio) / 1000.0  # Duration in seconds
 

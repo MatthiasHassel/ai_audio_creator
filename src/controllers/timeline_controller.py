@@ -15,6 +15,7 @@ class TimelineController:
         self.update_interval = 50  # milliseconds
         self.unsaved_changes = False
         self.imported_audio_files = set()
+        self.max_playhead_position = 1800  # Set a maximum playhead position in sec (e.g., 30m -> 1800s)
 
     def show(self):
         if self.view is None or not self.view.winfo_exists():
@@ -264,34 +265,26 @@ class TimelineController:
 
     def play_timeline(self):
         active_tracks = self.get_active_tracks()
+        initial_position = self.timeline_model.get_playhead_position()
         self.timeline_model.play_timeline(active_tracks)
         if self.view:
             self.view.play_timeline()
-        self._schedule_playhead_update()
-        logging.info("Timeline playback initiated from controller")
+            # Immediately update the playhead position to ensure the view is correct
+            self.view.update_playhead_position(initial_position)
+        logging.info(f"Timeline playback initiated from controller. Initial position: {initial_position}")
 
     def stop_timeline(self):
         self.timeline_model.stop_timeline()
         if self.view:
             self.view.stop_timeline()
-        if hasattr(self, '_update_id'):
-            self.master.after_cancel(self._update_id)
         logging.info("Timeline playback stopped from controller")
 
-    def _schedule_playhead_update(self):
-        self._update_playhead()
-        if self.timeline_model.is_playing:
-            self._update_id = self.master.after(self.update_interval, self._schedule_playhead_update)
-
-    def _update_playhead(self):
-        position = self.timeline_model.get_playhead_position()
-        if self.view:
-            self.view.update_playhead_position(position)
-
     def set_playhead_position(self, position):
+        position = min(max(0, position), self.max_playhead_position)
         self.timeline_model.set_playhead_position(position)
         if self.view:
             self.view.update_playhead_position(position)
+        logging.info(f"Playhead position set to {position}")
 
     def restart_timeline(self):
         self.stop_timeline()
@@ -300,7 +293,8 @@ class TimelineController:
             self.view.restart_button.configure(state="normal")
 
     def get_playhead_position(self):
-        return self.timeline_model.get_playhead_position()
+        position = self.timeline_model.get_playhead_position()
+        return min(position, self.max_playhead_position)
     
     def clear_timeline(self):
         if self.view:
@@ -412,3 +406,13 @@ class TimelineController:
                 last_clip = max(track['clips'], key=lambda clip: clip.x + clip.duration)
                 return last_clip.x + last_clip.duration
         return 0  # Return 0 if the track is empty or doesn't exist
+    
+    def undo_action(self):
+        self.timeline_model.undo()
+        self.load_timeline_data()
+        self.update_status("Undo successful")
+
+    def redo_action(self):
+        self.timeline_model.redo()
+        self.load_timeline_data()
+        self.update_status("Redo successful")

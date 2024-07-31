@@ -78,6 +78,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.timeline_canvas = None
         self.track_label_canvas = None
         self.timeline_duration = 300  # Default timeline duration in seconds
+        self.max_timeline_duration = 1800  # Set a maximum timeline duration in sec (e.g. 30min -> 1800s )
     
     def setup_scrolling(self):
         self.timeline_canvas.configure(xscrollcommand=self.x_scrollbar.set, 
@@ -211,16 +212,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
         else:
             return f"{minutes:02d}:{seconds:02d}"
- 
-    def update_timeline_duration(self):
-        max_duration = 0
-        for track in self.tracks:
-            for clip in track['clips']:
-                clip_end = clip.x + clip.duration
-                if clip_end > max_duration:
-                    max_duration = clip_end
-        self.timeline_duration = max(300, max_duration + 60)  # Add 60 seconds buffer
-        self.update_scrollregion()
     
     def update_grid_and_topbar(self):
         self.redraw_timeline()
@@ -356,6 +347,8 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
     def update_scrollregion(self):
         total_height = max(len(self.tracks) * self.track_height, self.timeline_canvas.winfo_height())
         self.timeline_width = max(self.timeline_canvas.winfo_width(), self.timeline_duration / self.seconds_per_pixel)
+        
+        logging.info(f"Updating scroll region. Timeline width: {self.timeline_width}, Timeline duration: {self.timeline_duration}")
         
         self.timeline_canvas.configure(scrollregion=(0, 0, self.timeline_width, total_height))
         self.topbar.configure(scrollregion=(0, 0, self.timeline_width, self.topbar_height))
@@ -548,12 +541,16 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             self.stop_button.configure(state="normal")
             self.restart_button.configure(state="normal")
             logging.info("Timeline playback started in view")
+            initial_position = self.controller.get_playhead_position()
+            self.update_playhead_position(initial_position)
 
     def stop_timeline(self):
         self.is_playing = False
         self.play_button.configure(state="normal")
         self.stop_button.configure(state="disabled")
         self.restart_button.configure(state="normal")
+        # Cancel any pending playhead updates
+        self.after_cancel(self.after(0, lambda: None))
 
     def restart_timeline(self):
         self.stop_timeline()
@@ -563,16 +560,10 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.draw_playhead(0)
         self.stop_button.configure(state="normal")
 
-    def update_playhead(self):
-        if self.is_playing:
-            current_time = time.time() - self.start_time
-            self.playhead_position = current_time
-            self.draw_playhead(self.playhead_position / self.seconds_per_pixel)
-            self.after(50, self.update_playhead)  # Update every 50ms
-
     def update_playhead_position(self, position):
-        self.playhead_position = position
-        x = position / self.seconds_per_pixel
+        logging.info(f"Updating playhead position to {position}")
+        self.playhead_position = min(position, self.timeline_duration)  # Ensure playhead doesn't go beyond timeline
+        x = self.playhead_position / self.seconds_per_pixel
         self.draw_playhead(x)
         
         # Check if playhead is near the edge of the view
@@ -590,11 +581,25 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             self.topbar.xview_moveto(new_start / self.timeline_width)
             self.update_grid_and_topbar()
         
-        # Extend timeline if nearing the end
-        if position > self.timeline_duration - 60:  # Extend when within 60 seconds of the end
-            self.timeline_duration += 300  # Add 5 minutes
+        # Extend timeline if nearing the end, but respect the maximum duration
+        if position > self.timeline_duration - 60 and self.timeline_duration < self.max_timeline_duration:
+            self.timeline_duration = min(self.timeline_duration + 300, self.max_timeline_duration)
             self.update_scrollregion()
             self.update_grid_and_topbar()
+        
+        # Continue updating if playing
+        if self.is_playing:
+            self.after(50, lambda: self.update_playhead_position(self.controller.get_playhead_position()))
+
+    def update_timeline_duration(self):
+        max_duration = 0
+        for track in self.tracks:
+            for clip in track['clips']:
+                clip_end = clip.x + clip.duration
+                if clip_end > max_duration:
+                    max_duration = clip_end
+        self.timeline_duration = min(max(300, max_duration + 60), self.max_timeline_duration)
+        self.update_scrollregion()
 
     def draw_playhead(self, x):
         if self.timeline_canvas:
@@ -870,3 +875,13 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
     def show_error(self, title, message):
         messagebox.showerror(title, message)
     
+    def select_multiple_clips(self, event):
+        x = self.timeline_canvas.canvasx(event.x)
+        y = self.timeline_canvas.canvasy(event.y)
+        clicked_clip = self.find_clip_at_position(x, y)
+        if clicked_clip:
+            if clicked_clip not in self.selected_clips:
+                self.selected_clips.append(clicked_clip)
+            else:
+                self.selected_clips.remove(clicked_clip)
+            self.redraw_timeline()
