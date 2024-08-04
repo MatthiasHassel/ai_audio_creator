@@ -3,6 +3,7 @@ import pyaudio
 import numpy as np
 import time
 import logging
+import threading
 from pydub import AudioSegment
 from utils.audio_clip import AudioClip
 from utils.audio_buffer_manager import AudioBufferManager
@@ -17,6 +18,7 @@ class TimelineModel:
         self.stream = None
         self.active_clips = []
         self.audio_cache = {}
+        self.cache_lock = threading.Lock()
         self.sample_rate = 44100
         self.target_sample_rate = 44100
         self.channels = 2
@@ -35,15 +37,23 @@ class TimelineModel:
             self.buffer_manager.is_playing = True
             self.buffer_manager.reset()
             self.buffer_manager.playhead_position = self.playhead_position
-            self.start_time = time.time() - self.playhead_position  # Set the correct start time
+
+            # Ensure all active clips are cached before starting playback
+            for track in active_tracks:
+                for clip in track['clips']:
+                    if clip.file_path not in self.audio_cache:
+                        self._cache_audio_file(clip.file_path)
+
+            self.start_time = time.time() - self.playhead_position
             self.stream = self.p.open(format=pyaudio.paFloat32,
-                                    channels=self.channels,
-                                    rate=self.target_sample_rate,
-                                    output=True,
-                                    frames_per_buffer=2048,
-                                    stream_callback=self.buffer_manager.get_audio_data)
+                                      channels=self.channels,
+                                      rate=self.target_sample_rate,
+                                      output=True,
+                                      frames_per_buffer=2048,
+                                      stream_callback=self.buffer_manager.get_audio_data)
             self.stream.start_stream()
             logging.info(f"Timeline model: playback started at position {self.playhead_position}")
+
 
     def stop_timeline(self):
         if self.is_playing:
@@ -54,31 +64,39 @@ class TimelineModel:
                 self.stream.close()
             self.stream = None
             logging.info("Timeline model: playback stopped")
-    
+
+    def preload_audio_files(self):
+        threading.Thread(target=self._preload_audio_files_thread, daemon=True).start()
+
+    def _preload_audio_files_thread(self):
+        for track in self.tracks:
+            for clip in track['clips']:
+                self._cache_audio_file(clip.file_path)
+
+    def _cache_audio_file(self, file_path):
+        if file_path not in self.audio_cache:
+            try:
+                audio = AudioSegment.from_file(file_path)
+                resampled_audio = audio.set_frame_rate(self.target_sample_rate).set_channels(self.channels)
+                samples = np.array(resampled_audio.get_array_of_samples(), dtype=np.float32)
+                samples = samples.reshape((-1, 2)) if resampled_audio.channels == 2 else np.column_stack((samples, samples))
+                
+                with self.cache_lock:
+                    self.audio_cache[file_path] = {
+                        'samples': samples / 32768.0,
+                        'duration': len(resampled_audio) / 1000.0
+                    }
+                logging.info(f"Cached audio file: {file_path}")
+            except Exception as e:
+                logging.error(f"Error caching audio file {file_path}: {str(e)}")
+
     def get_clip_frames(self, clip, start_time, frame_count):
-        if clip.file_path not in self.audio_cache:
-            audio = AudioSegment.from_file(clip.file_path)
+        with self.cache_lock:
+            if clip.file_path not in self.audio_cache:
+                self._cache_audio_file(clip.file_path)
             
-            # Resample if necessary
-            if audio.frame_rate != self.target_sample_rate:
-                resampled_audio = audio.set_frame_rate(self.target_sample_rate)
-            else:
-                resampled_audio = audio
+            cached_data = self.audio_cache[clip.file_path]
 
-            resampled_audio = resampled_audio.set_channels(self.channels)
-            
-            samples = np.array(resampled_audio.get_array_of_samples(), dtype=np.float32)
-            if resampled_audio.channels == 1:
-                samples = np.column_stack((samples, samples))
-            else:
-                samples = samples.reshape((-1, 2))
-            
-            self.audio_cache[clip.file_path] = {
-                'samples': samples / 32768.0,
-                'duration': len(resampled_audio) / 1000.0  # Duration in seconds
-            }
-
-        cached_data = self.audio_cache[clip.file_path]
         start_sample = int(start_time * self.target_sample_rate)
         end_sample = start_sample + frame_count
 

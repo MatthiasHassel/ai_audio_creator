@@ -58,6 +58,7 @@ class TimelineController:
     def load_timeline_data(self):
         tracks = self.project_model.get_timeline_data()
         self.timeline_model.set_tracks(tracks)
+        self.timeline_model.preload_audio_files()  # Add this line
         if self.view:
             self.view.update_tracks(tracks)
             for track_index, track_data in enumerate(tracks):
