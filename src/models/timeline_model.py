@@ -77,18 +77,25 @@ class TimelineModel:
         if file_path not in self.audio_cache:
             try:
                 audio = AudioSegment.from_file(file_path)
-                resampled_audio = audio.set_frame_rate(self.target_sample_rate).set_channels(self.channels)
-                samples = np.array(resampled_audio.get_array_of_samples(), dtype=np.float32)
-                samples = samples.reshape((-1, 2)) if resampled_audio.channels == 2 else np.column_stack((samples, samples))
+                if audio.frame_rate != self.target_sample_rate:
+                    logging.info(f"Converting {file_path} from {audio.frame_rate}Hz to {self.target_sample_rate}Hz")
+                    audio = audio.set_frame_rate(self.target_sample_rate)
+                    audio.export(file_path, format="wav")
+                    audio = AudioSegment.from_file(file_path)  # Reload the converted file
+                
+                samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
+                samples = samples.reshape((-1, 2)) if audio.channels == 2 else np.column_stack((samples, samples))
                 
                 with self.cache_lock:
                     self.audio_cache[file_path] = {
                         'samples': samples / 32768.0,
-                        'duration': len(resampled_audio) / 1000.0
+                        'duration': len(audio) / 1000.0
                     }
                 logging.info(f"Cached audio file: {file_path}")
             except Exception as e:
                 logging.error(f"Error caching audio file {file_path}: {str(e)}")
+
+
 
     def get_clip_frames(self, clip, start_time, frame_count):
         with self.cache_lock:

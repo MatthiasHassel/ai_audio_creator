@@ -4,6 +4,7 @@ import datetime
 import logging
 import shutil
 from models.timeline_model import TimelineModel  
+from pydub import AudioSegment
 
 class ProjectModel:
     def __init__(self, base_projects_dir):
@@ -163,19 +164,33 @@ class ProjectModel:
             raise ValueError("No project is currently active")
         
         if self.is_file_in_output_directory(file_path):
-            # If the file is already in an output directory, don't move it
             return file_path
+        
+        # Load the audio file
+        audio = AudioSegment.from_file(file_path)
+        
+        # Check if the sample rate is either 44.1kHz or 48kHz
+        if audio.frame_rate not in [44100, 48000]:
+            raise ValueError(f"Unsupported sample rate: {audio.frame_rate}Hz. Only 44.1kHz and 48kHz are supported.")
+        
+        audio_files_dir = self.get_audio_files_dir()
+        file_name = os.path.basename(file_path)
+        destination = os.path.join(audio_files_dir, file_name)
+        
+        os.makedirs(audio_files_dir, exist_ok=True)
+        
+        # Resample if necessary
+        if audio.frame_rate == 48000:
+            print(f"Resampling {file_name} from 48kHz to 44.1kHz")
+            audio = audio.set_frame_rate(44100)
+            audio.export(destination, format="wav")
         else:
-            # If it's an external file, import it to the audio_files directory
-            audio_files_dir = self.get_audio_files_dir()
-            file_name = os.path.basename(file_path)
-            destination = os.path.join(audio_files_dir, file_name)
-            
-            os.makedirs(audio_files_dir, exist_ok=True)
+            # If it's already 44.1kHz, just copy the file
             shutil.copy2(file_path, destination)
-            print(f"File copied to: {destination}")  # For debugging
-            self.new_audio_files.add(destination)
-            return destination
+        
+        print(f"File imported to: {destination}")
+        self.new_audio_files.add(destination)
+        return destination
     
     def update_saved_audio_files(self):
         self.saved_audio_files.update(self.new_audio_files)

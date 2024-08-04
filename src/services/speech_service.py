@@ -100,7 +100,7 @@ class SpeechService:
             response = self.client.text_to_speech.convert(
                 voice_id=voice_id,
                 optimize_streaming_latency="0",
-                output_format="mp3_22050_32",
+                output_format="mp3_44100_96",
                 text=text_prompt,
                 model_id="eleven_multilingual_v2",
                 voice_settings=VoiceSettings(

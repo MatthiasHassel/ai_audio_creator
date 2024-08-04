@@ -177,7 +177,7 @@ class MainController:
 
         if file_path:
             try:
-                # Import the audio file
+                # Import and convert the audio file if necessary
                 new_file_path = self.project_model.import_audio_file(file_path)
                 logging.info(f"Audio file imported: {new_file_path}")
                 
@@ -190,6 +190,9 @@ class MainController:
                     self.view.show_error("Error", "Timeline controller is not initialized")
                 
                 self.view.update_status(f"Audio file imported: {os.path.basename(new_file_path)}")
+            except ValueError as e:
+                logging.error(f"Failed to import audio file: {str(e)}")
+                self.view.show_error("Import Error", str(e))
             except Exception as e:
                 logging.error(f"Failed to import audio file: {str(e)}", exc_info=True)
                 self.view.show_error("Import Error", f"Failed to import audio file: {str(e)}")

@@ -14,8 +14,13 @@ class AudioClip:
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"Audio file not found: {file_path}")
 
-            # Use pydub to load both MP3 and WAV files
+            # Use pydub to load the audio file
             self.audio = AudioSegment.from_file(file_path)
+            
+            # Ensure the audio is at 44.1kHz
+            if self.audio.frame_rate != 44100:
+                raise ValueError(f"Audio file {file_path} is not at 44.1kHz. It should have been converted during import.")
+            
             self.duration = len(self.audio) / 1000.0  # Duration in seconds
 
             logging.info(f"AudioClip created: file={file_path}, x={x}, duration={self.duration}, index={index}")
