@@ -197,9 +197,9 @@ class MainController:
                 logging.error(f"Failed to import audio file: {str(e)}", exc_info=True)
                 self.view.show_error("Import Error", f"Failed to import audio file: {str(e)}")
 
-    def add_audio_to_timeline(self, file_path, track_index):
+    def add_audio_to_timeline(self, file_path):
         if self.timeline_controller:
-            self.timeline_controller.add_audio_clip(file_path, track_index)
+            self.timeline_controller.add_audio_clip(file_path)
         else:
             logging.warning("Timeline controller is not available")
     

@@ -236,16 +236,13 @@ class AudioController:
     def add_audio_to_timeline(self):
         selected_file = self.view.audio_file_selector.get_selected_file()
         if selected_file and self.add_to_timeline_callback:
-            current_module = self.view.current_module.get().lower()
-            track_index = {"music": 0, "sfx": 1, "speech": 2}.get(current_module, 0)
-            
             # Use the callback to add the file to new_audio_files
             if self.add_to_new_audio_files_callback:
                 self.add_to_new_audio_files_callback(selected_file)
 
-            # Use the callback to add the clip
-            self.add_to_timeline_callback(selected_file, track_index)
-            self.view.update_status(f"Added audio to {current_module.capitalize()} track")
+            # Use the callback to add the clip to the currently selected track
+            self.add_to_timeline_callback(selected_file)
+            self.view.update_status(f"Added audio to the selected track")
         else:
             self.view.update_status("No audio file selected or timeline not available")
 

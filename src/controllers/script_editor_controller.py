@@ -222,8 +222,7 @@ class ScriptEditorController:
         )
         
         if audio_file:
-            track_name = speaker
-            self.add_clip_to_timeline(audio_file, track_name, index)
+            self.add_clip_to_timeline(audio_file, speaker, index)
 
     def get_default_voice(self, gender):
         default_voices = {
@@ -267,14 +266,10 @@ class ScriptEditorController:
 
     def add_clip_to_timeline(self, file_path, track_name, index):
         if file_path:
-            track_index = self.timeline_controller.get_or_create_track(track_name)
             start_time = self.calculate_global_start_time(index)
             
-            # Create the new clip with the index
-            new_clip = AudioClip(file_path, start_time, index)
-            
             # Add the clip to the timeline
-            self.timeline_controller.add_audio_clip(new_clip, track_index, track_name)
+            self.timeline_controller.add_audio_clip_to_track(file_path, track_name, start_time, index)
         else:
             logging.warning(f"Skipping addition of non-existent audio clip to timeline")
 
