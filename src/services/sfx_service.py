@@ -2,6 +2,8 @@ import os
 import re
 from elevenlabs.client import ElevenLabs
 import logging
+from mutagen.id3 import ID3, TIT2, COMM
+from mutagen.mp3 import MP3
 
 class SFXService:
     def __init__(self, config, status_update_callback):
@@ -43,11 +45,34 @@ class SFXService:
             with open(output_path, "wb") as f:
                 for chunk in result:
                     f.write(chunk)
+            self.add_id3_tag(output_path, text_prompt)
             return output_path
         except Exception as e:
             self.logger.error(f"Error generating sound effect: {str(e)}")
             self.update_status(f"Error generating sound effect: {str(e)}")
             return None
+
+    def add_id3_tag(self, file_path, prompt):
+        try:
+            # Load the file
+            audio = MP3(file_path, ID3=ID3)
+
+            # Add ID3 tag if it doesn't exist
+            if audio.tags is None:
+                audio.add_tags()
+
+            # Set the title
+            audio.tags.add(TIT2(encoding=3, text="Generated Speech"))  # or "Generated SFX" or "Generated Music"
+
+            # Add the prompt as a comment
+            audio.tags.add(COMM(encoding=3, lang='eng', desc='Prompt', text=prompt))
+
+            # Save the changes
+            audio.save()
+
+            self.logger.info(f"Successfully added ID3 tag to {file_path} with prompt: {prompt}")
+        except Exception as e:
+            self.logger.error(f"Failed to add ID3 tag: {str(e)}")
 
     def validate_duration(self, duration: str) -> float:
         """Validate and convert duration input."""

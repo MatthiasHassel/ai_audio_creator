@@ -6,6 +6,8 @@ from elevenlabs import VoiceSettings
 from elevenlabs.client import ElevenLabs
 import logging
 from utils.file_utils import sanitize_filename
+from mutagen.id3 import ID3, TIT2, COMM
+from mutagen.mp3 import MP3
 
 class SpeechService:
     def __init__(self, config, status_update_callback):
@@ -131,11 +133,36 @@ class SpeechService:
                 for chunk in response:
                     if chunk:
                         f.write(chunk)
+
+            # Add ID3 tag with the prompt
+            self.add_id3_tag(save_file_path, text_prompt)
             return save_file_path
         except Exception as e:
             self.logger.error(f"Failed to generate speech: {str(e)}", exc_info=True)
             return None
     
+    def add_id3_tag(self, file_path, prompt):
+        try:
+            # Load the file
+            audio = MP3(file_path, ID3=ID3)
+
+            # Add ID3 tag if it doesn't exist
+            if audio.tags is None:
+                audio.add_tags()
+
+            # Set the title
+            audio.tags.add(TIT2(encoding=3, text="Generated Speech"))  # or "Generated SFX" or "Generated Music"
+
+            # Add the prompt as a comment
+            audio.tags.add(COMM(encoding=3, lang='eng', desc='Prompt', text=prompt))
+
+            # Save the changes
+            audio.save()
+
+            self.logger.info(f"Successfully added ID3 tag to {file_path} with prompt: {prompt}")
+        except Exception as e:
+            self.logger.error(f"Failed to add ID3 tag: {str(e)}")
+
     def process_speech_request(self, text_prompt: str, voice_id: str):
         return self.text_to_speech_file(text_prompt, voice_id)
     

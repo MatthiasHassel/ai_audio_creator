@@ -7,7 +7,7 @@ from services.sfx_service import SFXService
 from services.speech_service import SpeechService
 from tkinter import messagebox
 import logging
-from utils.audio_clip import AudioClip
+from utils.file_utils import read_audio_prompt
 
 class AudioController:
     def __init__(self, model: AudioModel, view, config):
@@ -214,13 +214,21 @@ class AudioController:
         if file_path and os.path.exists(file_path):
             self.model.load_audio(file_path)
             self.view.audio_visualizer.update_waveform(file_path)
-            self.view.update_button_states(False, False)  # Enable play button
+            self.view.update_button_states(False, False)
             self.current_audio_file = file_path
-            self.view.add_to_timeline_button.configure(state="normal")  # Enable add_to_timeline button
+            self.view.add_to_timeline_button.configure(state="normal")
+            
+            # Display the prompt used to generate the audio
+            prompt = read_audio_prompt(file_path)
+            if prompt:
+                self.view.update_output(f"Prompt used: {prompt}")
+            else:
+                self.view.update_output("No prompt information available for this file.")
+            
             logging.info(f"Audio file loaded: {file_path}")
         else:
             logging.warning(f"Invalid file path: {file_path}")
-            self.view.add_to_timeline_button.configure(state="disabled")  # Disable add_to_timeline button
+            self.view.add_to_timeline_button.configure(state="disabled")
 
     def clear_input(self):
         self.view.clear_input()

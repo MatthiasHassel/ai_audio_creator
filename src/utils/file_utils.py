@@ -2,6 +2,7 @@ import os
 import re
 import platform
 import subprocess
+import mutagen
 
 def sanitize_filename(filename):
     """
@@ -33,3 +34,18 @@ def open_file(file_path):
             subprocess.run(["xdg-open", file_path], check=True)
     except Exception as e:
         raise Exception(f"Error opening file: {e}")
+    
+def read_audio_prompt(file_path):
+    try:
+        audio = mutagen.File(file_path, easy=True)
+        if audio and 'comment' in audio:
+            return audio['comment'][0]
+        elif audio:
+            # If 'comment' is not found, try to read the COMM frame directly
+            id3 = mutagen.id3.ID3(file_path)
+            comm_frame = id3.getall('COMM')
+            if comm_frame:
+                return comm_frame[0].text
+    except Exception as e:
+        print(f"Error reading audio prompt: {str(e)}")
+    return None

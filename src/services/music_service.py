@@ -4,6 +4,8 @@ import requests
 import re
 import subprocess
 import logging
+from mutagen.id3 import ID3, TIT2, COMM
+from mutagen.mp3 import MP3
 
 class MusicService:
     def __init__(self, config, status_update_callback):
@@ -148,6 +150,7 @@ class MusicService:
             self.update_status("Audio ready. Downloading...")
             url = data[0]['audio_url']
             if self.download_audio(url, output_filename):
+                self.add_id3_tag(output_filename, text_prompt)
                 return output_filename
             else:
                 raise Exception("Failed to download audio file")
@@ -161,6 +164,27 @@ class MusicService:
             self.logger.info("Music generation process completed.")
             self.update_status("Music generation process completed.")
         
+    def add_id3_tag(self, file_path, prompt):
+        try:
+            # Load the file
+            audio = MP3(file_path, ID3=ID3)
+
+            # Add ID3 tag if it doesn't exist
+            if audio.tags is None:
+                audio.add_tags()
+
+            # Set the title
+            audio.tags.add(TIT2(encoding=3, text="Generated Speech"))  # or "Generated SFX" or "Generated Music"
+
+            # Add the prompt as a comment
+            audio.tags.add(COMM(encoding=3, lang='eng', desc='Prompt', text=prompt))
+
+            # Save the changes
+            audio.save()
+
+            self.logger.info(f"Successfully added ID3 tag to {file_path} with prompt: {prompt}")
+        except Exception as e:
+            self.logger.error(f"Failed to add ID3 tag: {str(e)}")
     def process_music_request(self, text_prompt: str, make_instrumental: bool):
         """Process a music generation request."""
         return self.create_song(text_prompt, make_instrumental)
