@@ -16,6 +16,7 @@ class TimelineController:
         self.unsaved_changes = False
         self.imported_audio_files = set()
         self.max_playhead_position = 1800  # Set a maximum playhead position in sec (e.g., 30m -> 1800s)
+        self.timeline_model.on_playhead_update = self.update_playhead_view
 
     def show(self):
         if self.view is None or not self.view.winfo_exists():
@@ -297,13 +298,10 @@ class TimelineController:
 
     def play_timeline(self):
         active_tracks = self.get_active_tracks()
-        initial_position = self.timeline_model.get_playhead_position()
         self.timeline_model.play_timeline(active_tracks)
         if self.view:
             self.view.play_timeline()
-            # Immediately update the playhead position to ensure the view is correct
-            self.view.update_playhead_position(initial_position)
-        logging.info(f"Timeline playback initiated from controller. Initial position: {initial_position}")
+        logging.info(f"Timeline playback initiated from controller. Initial position: {self.timeline_model.playhead_position}")
 
     def stop_timeline(self):
         self.timeline_model.stop_timeline()
@@ -311,8 +309,11 @@ class TimelineController:
             self.view.stop_timeline()
         logging.info("Timeline playback stopped from controller")
 
+    def update_playhead_view(self, position):
+        if self.view:
+            self.view.update_playhead_position(position)
+            
     def set_playhead_position(self, position):
-        position = min(max(0, position), self.max_playhead_position)
         self.timeline_model.set_playhead_position(position)
         if self.view:
             self.view.update_playhead_position(position)

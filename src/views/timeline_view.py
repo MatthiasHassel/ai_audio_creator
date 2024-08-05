@@ -562,7 +562,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
 
     def update_playhead_position(self, position):
         logging.info(f"Updating playhead position to {position}")
-        self.playhead_position = min(position, self.timeline_duration)  # Ensure playhead doesn't go beyond timeline
+        self.playhead_position = min(position, self.timeline_duration)
         x = self.playhead_position / self.seconds_per_pixel
         self.draw_playhead(x)
         
@@ -581,15 +581,11 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             self.topbar.xview_moveto(new_start / self.timeline_width)
             self.update_grid_and_topbar()
         
-        # Extend timeline if nearing the end, but respect the maximum duration
-        if position > self.timeline_duration - 60 and self.timeline_duration < self.max_timeline_duration:
-            self.timeline_duration = min(self.timeline_duration + 300, self.max_timeline_duration)
+        # Extend timeline if nearing the end
+        if position > self.timeline_duration - 60:
+            self.timeline_duration += 300
             self.update_scrollregion()
             self.update_grid_and_topbar()
-        
-        # Continue updating if playing
-        if self.is_playing:
-            self.after(50, lambda: self.update_playhead_position(self.controller.get_playhead_position()))
 
     def update_timeline_duration(self):
         max_duration = 0
@@ -606,12 +602,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             if self.playhead_line:
                 self.timeline_canvas.delete(self.playhead_line)
             height = self.timeline_canvas.winfo_height()
-            if height > 0:
-                self.playhead_line = self.timeline_canvas.create_line(x, 0, x, height, fill="red", width=2)
-            else:
-                self.after(100, lambda: self.draw_playhead(x))
-        else:
-            self.after(100, lambda: self.draw_playhead(x))
+            self.playhead_line = self.timeline_canvas.create_line(x, 0, x, height, fill="red", width=2)
 
     def on_canvas_click(self, event):
         x = self.timeline_canvas.canvasx(event.x)

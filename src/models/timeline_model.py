@@ -4,6 +4,7 @@ import numpy as np
 import time
 import logging
 import threading
+import sounddevice as sd
 from pydub import AudioSegment
 from utils.audio_clip import AudioClip
 from utils.audio_buffer_manager import AudioBufferManager
@@ -16,6 +17,7 @@ class TimelineModel:
         self.start_time = 0
         self.p = pyaudio.PyAudio()
         self.stream = None
+        self.audio_stream = None
         self.active_clips = []
         self.audio_cache = {}
         self.cache_lock = threading.Lock()
@@ -23,6 +25,7 @@ class TimelineModel:
         self.target_sample_rate = 44100
         self.channels = 2
         self.max_playhead_position = 1800  # Set a maximum playhead position in sec (e.g., 30min -> 1800s)
+        self.quantization_interval = 1 / 44100  # Quantize to sample rate
 
 
         self.undo_stack = []
@@ -37,33 +40,31 @@ class TimelineModel:
             self.buffer_manager.is_playing = True
             self.buffer_manager.reset()
             self.buffer_manager.playhead_position = self.playhead_position
-
-            # Ensure all active clips are cached before starting playback
-            for track in active_tracks:
-                for clip in track['clips']:
-                    if clip.file_path not in self.audio_cache:
-                        self._cache_audio_file(clip.file_path)
-
             self.start_time = time.time() - self.playhead_position
-            self.stream = self.p.open(format=pyaudio.paFloat32,
-                                      channels=self.channels,
-                                      rate=self.target_sample_rate,
-                                      output=True,
-                                      frames_per_buffer=2048,
-                                      stream_callback=self.buffer_manager.get_audio_data)
-            self.stream.start_stream()
-            logging.info(f"Timeline model: playback started at position {self.playhead_position}")
 
+            def audio_callback(outdata, frames, time, status):
+                if status:
+                    print(status)
+                data, _ = self.buffer_manager.get_audio_data(None, frames, None, None)
+                outdata[:] = data
+                self.update_playhead()
+
+            self.audio_stream = sd.OutputStream(
+                samplerate=self.sample_rate,
+                channels=2,
+                callback=audio_callback,
+                blocksize=2048
+            )
+            self.audio_stream.start()
 
     def stop_timeline(self):
         if self.is_playing:
             self.is_playing = False
             self.buffer_manager.is_playing = False
-            if self.stream:
-                self.stream.stop_stream()
-                self.stream.close()
-            self.stream = None
-            logging.info("Timeline model: playback stopped")
+            if self.audio_stream:
+                self.audio_stream.stop()
+                self.audio_stream.close()
+                self.audio_stream = None
 
     def preload_audio_files(self):
         threading.Thread(target=self._preload_audio_files_thread, daemon=True).start()
@@ -95,24 +96,21 @@ class TimelineModel:
             except Exception as e:
                 logging.error(f"Error caching audio file {file_path}: {str(e)}")
 
-
-
-    def get_clip_frames(self, clip, start_time, frame_count):
+    def get_clip_frames(self, clip, start_time, duration):
         with self.cache_lock:
             if clip.file_path not in self.audio_cache:
                 self._cache_audio_file(clip.file_path)
             
             cached_data = self.audio_cache[clip.file_path]
 
-        start_sample = int(start_time * self.target_sample_rate)
-        end_sample = start_sample + frame_count
+        start_sample = int(round(start_time * self.sample_rate))
+        end_sample = int(round((start_time + duration) * self.sample_rate))
 
         if end_sample > len(cached_data['samples']):
-            # Pad with zeros if we're requesting samples beyond the clip length
-            samples = np.zeros((frame_count, 2), dtype=np.float32)
+            samples = np.zeros((end_sample - start_sample, 2), dtype=np.float32)
             available_samples = len(cached_data['samples']) - start_sample
             if available_samples > 0:
-                samples[:available_samples] = cached_data['samples'][start_sample:]
+                samples[:available_samples] = cached_data['samples'][start_sample:start_sample + available_samples]
         else:
             samples = cached_data['samples'][start_sample:end_sample]
 
@@ -196,10 +194,17 @@ class TimelineModel:
 
     def update_playhead(self):
         if self.is_playing:
-            current_time = time.time() - self.start_time
-            self.playhead_position = current_time
-            self.update_active_sounds()
-            self.play_new_clips(self.get_active_tracks())
+            self.playhead_position = time.time() - self.start_time
+            # Notify the view to update the playhead position
+            if hasattr(self, 'on_playhead_update'):
+                self.on_playhead_update(self.playhead_position)
+
+    def quantize_position(self, position):
+        return round(position / self.quantization_interval) * self.quantization_interval
+
+    def get_playhead_position(self):
+        if self.is_playing:
+            return time.time() - self.start_time
         return self.playhead_position
 
     def set_playhead_position(self, position):
@@ -207,15 +212,6 @@ class TimelineModel:
         self.buffer_manager.update_playhead(self.playhead_position)
         if self.is_playing:
             self.start_time = time.time() - self.playhead_position
-            self.stop_timeline()
-            active_tracks = self.get_active_tracks()
-            self.play_timeline(active_tracks)
-
-    def get_playhead_position(self):
-        if self.is_playing:
-            current_position = time.time() - self.start_time
-            return min(current_position, self.max_playhead_position)
-        return self.playhead_position
             
     def get_track_index_for_clip(self, clip):
         for i, track in enumerate(self.tracks):
