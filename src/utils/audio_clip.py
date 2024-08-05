@@ -1,6 +1,7 @@
 from pydub import AudioSegment
 import logging
 import os
+from utils.file_utils import read_audio_prompt
 
 class AudioClip:
     def __init__(self, file_path, x, index=None):
@@ -9,6 +10,8 @@ class AudioClip:
         self.duration = 0
         self.audio = None
         self.index = index
+        self.prompt = read_audio_prompt(file_path)
+        self.title = os.path.basename(file_path)
 
         try:
             if not os.path.exists(file_path):
@@ -33,7 +36,9 @@ class AudioClip:
             return self.audio.get_array_of_samples()
         return []
 
-    # Placeholder for actual playback implementation
-    def play(self, start_time=0):
-        logging.info(f"Playing {self.file_path} from {start_time}")
-        # Implement actual playback here
+    def get_display_text(self):
+        if self.prompt:
+            # Ensure prompt is a string and remove curly braces
+            prompt_text = self.prompt if isinstance(self.prompt, str) else str(self.prompt)
+            return prompt_text.strip("{}").strip()
+        return self.title

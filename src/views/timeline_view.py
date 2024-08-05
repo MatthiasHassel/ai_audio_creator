@@ -4,7 +4,7 @@ import customtkinter as ctk
 import tkinter as tk
 import logging
 import os 
-import time
+import textwrap
 from tkinter import messagebox
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from utils.audio_clip import AudioClip
@@ -267,7 +267,10 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
     def redraw_timeline(self):
         self.timeline_canvas.delete("all")
         self.draw_grid()
-        self.draw_clips()
+        for track_index, track in enumerate(self.tracks):
+            y = track_index * self.track_height - self.scroll_offset
+            for clip in track['clips']:
+                self.draw_clip(clip, y)
         self.draw_playhead(self.playhead_position / self.seconds_per_pixel)
 
     def update_status(self, message):
@@ -752,11 +755,33 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         x = clip.x / self.seconds_per_pixel
         width = clip.duration / self.seconds_per_pixel
         fill_color = "blue" if clip == self.selected_clip else "lightblue"
+        
         self.timeline_canvas.create_rectangle(x, y, x + width, y + self.track_height, 
                                               fill=fill_color, outline="blue", tags="clip")
-        self.timeline_canvas.create_text(x + 5, y + 5, text=f"{os.path.basename(clip.file_path)} (Index: {clip.index})", 
-                                         anchor="nw", tags="clip")
         
+        # Get display text (prompt or title)
+        display_text = clip.get_display_text()
+        
+        # Calculate available width for text
+        available_width = width - 10  # 5 pixels padding on each side
+        
+        # Estimate number of characters that can fit
+        font = self.timeline_canvas.itemcget(self.timeline_canvas.create_text(0, 0, text=""), "font")
+        char_width = self.timeline_canvas.bbox(self.timeline_canvas.create_text(0, 0, text="W", font=font))[2]
+        max_chars = int(available_width / char_width)
+        
+        # Only display text if we can fit at least 4 characters (3 for "..." and 1 for content)
+        if max_chars >= 4:
+            # Truncate and add ellipsis if necessary
+            if len(display_text) > max_chars:
+                display_text = display_text[:max_chars-3] + "..."
+            
+            self.timeline_canvas.create_text(x + 5, y + self.track_height/2, 
+                                             text=display_text, 
+                                             anchor="w",  # Left-align the text
+                                             tags="clip", 
+                                             width=available_width)  # This 'width' is for text wrapping
+            
     def on_drag(self, event):
         if self.selected_clip:
             x = self.timeline_canvas.canvasx(event.x)

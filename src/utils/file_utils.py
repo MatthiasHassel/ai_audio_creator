@@ -2,7 +2,8 @@ import os
 import re
 import platform
 import subprocess
-import mutagen
+from mutagen.mp3 import MP3
+from mutagen.id3 import ID3
 
 def sanitize_filename(filename):
     """
@@ -37,15 +38,13 @@ def open_file(file_path):
     
 def read_audio_prompt(file_path):
     try:
-        audio = mutagen.File(file_path, easy=True)
-        if audio and 'comment' in audio:
-            return audio['comment'][0]
-        elif audio:
-            # If 'comment' is not found, try to read the COMM frame directly
-            id3 = mutagen.id3.ID3(file_path)
-            comm_frame = id3.getall('COMM')
-            if comm_frame:
-                return comm_frame[0].text
+        audio = MP3(file_path, ID3=ID3)
+        if audio.tags:
+            comments = audio.tags.getall('COMM')
+            for comment in comments:
+                if comment.desc == 'Prompt':
+                    # Return the first element if it's a list, otherwise return the whole text
+                    return comment.text[0] if isinstance(comment.text, list) else comment.text
     except Exception as e:
         print(f"Error reading audio prompt: {str(e)}")
     return None

@@ -5,6 +5,7 @@ from tkinterdnd2 import DND_FILES
 import logging 
 from tkinter import messagebox
 from pydub import AudioSegment
+from utils.file_utils import read_audio_prompt
 
 class TimelineController:
     def __init__(self, master, timeline_model, project_model):
@@ -59,11 +60,16 @@ class TimelineController:
     def load_timeline_data(self):
         tracks = self.project_model.get_timeline_data()
         self.timeline_model.set_tracks(tracks)
-        self.timeline_model.preload_audio_files()  # Add this line
+        self.timeline_model.preload_audio_files()
         if self.view:
             self.view.update_tracks(tracks)
             for track_index, track_data in enumerate(tracks):
                 for clip in track_data['clips']:
+                    # Ensure each clip has the prompt information and title
+                    if not hasattr(clip, 'prompt'):
+                        clip.prompt = read_audio_prompt(clip.file_path)
+                    if not hasattr(clip, 'title'):
+                        clip.title = os.path.basename(clip.file_path)
                     self.view.draw_clip(clip, track_index)
             self.view.redraw_timeline()
         self.project_model.clear_timeline_clips()
