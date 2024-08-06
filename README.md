@@ -11,6 +11,7 @@ AI Audio Creator is a Python application that combines AI-generated audio conten
    - [Timeline](#timeline)
 4. [Project Management](#project-management)
 5. [Limitations and Future Improvements](#limitations-and-future-improvements)
+6. [Attributions](#attributions)
 
 ## Features
 
@@ -49,10 +50,12 @@ AI Audio Creator is a Python application that combines AI-generated audio conten
    OPENAI_API_KEY=your_openai_api_key
    ```
 
-6. Add your Suno-Cookie and Session ID. Instructions for this: https://github.com/gcui-art/suno-api/blob/main/public/get-cookie-demo.gif
+6. Add your Suno-Cookie and Session ID.
+   Instructions for this: https://github.com/gcui-art/suno-api/blob/main/public/get-cookie-demo.gif
 
-   Rename the .env_example file to just .env
-   Make a copy of the .env file and put it in the suno_api directory   #temporary workaround. Should not be necessary in future versions
+7. Rename the .env_example file to just .env and place a copy of it in the suno_api directory.
+   (Temporary workaround. Should not be necessary in future versions)
+
    Install Suno API:
    ```
    cd /<your_project_directory_here>/suno_api
@@ -65,19 +68,21 @@ AI Audio Creator is a Python application that combines AI-generated audio conten
    ```
    Visit http://localhost:3000/api/get_limit
    If the following result is returned:
+   
    {
      "credits_left": 50,
      "period": "day",
      "monthly_limit": 50,
      "monthly_usage": 50
    }
+   
    ...it means the program is running normally.
 
 
-7. Configure the application:
+9. Configure the application:
    - Review and modify `config/config.yaml` as needed
 
-8. Run the application:
+10. Run the application:
    ```
    python src/main.py
    ```
@@ -145,6 +150,6 @@ Future improvements could include:
 
 Contributions and suggestions for improving AI Audio Creator are very welcome!
 
-**Attributions**
+## Attributions
 Suno-API provided by: https://github.com/gcui-art/suno-api/tree/main
 
