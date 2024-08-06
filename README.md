@@ -39,11 +39,9 @@ AI Audio Creator is a Python application that combines AI-generated audio conten
    ```
    pip install -r requirements.txt
    ```
-4. Make sure you have the latest version of Python3 installed on your system:
+4. Install llama3 via ollama: https://ollama.com/
 
-   Install llama3 via ollama: https://ollama.com/
-
-4. Set up API keys:
+5. Set up API keys:
    - Adjust the .env_example file:
    Add your ElevenLabs + ChatGPT API Keys:
    ```
@@ -51,7 +49,7 @@ AI Audio Creator is a Python application that combines AI-generated audio conten
    OPENAI_API_KEY=your_openai_api_key
    ```
 
-   Add your Suno-Cookie and Session ID. Instructions for this: https://github.com/gcui-art/suno-api/blob/main/public/get-cookie-demo.gif
+6. Add your Suno-Cookie and Session ID. Instructions for this: https://github.com/gcui-art/suno-api/blob/main/public/get-cookie-demo.gif
 
    Rename the .env_example file to just .env
    Make a copy of the .env file and put it in the suno_api directory   #temporary workaround. Should not be necessary in future versions
@@ -76,10 +74,10 @@ AI Audio Creator is a Python application that combines AI-generated audio conten
    ...it means the program is running normally.
 
 
-5. Configure the application:
+7. Configure the application:
    - Review and modify `config/config.yaml` as needed
 
-6. Run the application:
+8. Run the application:
    ```
    python src/main.py
    ```
