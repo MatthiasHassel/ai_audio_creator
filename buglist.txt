@@ -1,17 +1,7 @@
-- audioplayback in timeline not perfect:
-    * poor quality (slightly distorted)
-    * after importing a new clip and playing back the timline, the first milliseconds of the new clip are not played back
-    --> probably bad caching implementation
-    --> preload audio when importing new clips or opening new project / initial program start and not only when pressing play
-
 - vertical scroll: 
     * tracklabels not always aligned with grid
     * tracklabels can be scrolled individually for a little bit, when all tracks fit in the frame and vertical scroll is meant to be disabled.
 
 - not a bug but a consideration: input text gets cleared after audio generation -> maybe leave it or display the used prompt in the output area?
-
-- Script Analysis: 
-    * Apostrophe in script analysis is displayed as \u2019 in json file
-    * Index is just consecutive but not in correct order --> adjust gpt prompt
 
 
