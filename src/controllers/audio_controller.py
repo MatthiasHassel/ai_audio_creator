@@ -27,7 +27,7 @@ class AudioController:
         self.setup_view_commands()
 
     def setup_services(self):
-        self.llama_service = LlamaService(self.config, self.update_status)
+        self.llama_service = LlamaService(self.config, self.update_status, self.update_output)
         self.music_service = MusicService(self.config, self.update_status)
         self.sfx_service = SFXService(self.config, self.update_status)
         self.speech_service = SpeechService(self.config, self.update_status)
@@ -35,7 +35,7 @@ class AudioController:
     def setup_view_commands(self):
         self.view.set_generate_command(self.process_input)
         self.view.set_clear_command(self.clear_input)
-        self.view.set_llama_command(self.process_llama_input)
+        self.view.set_llama_command(self.improve_prompt)
         self.view.set_play_command(self.play_audio)
         self.view.set_pause_resume_command(self.pause_resume_audio)
         self.view.set_stop_command(self.stop_audio)
@@ -62,26 +62,27 @@ class AudioController:
         elif current_module == "Speech":
             self.process_speech_request()
 
-    def process_llama_input(self):
+    def improve_prompt(self):
         user_input = self.view.user_input.get("1.0", "end-1c").strip()
         if not user_input:
             self.view.update_output("Error: Please enter some text.")
             return
 
         current_module = self.view.current_module.get()
-        if current_module == "Music":
-            result = self.llama_service.get_llama_musicprompt(user_input)
-        elif current_module == "SFX":
-            result = self.llama_service.get_llama_sfx(user_input)
-        else:
-            self.view.update_output("Error: Llama3 input is only available for Music and SFX modules.")
+        if current_module not in ["Music", "SFX"]:
+            self.view.update_output("Error: Llama input is only available for Music and SFX modules.")
             return
 
-        if result:
-            self.view.user_input.delete("1.0", "end")
-            self.view.user_input.insert("1.0", result)
-        else:
-            self.view.update_output("Error: Failed to process input with Llama3.")
+        # Clear the output field
+        self.view.output_text.configure(state="normal")
+        self.view.output_text.delete("1.0", "end")
+        self.view.output_text.configure(state="disabled")
+
+        # Show the progress bar
+        self.view.show_progress_bar(determinate=False)
+
+        # Process the Llama request
+        self.llama_service.process_llama_request(user_input, current_module == "Music")
 
     def set_add_to_timeline_callback(self, callback):
             self.add_to_timeline_callback = callback
@@ -257,6 +258,13 @@ class AudioController:
     def update_status(self, message):
         self.view.update_status(message)
 
+    def update_output(self, message):
+        self.view.output_text.configure(state="normal")
+        self.view.output_text.delete("1.0", "end")
+        self.view.output_text.insert("end", message)
+        self.view.output_text.configure(state="disabled")
+        self.view.hide_progress_bar()
+        
     def set_show_timeline_command(self, command):
         self.view.set_timeline_command(command)
 

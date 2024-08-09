@@ -73,7 +73,7 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.clear_button = ctk.CTkButton(action_frame, text="Clear")
         self.clear_button.grid(row=0, column=1, padx=5)
 
-        self.llama_button = ctk.CTkButton(action_frame, text="Input to Llama3")
+        self.llama_button = ctk.CTkButton(action_frame, text="Improve Prompt")
         self.llama_button.grid(row=0, column=2, padx=5)
 
     def create_tab_specific_options(self, parent):
