@@ -21,7 +21,7 @@ class PDFAnalysisService:
     def analyze_script(self, script_text):
         try:
             formatting_instructions = """
-I have a script for an audio drama that I would like to analyze and categorize. Please analyze each line in the script and categorize it as follows:
+I have a script for an audio play that I would like to analyze and categorize. Please analyze each line in the script and categorize it as follows:
 
 1. Determine if the line is a spoken sentence by a character, a description of a sound effect (SFX), or a description of music. If the estimated length of a music piece is below 22s categorize it as SFX
 2. If it is a spoken sentence by a character, identify the character's name.
@@ -80,7 +80,7 @@ Here is the script to be analyzed:
                 model="gpt-4o-mini",
                 response_format={ "type": "json_object" },
                 messages=[
-                    {"role": "system", "content": "You are a script analyzer. Analyze the given script for an audiobook and provide structured output."},
+                    {"role": "system", "content": "You are a script analyzer. Analyze the given script for an audio play and provide structured output."},
                     {"role": "user", "content": f"{formatting_instructions}\n\n{script_text}"}
                 ]
             )

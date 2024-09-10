@@ -413,7 +413,7 @@ class ScriptEditorController:
 
         # If no fitting voice at all, use default voices
         default_voices = {
-            'male': ('George', 'jsCqWAovK2LkecY7zXl4'),
+            'male': ('Will', 'bIHbv24MWmeRgasZH58o'),
             'female': ('Matilda', 'XrExE9yKIg1WjnnlVkGX')
         }
         default_voice = default_voices.get(gender, default_voices['male'])
