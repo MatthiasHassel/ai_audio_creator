@@ -1,6 +1,7 @@
 import customtkinter as ctk
 import tkinter as tk
-from tkinter import font as tkfont
+import tkinter.font as tkfont
+from tkinter import font
 
 import customtkinter as ctk
 
@@ -81,8 +82,10 @@ class ScriptEditorView(ctk.CTkFrame):
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
         self.current_speaker = ctk.StringVar(value="Speaker 1")
+        self.current_font = tkfont.Font(family="TkDefaultFont", size=12)
         self.create_widgets()
         self.create_tags()
+        self.text_area.tag_add("base_font", "1.0", "end")
         self.bind_shortcuts()
         self.bind_text_protection()
 
@@ -95,7 +98,7 @@ class ScriptEditorView(ctk.CTkFrame):
     def create_toolbar(self):
         toolbar = ctk.CTkFrame(self)
         toolbar.grid(row=0, column=0, sticky="ew", padx=5, pady=(5, 2))
-        toolbar.grid_columnconfigure(6, weight=1)  # Push buttons to the left
+        toolbar.grid_columnconfigure(7, weight=1)  # Push buttons to the left
 
         self.bold_button = ctk.CTkButton(toolbar, text="B", width=30, command=lambda: self.format_text('bold'))
         self.bold_button.grid(row=0, column=0, padx=2)
@@ -105,6 +108,8 @@ class ScriptEditorView(ctk.CTkFrame):
 
         self.underline_button = ctk.CTkButton(toolbar, text="U", width=30, command=lambda: self.format_text('underline'))
         self.underline_button.grid(row=0, column=2, padx=2)
+
+        self.create_font_controls(toolbar)
 
         # Speaker split button
         speaker_options = [f"Speaker {i+1}" for i in range(5)]
@@ -120,7 +125,7 @@ class ScriptEditorView(ctk.CTkFrame):
         self.music_button.grid(row=0, column=5, padx=2)
 
     def create_main_content(self):
-        self.text_area = tk.Text(self, wrap=tk.WORD, undo=True)
+        self.text_area = tk.Text(self, wrap=tk.WORD, undo=True, font=self.current_font)
         self.text_area.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
 
         scrollbar = ctk.CTkScrollbar(self, command=self.text_area.yview)
@@ -179,13 +184,9 @@ class ScriptEditorView(ctk.CTkFrame):
         self.status_var.set(message)
                                            
     def create_tags(self):
-        bold_font = tkfont.Font(self.text_area, self.text_area.cget("font"))
-        bold_font.configure(weight="bold")
-        self.text_area.tag_configure("bold", font=bold_font)
-
-        italic_font = tkfont.Font(self.text_area, self.text_area.cget("font"))
-        italic_font.configure(slant="italic")
-        self.text_area.tag_configure("italic", font=italic_font)
+        self.text_area.tag_configure("base_font", font=self.current_font)
+        self.text_area.tag_configure("bold", font=(self.current_font.actual()['family'], self.current_font.actual()['size'], "bold"))
+        self.text_area.tag_configure("italic", font=(self.current_font.actual()['family'], self.current_font.actual()['size'], "italic"))
         self.text_area.tag_configure("underline", underline=1)
 
     def bind_shortcuts(self):
@@ -212,9 +213,46 @@ class ScriptEditorView(ctk.CTkFrame):
             else:
                 self.text_area.tag_add(tag, start, end)
 
+            # Ensure the base font is applied
+            self.text_area.tag_add("base_font", start, end)
+
             self.update_button_states(tag)
         else:
             self.status_var.set("Please select text to format")
+
+        # Recreate tags to ensure they use the current font
+        self.create_tags()
+
+    def create_font_controls(self, parent):
+        font_frame = ctk.CTkFrame(parent)
+        font_frame.grid(row=0, column=6, padx=5, sticky="e")
+
+        self.font_family_var = ctk.StringVar(value=self.current_font.actual()['family'])
+        self.font_size_var = ctk.StringVar(value=str(self.current_font.actual()['size']))
+
+        font_family_menu = ctk.CTkOptionMenu(font_frame, variable=self.font_family_var, values=font.families(), command=self.update_font)
+        font_family_menu.grid(row=0, column=0, padx=5)
+
+        font_size_menu = ctk.CTkOptionMenu(font_frame, variable=self.font_size_var, values=[str(i) for i in range(8, 25)], command=self.update_font)
+        font_size_menu.grid(row=0, column=1, padx=5)
+
+    def update_font(self, *args):
+        family = self.font_family_var.get()
+        size = int(self.font_size_var.get())
+        self.current_font.configure(family=family, size=size)
+        self.text_area.configure(font=self.current_font)
+        
+        # Update tags
+        self.text_area.tag_configure("base_font", font=self.current_font)
+        self.text_area.tag_configure("bold", font=(family, size, "bold"))
+        self.text_area.tag_configure("italic", font=(family, size, "italic"))
+        
+        # Reapply base_font tag to all text
+        self.text_area.tag_add("base_font", "1.0", "end")
+        
+        # Notify the controller to save preferences
+        if hasattr(self, 'on_font_change'):
+            self.on_font_change()
 
     def format_as_speaker(self, speaker):
         start_index = self.text_area.index(tk.INSERT + " linestart")
@@ -424,6 +462,7 @@ class ScriptEditorView(ctk.CTkFrame):
     def set_text(self, text):
         self.text_area.delete("1.0", tk.END)
         self.text_area.insert(tk.END, text)
+        self.text_area.tag_add("base_font", "1.0", "end")
     
     def import_pdf(self):
         if self.import_pdf_callback:

@@ -37,7 +37,7 @@ class SFXService:
             result = self.elevenlabs.text_to_sound_effects.convert(
                 text=sanitized_text_prompt,
                 duration_seconds=duration,
-                prompt_influence=0.3,
+                prompt_influence=0.5,
             )
 
             self.logger.info("Receiving and writing audio data...")

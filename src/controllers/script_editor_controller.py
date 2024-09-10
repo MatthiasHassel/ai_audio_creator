@@ -23,16 +23,81 @@ class ScriptEditorController:
         self.pdf_analysis_service = PDFAnalysisService(config)
         self.character_voices = {}  # Store selected voices for each character
 
+         # Set default font preferences
+        default_font_family = "TkDefaultFont"
+        default_font_size = "12"
+        self.view.font_family_var.set(default_font_family)
+        self.view.font_size_var.set(default_font_size)
+        self.view.update_font()
+
+        self.load_font_preferences()
+
 
     def setup_view_commands(self):
         self.view.save_button.configure(command=self.save_script)
         self.view.load_button.configure(command=self.load_script)
         self.view.set_import_pdf_callback(self.import_pdf)
         self.view.set_analyze_script_callback(self.analyze_script)
+        self.view.font_family_var.trace_add("write", lambda *args: self.save_font_preferences())
+        self.view.font_size_var.trace_add("write", lambda *args: self.save_font_preferences())
+        self.view.on_font_change = self.save_font_preferences
 
 
     def format_text(self, style):
         self.view.format_text(style)
+
+    def save_font_preferences(self):
+        font_family = self.view.font_family_var.get()
+        font_size = self.view.font_size_var.get()
+        
+        try:
+            project_dir = self.project_model.get_project_dir()
+            metadata_file = os.path.join(project_dir, "project_metadata.json")
+            
+            # Load existing metadata
+            if os.path.exists(metadata_file):
+                with open(metadata_file, 'r') as f:
+                    metadata = json.load(f)
+            else:
+                metadata = {}
+            
+            # Update font preferences
+            if 'script_editor' not in metadata:
+                metadata['script_editor'] = {}
+            metadata['script_editor']['font_family'] = font_family
+            metadata['script_editor']['font_size'] = font_size
+            
+            # Save updated metadata
+            with open(metadata_file, 'w') as f:
+                json.dump(metadata, f, indent=2)
+            
+            self.view.update_status(f"Font preferences saved: Family={font_family}, Size={font_size}")
+        except ValueError:
+            self.view.update_status("No active project. Font preferences not saved.")
+
+    def load_font_preferences(self):
+        try:
+            project_dir = self.project_model.get_project_dir()
+            metadata_file = os.path.join(project_dir, "project_metadata.json")
+            
+            if os.path.exists(metadata_file):
+                with open(metadata_file, 'r') as f:
+                    metadata = json.load(f)
+                
+                script_editor_prefs = metadata.get('script_editor', {})
+                font_family = script_editor_prefs.get('font_family')
+                font_size = script_editor_prefs.get('font_size')
+                
+                if font_family and font_size:
+                    self.view.font_family_var.set(font_family)
+                    self.view.font_size_var.set(font_size)
+                    self.view.update_font()
+                    self.view.update_status(f"Loaded font preferences: Family={font_family}, Size={font_size}")
+            else:
+                self.view.update_status("No saved font preferences found. Using defaults.")
+        except ValueError:
+            # No project is currently active, use default font settings
+            self.view.update_status("No active project. Using default font settings.")
 
     def get_script_hash(self):
         return hashlib.md5(self.get_script_text().encode()).hexdigest()
