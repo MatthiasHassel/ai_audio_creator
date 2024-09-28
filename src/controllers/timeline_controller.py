@@ -3,8 +3,10 @@ import os
 from utils.audio_clip import AudioClip
 from tkinterdnd2 import DND_FILES
 import logging 
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 from pydub import AudioSegment
+import soundfile as sf
+import numpy as np
 from utils.file_utils import read_audio_prompt
 
 class TimelineController:
@@ -446,6 +448,68 @@ class TimelineController:
                 return last_clip.x + last_clip.duration
         return 0  # Return 0 if the track is empty or doesn't exist
     
+    def export_audio(self):
+        if not self.timeline_model.get_tracks():
+            messagebox.showerror("Error", "No tracks to export")
+            return
+
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".mp3",
+            filetypes=[("MP3 files", "*.mp3")]
+        )
+
+        if not file_path:
+            return  # User cancelled the file dialog
+
+        try:
+            self.view.show_progress_bar(determinate=True)
+            self.view.update_status("Exporting audio...")
+
+            # Get the end time of the last clip
+            end_time = max(
+                clip.x + clip.duration
+                for track in self.timeline_model.get_tracks()
+                for clip in track['clips']
+            )
+
+            # Initialize an empty numpy array for the final mix
+            sample_rate = 44100
+            channels = 2
+            final_mix = np.zeros((int(end_time * sample_rate), channels))
+
+            total_clips = sum(len(track['clips']) for track in self.timeline_model.get_tracks())
+            processed_clips = 0
+
+            for track in self.timeline_model.get_tracks():
+                for clip in track['clips']:
+                    audio_data = self.timeline_model.get_clip_frames(clip, 0, clip.duration)
+                    start_sample = int(clip.x * sample_rate)
+                    end_sample = start_sample + len(audio_data)
+                    
+                    if end_sample > len(final_mix):
+                        pad_length = end_sample - len(final_mix)
+                        final_mix = np.pad(final_mix, ((0, pad_length), (0, 0)))
+
+                    final_mix[start_sample:end_sample] += audio_data * track.get("volume", 1.0)
+
+                    processed_clips += 1
+                    self.view.progress_bar.set(processed_clips / total_clips)
+
+            # Normalize the final mix
+            max_amplitude = np.max(np.abs(final_mix))
+            if max_amplitude > 0:
+                final_mix = final_mix / max_amplitude
+
+            # Export as MP3
+            with sf.SoundFile(file_path, 'w', samplerate=sample_rate, channels=channels, format='mp3') as f:
+                f.write(final_mix)
+
+            self.view.update_status(f"Audio exported successfully to {file_path}")
+        except Exception as e:
+            messagebox.showerror("Export Error", f"Failed to export audio: {str(e)}")
+        finally:
+            self.view.hide_progress_bar()
+
     def undo_action(self):
         self.timeline_model.undo()
         self.load_timeline_data()

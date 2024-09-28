@@ -51,8 +51,10 @@ class MainController:
         self.view.set_new_project_callback(self.new_project)
         self.view.set_open_project_callback(self.open_project)
         self.view.set_save_project_callback(self.save_project)
-        self.view.set_import_audio_callback(self.import_audio)
         self.view.set_edit_delete_project_callback(self.edit_delete_project)
+        self.view.set_import_audio_callback(self.import_audio)
+        self.view.set_export_audio_callback(self.export_audio)
+
         
         # Set up the connection between Timeline and Audio Creator
         self.timeline_controller.set_toggle_audio_creator_command(self.view.toggle_visibility)
@@ -196,6 +198,12 @@ class MainController:
             except Exception as e:
                 logging.error(f"Failed to import audio file: {str(e)}", exc_info=True)
                 self.view.show_error("Import Error", f"Failed to import audio file: {str(e)}")
+
+    def export_audio(self):
+        if self.timeline_controller:
+            self.timeline_controller.export_audio()
+        else:
+            self.view.show_error("Error", "Timeline controller is not initialized")
 
     def add_audio_to_timeline(self, file_path):
         if self.timeline_controller:

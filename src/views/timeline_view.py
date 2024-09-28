@@ -118,6 +118,10 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.create_toolbar()
         self.create_main_content()
         self.create_status_bar()
+         # Create progress bar
+        self.progress_bar = ctk.CTkProgressBar(self)
+        self.progress_bar.grid(row=2, column=1, sticky="ew", padx=5, pady=5)
+        self.progress_bar.grid_remove()  # Initially hidden
 
     def create_toolbar(self):
         toolbar = ctk.CTkFrame(self)
@@ -941,7 +945,20 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
 
     def show_error(self, title, message):
         messagebox.showerror(title, message)
-    
+
+    def show_progress_bar(self, determinate=True):
+        if determinate:
+            self.progress_bar.configure(mode="determinate")
+            self.progress_bar.set(0)
+        else:
+            self.progress_bar.configure(mode="indeterminate")
+        self.progress_bar.grid()
+        self.progress_bar.start()
+
+    def hide_progress_bar(self):
+        self.progress_bar.stop()
+        self.progress_bar.grid_remove()
+ 
     def select_multiple_clips(self, event):
         x = self.timeline_canvas.canvasx(event.x)
         y = self.timeline_canvas.canvasy(event.y)

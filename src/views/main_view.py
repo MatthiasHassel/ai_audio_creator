@@ -138,6 +138,7 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
         edit_menu = tk.Menu(self.menu, tearoff=0)
         self.menu.add_cascade(label="Edit", menu=edit_menu)
         edit_menu.add_command(label="Import Audio", command=self.import_audio)
+        edit_menu.add_command(label="Export Audio", command=self.export_audio)
 
         self.window_menu = tk.Menu(self.menu, tearoff=0)
         self.menu.add_cascade(label="Window", menu=self.window_menu)
@@ -199,3 +200,10 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
 
     def set_edit_delete_project_callback(self, callback):
         self.edit_delete_project_callback = callback
+
+    def export_audio(self):
+        if self.export_audio_callback:
+            self.export_audio_callback()
+    
+    def set_export_audio_callback(self, callback):
+        self.export_audio_callback = callback
