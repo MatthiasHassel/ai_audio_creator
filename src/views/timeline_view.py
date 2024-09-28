@@ -572,7 +572,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.stop_button.configure(state="normal")
 
     def update_playhead_position(self, position):
-        logging.info(f"Updating playhead position to {position}")
         self.playhead_position = min(position, self.timeline_duration)
         x = self.playhead_position / self.seconds_per_pixel
         self.draw_playhead(x)
@@ -923,6 +922,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             self.select_clip(clicked_clip)
             context_menu = tk.Menu(self, tearoff=0)
             context_menu.add_command(label="Delete clip", command=self.delete_selected_clip)
+            context_menu.add_command(label="Regenerate", command=self.delete_selected_clip)
             context_menu.tk_popup(event.x_root, event.y_root)
 
     def remove_clip(self, clip):

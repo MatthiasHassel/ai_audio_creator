@@ -23,7 +23,7 @@ class PDFAnalysisService:
             formatting_instructions = """
 I have a script for an audio drama that I would like to analyze and categorize. Please analyze each line in the script and categorize it as follows:
 
-1. Determine if the line is a spoken sentence by a character, a description of a sound effect (SFX), or a description of music.
+1. Determine if the line is a spoken sentence by a character, a description of a sound effect (SFX), or a description of music. If the estimated length of a music piece is below 22s categorize it as SFX
 2. If it is a spoken sentence by a character, identify the character's name.
 3. If it is an SFX, estimate the duration of the sound (between 0.5 and 22 seconds).
 4. If it is music, specify whether it is instrumental or with vocals. Use "instrumental": "yes" for instrumental music and "instrumental": "no" for music with vocals.
