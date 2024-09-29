@@ -6,13 +6,29 @@ from views.main_view import MainView
 from controllers.main_controller import MainController
 from utils.config_manager import load_config
 import logging
+import os
 
 def setup_logging(config):
-    logging.basicConfig(
-        level=config['logging']['level'],
-        format=config['logging']['format'],
-        filename=config['logging']['file']
-    )
+     # Get the directory of the main.py file
+    src_dir = os.path.dirname(os.path.abspath(__file__))
+    base_dir = os.path.dirname(src_dir)
+    
+    # Construct the log file path
+    log_file_path = os.path.join(base_dir, 'logs', 'ai_audio_creator.log')
+    
+    # Ensure the logs directory exists
+    os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
+
+    try:
+        logging.basicConfig(
+            level=config['logging']['level'],
+            format=config['logging']['format'],
+            filename=log_file_path
+        )
+        print(f"Logging setup successful. Log file: {log_file_path}")
+    except Exception as e:
+        print(f"Error setting up logging: {str(e)}")
+        raise
 
 def main():
     # Load configuration

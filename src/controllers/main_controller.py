@@ -5,6 +5,7 @@ from tkinter import filedialog, simpledialog, messagebox
 import tkinter as tk
 import os
 import logging
+import webbrowser
 
 class MainController:
     def __init__(self, model, view, config, project_model):
@@ -54,6 +55,7 @@ class MainController:
         self.view.set_edit_delete_project_callback(self.edit_delete_project)
         self.view.set_import_audio_callback(self.import_audio)
         self.view.set_export_audio_callback(self.export_audio)
+        self.view.set_open_user_manual_callback(self.open_user_manual)
 
         
         # Set up the connection between Timeline and Audio Creator
@@ -317,3 +319,10 @@ class MainController:
                 self.load_last_opened_script()
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to delete project: {str(e)}")
+
+    def open_user_manual(self):
+        manual_path = os.path.join(os.path.dirname(__file__), '..', '..', 'docs', 'AI_Audio_Creator_User_Manual.md')
+        if os.path.exists(manual_path):
+            webbrowser.open('file://' + os.path.realpath(manual_path))
+        else:
+            self.view.show_error("Error", "User manual not found.")

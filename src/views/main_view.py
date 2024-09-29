@@ -145,6 +145,11 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
         self.window_menu.add_command(label="Show/Hide Timeline", command=self.toggle_timeline)
         self.window_menu.add_command(label="Show/Hide Audio Creator", command=self.toggle_visibility)
 
+        help_menu = tk.Menu(self.menu, tearoff=0)
+        self.menu.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="User Manual", command=self.open_user_manual)
+
+
     def create_main_content(self):
         self.paned_window = tk.PanedWindow(self, orient=tk.HORIZONTAL, sashwidth=10, sashrelief=tk.RAISED, bg='#3E3E3E')
         self.paned_window.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
@@ -207,3 +212,10 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
     
     def set_export_audio_callback(self, callback):
         self.export_audio_callback = callback
+
+    def open_user_manual(self):
+        if hasattr(self, 'open_user_manual_callback'):
+            self.open_user_manual_callback()
+
+    def set_open_user_manual_callback(self, callback):
+        self.open_user_manual_callback = callback
