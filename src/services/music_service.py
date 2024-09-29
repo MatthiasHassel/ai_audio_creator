@@ -6,6 +6,7 @@ import subprocess
 import logging
 from mutagen.id3 import ID3, TIT2, COMM
 from mutagen.mp3 import MP3
+from pydub import AudioSegment
 
 class MusicService:
     def __init__(self, config, status_update_callback):
@@ -150,6 +151,7 @@ class MusicService:
             self.update_status("Audio ready. Downloading...")
             url = data[0]['audio_url']
             if self.download_audio(url, output_filename):
+                self.convert_to_44100hz(output_filename)
                 self.add_id3_tag(output_filename, text_prompt)
                 return output_filename
             else:
@@ -164,6 +166,20 @@ class MusicService:
             self.logger.info("Music generation process completed.")
             self.update_status("Music generation process completed.")
         
+    def convert_to_44100hz(self, file_path):
+        try:
+            audio = AudioSegment.from_file(file_path)
+            if audio.frame_rate != 44100:
+                self.logger.info(f"Converting {file_path} from {audio.frame_rate}Hz to 44100Hz")
+                audio = audio.set_frame_rate(44100)
+                audio.export(file_path, format="mp3")
+                self.logger.info(f"Conversion completed: {file_path}")
+            else:
+                self.logger.info(f"No conversion needed. File already at 44100Hz: {file_path}")
+        except Exception as e:
+            self.logger.error(f"Error converting audio to 44100Hz: {str(e)}")
+            raise
+
     def add_id3_tag(self, file_path, prompt):
         try:
             # Load the file
