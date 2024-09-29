@@ -201,6 +201,7 @@ class MusicService:
             self.logger.info(f"Successfully added ID3 tag to {file_path} with prompt: {prompt}")
         except Exception as e:
             self.logger.error(f"Failed to add ID3 tag: {str(e)}")
+            
     def process_music_request(self, text_prompt: str, make_instrumental: bool):
         """Process a music generation request."""
         return self.create_song(text_prompt, make_instrumental)

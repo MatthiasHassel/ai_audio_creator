@@ -151,9 +151,14 @@ class AudioController:
                                      [text_prompt, duration],
                                      synchronous)
 
-    def process_music_request(self, synchronous=False):
+    def process_music_request(self, text_prompt=None, make_instrumental=None, synchronous=False):
+        if text_prompt is None:
+            text_prompt = self.view.user_input.get("1.0", "end-1c").strip()
+        if make_instrumental is None:
+            make_instrumental = self.view.instrumental_var.get()
+        
         return self._process_request(self.music_service.process_music_request, 
-                                [self.view.user_input.get("1.0", "end-1c").strip(), self.view.instrumental_var.get()],
+                                [text_prompt, make_instrumental],
                                 synchronous)
         
     def handle_successful_generation(self, result):
