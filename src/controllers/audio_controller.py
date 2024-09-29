@@ -233,10 +233,6 @@ class AudioController:
 
     def clear_input(self):
         self.view.clear_input()
-        self.model.stop()
-        self.view.audio_visualizer.clear()
-        self.view.audio_file_selector.clear()
-        self.view.audio_visualizer.hide_playhead()
 
     def load_voices(self):
         voices = self.speech_service.get_user_voices()
