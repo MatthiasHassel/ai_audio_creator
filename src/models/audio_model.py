@@ -1,68 +1,65 @@
 import pygame
 import time
+import threading
 
 class AudioModel:
     def __init__(self):
         self.current_audio_file = None
         self.is_playing = False
-        self.is_paused = False
         self.start_time = 0
         self.pause_time = 0
         self.seek_position = 0
+        self.duration = 0
         pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=1024)
+        self.playback_finished_callback = None
 
     def load_audio(self, file_path):
         self.current_audio_file = file_path
         pygame.mixer.music.load(self.current_audio_file)
         self.seek_position = 0
+        sound = pygame.mixer.Sound(file_path)
+        self.duration = sound.get_length()
 
     def play(self):
         if self.current_audio_file:
-            if self.is_paused:
-                pygame.mixer.music.unpause()
-                self.start_time = time.time() - self.pause_time
-            else:
-                pygame.mixer.music.play(start=self.seek_position)
-                self.start_time = time.time() - self.seek_position
+            pygame.mixer.music.play(start=self.seek_position)
+            self.start_time = time.time() - self.seek_position
             self.is_playing = True
-            self.is_paused = False
+            threading.Thread(target=self._monitor_playback, daemon=True).start()
 
-    def pause(self):
-        if self.is_playing and not self.is_paused:
-            pygame.mixer.music.pause()
-            self.is_paused = True
-            self.pause_time = time.time() - self.start_time
+    def _monitor_playback(self):
+        while self.is_playing:
+            if not pygame.mixer.music.get_busy():
+                self.stop()
+                if self.playback_finished_callback:
+                    self.playback_finished_callback()
+                break
+            time.sleep(0.1)
 
-    def resume(self):
-        if self.is_paused:
-            pygame.mixer.music.unpause()
-            self.is_paused = False
-            self.start_time = time.time() - self.pause_time
+    def set_playback_finished_callback(self, callback):
+        self.playback_finished_callback = callback
 
     def stop(self):
         pygame.mixer.music.stop()
         self.is_playing = False
-        self.is_paused = False
-        self.start_time = 0
-        self.pause_time = 0
+        self.seek_position = self.get_current_position()
+
+    def restart(self):
         self.seek_position = 0
+        if self.is_playing:
+            self.play()
 
     def seek(self, position):
-        if self.current_audio_file:
-            self.seek_position = position
-            if self.is_playing:
-                pygame.mixer.music.play(start=position)
-                self.start_time = time.time() - position
-            return True
-        return False
-    
+        self.seek_position = max(0, min(position, self.duration))
+        if self.is_playing:
+            pygame.mixer.music.play(start=self.seek_position)
+            self.start_time = time.time() - self.seek_position
+        return True
+
     def get_current_position(self):
         if self.is_playing:
-            if self.is_paused:
-                return self.pause_time
-            else:
-                return time.time() - self.start_time
+            return time.time() - self.start_time
         return self.seek_position
-
+    
     def quit(self):
         pygame.mixer.quit()

@@ -25,6 +25,7 @@ class AudioController:
         self.current_audio_file = None
         self.setup_services()
         self.setup_view_commands()
+        self.model.set_playback_finished_callback(self.on_playback_finished)
 
     def setup_services(self):
         self.llama_service = LlamaService(self.config, self.update_status, self.update_output)
@@ -37,12 +38,12 @@ class AudioController:
         self.view.set_clear_command(self.clear_input)
         self.view.set_llama_command(self.improve_prompt)
         self.view.set_play_command(self.play_audio)
-        self.view.set_pause_resume_command(self.pause_resume_audio)
         self.view.set_stop_command(self.stop_audio)
+        self.view.set_restart_command(self.restart_audio)
         self.view.set_add_to_timeline_command(self.add_audio_to_timeline)
         self.view.set_file_select_command(self.on_audio_file_select)
         self.view.set_visualizer_click_command(self.seek_audio)
-        self.view.audio_visualizer.set_delete_callback(self.delete_audio_file) 
+        self.view.audio_visualizer.set_delete_callback(self.delete_audio_file)
 
     def set_timeline_controller(self, timeline_controller):
         self.timeline_controller = timeline_controller
@@ -162,39 +163,36 @@ class AudioController:
         self.model.load_audio(result)
         self.view.audio_visualizer.update_waveform(result)
         self.current_audio_file = result
-        self.view.update_button_states(False, False)
+        self.view.update_button_states(False)
         self.on_audio_file_select(result)  # Manually trigger file selection
 
     def seek_audio(self, position):
         if self.model.seek(position):
-            self.stop_playhead_update()  # Stop any existing playhead updates
             self.view.audio_visualizer.update_playhead(position)
             if self.model.is_playing:
                 self.start_playhead_update()
-            else:
-                self.play_audio()
-            self.view.update_button_states(True, False)  # Enable stop button
 
     def play_audio(self):
         if self.current_audio_file:
             self.model.play()
-            self.view.update_button_states(self.model.is_playing, self.model.is_paused)
+            self.view.update_button_states(self.model.is_playing)
             self.start_playhead_update()
         else:
             logging.warning("No audio file loaded")
+    
+    def on_playback_finished(self):
+        self.view.after(0, self._update_ui_after_playback)
 
+    def _update_ui_after_playback(self):
+        self.model.seek(0)  # Reset the seek position to the start
+        self.view.update_button_states(False)
+        self.stop_playhead_update()
+        self.view.audio_visualizer.update_playhead(0)  # Reset the visual playhead to the start
+        
     def stop_audio(self):
         self.model.stop()
-        self.view.update_button_states(False, False)
-        self.view.audio_visualizer.update_playhead(0)
+        self.view.update_button_states(self.model.is_playing)
         self.stop_playhead_update()
-
-    def pause_resume_audio(self):
-        if self.model.is_playing and not self.model.is_paused:
-            self.model.pause()
-        elif self.model.is_paused:
-            self.model.resume()
-        self.view.update_button_states(self.model.is_playing, self.model.is_paused)
 
     def start_playhead_update(self):
         self.stop_playhead_update()  # Ensure no existing update is running
@@ -205,17 +203,26 @@ class AudioController:
             self.view.after_cancel(self.playhead_update_id)
             self.playhead_update_id = None
 
+    def restart_audio(self):
+        self.model.restart()
+        self.view.update_button_states(self.model.is_playing)
+        self.view.audio_visualizer.update_playhead(0)
+        if self.model.is_playing:
+            self.start_playhead_update()
+        else:
+            self.stop_playhead_update()
+
     def update_playhead(self):
-        if self.model.is_playing and not self.model.is_paused:
+        if self.model.is_playing:
             current_time = self.model.get_current_position()
             self.view.audio_visualizer.update_playhead(current_time)
-            self.view.after(50, self.update_playhead)  # Update every 50ms
+            self.playhead_update_id = self.view.after(50, self.update_playhead)  # Update every 50ms
 
     def on_audio_file_select(self, file_path):
         if file_path and os.path.exists(file_path):
             self.model.load_audio(file_path)
             self.view.audio_visualizer.update_waveform(file_path)
-            self.view.update_button_states(False, False)
+            self.view.update_button_states(False)
             self.current_audio_file = file_path
             self.view.add_to_timeline_button.configure(state="normal")
             
@@ -307,7 +314,7 @@ class AudioController:
                 
                 # Update the view
                 self.view.update_status(f"Deleted audio file: {os.path.basename(file_path)}")
-                self.view.update_button_states(False, False)
+                self.view.update_button_states(False)
                 self.view.add_to_timeline_button.configure(state="disabled")
             else:
                 logging.warning(f"File not found: {file_path}")

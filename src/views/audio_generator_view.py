@@ -120,11 +120,11 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.play_button = ctk.CTkButton(control_frame, text="Play", state="disabled", width=60)
         self.play_button.grid(row=0, column=0, padx=(0, 2))
 
-        self.pause_resume_button = ctk.CTkButton(control_frame, text="Pause", state="disabled", width=60)
-        self.pause_resume_button.grid(row=0, column=1, padx=2)
-
         self.stop_button = ctk.CTkButton(control_frame, text="Stop", state="disabled", width=60)
-        self.stop_button.grid(row=0, column=2, padx=2)
+        self.stop_button.grid(row=0, column=1, padx=2)
+
+        self.restart_button = ctk.CTkButton(control_frame, text="Restart", state="disabled", width=60)
+        self.restart_button.grid(row=0, column=2, padx=2)
 
         self.add_to_timeline_button = ctk.CTkButton(control_frame, text="Add to Timeline", state="disabled", width=120)
         self.add_to_timeline_button.grid(row=0, column=3, padx=2)
@@ -220,19 +220,15 @@ class AudioGeneratorView(ctk.CTkFrame):
         # Update the audio file selector
         self.audio_file_selector.update_module(current_tab.lower())
 
-    def update_button_states(self, is_playing, is_paused):
+    def update_button_states(self, is_playing):
         if is_playing:
             self.play_button.configure(state="disabled")
-            self.pause_resume_button.configure(state="normal")
             self.stop_button.configure(state="normal")
-            if is_paused:
-                self.pause_resume_button.configure(text="Resume")
-            else:
-                self.pause_resume_button.configure(text="Pause")
+            self.restart_button.configure(state="normal")
         else:
             self.play_button.configure(state="normal")
-            self.pause_resume_button.configure(state="disabled", text="Pause")
             self.stop_button.configure(state="disabled")
+            self.restart_button.configure(state="normal")
 
     def update_output(self, message):
         self.output_text.configure(state="normal")
@@ -316,11 +312,11 @@ class AudioGeneratorView(ctk.CTkFrame):
     def set_play_command(self, command):
         self.play_button.configure(command=command)
 
-    def set_pause_resume_command(self, command):
-        self.pause_resume_button.configure(command=command)
-
     def set_stop_command(self, command):
         self.stop_button.configure(command=command)
+
+    def set_restart_command(self, command):
+        self.restart_button.configure(command=command)
 
     def set_file_select_command(self, command):
         self.audio_file_selector.set_file_select_command(command)

@@ -80,10 +80,10 @@ voice.
 
 After generating audio:
 1. The waveform will appear in the visualizer at the bottom.
-2. Use the play, pause, and stop buttons to control playback.
+2. Use the play, stop, and restart buttons to control playback.
 3. Click on the waveform to seek to a specific position.
 4. Use the "Add to Timeline" button to include the audio in your project 
-timeline.
+timeline. The audio will be added to the currently selected track in the timeline at the play header position.
 
 ## 5. Script Editor
 
@@ -151,6 +151,7 @@ status).
 
 - If audio generation fails, check your internet connection and API key 
 settings.
+- If music generation fails, you might need to update your SUNO cookie. Check the README for more information.
 - For timeline playback issues, ensure all audio files are present in your 
 project folder.
 - If the application crashes, check the log file in the 'logs' directory 
