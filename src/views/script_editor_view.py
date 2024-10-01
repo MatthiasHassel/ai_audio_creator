@@ -83,6 +83,7 @@ class ScriptEditorView(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
         self.current_speaker = ctk.StringVar(value="Speaker 1")
         self.current_font = tkfont.Font(family="TkDefaultFont", size=12)
+        self.format_states = {'bold': False, 'italic': False, 'underline': False}
         self.create_widgets()
         self.create_tags()
         self.text_area.tag_add("base_font", "1.0", "end")
@@ -127,6 +128,7 @@ class ScriptEditorView(ctk.CTkFrame):
     def create_main_content(self):
         self.text_area = tk.Text(self, wrap=tk.WORD, undo=True, font=self.current_font)
         self.text_area.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        self.text_area.bind("<Key>", self.apply_current_formatting)
 
         scrollbar = ctk.CTkScrollbar(self, command=self.text_area.yview)
         scrollbar.grid(row=1, column=1, sticky="ns", pady=5)
@@ -199,29 +201,26 @@ class ScriptEditorView(ctk.CTkFrame):
         self.text_area.bind("<Control-m>", lambda e: self.format_text('music'))
 
     def format_text(self, tag):
-        if tag.startswith("speaker"):
-            speaker = f"Speaker {tag[-1]}"
-            self.format_as_speaker(speaker)
+        if tag in ['bold', 'italic', 'underline']:
+            if self.text_area.tag_ranges("sel"):
+                start, end = self.text_area.tag_ranges("sel")
+                if tag in self.text_area.tag_names(start):
+                    self.text_area.tag_remove(tag, start, end)
+                    self.format_states[tag] = False
+                else:
+                    self.text_area.tag_add(tag, start, end)
+                    self.format_states[tag] = True
+            else:
+                self.format_states[tag] = not self.format_states[tag]
+            
+            self.update_button_states(tag)
+        elif tag.startswith("speaker"):
+            self.format_as_speaker(f"Speaker {tag[-1]}")
         elif tag in ['sfx', 'music']:
             self.format_as_sfx_or_music(tag)
-        elif self.text_area.tag_ranges("sel"):
-            start, end = self.text_area.tag_ranges("sel")
-            current_tags = self.text_area.tag_names(start)
-            
-            if tag in current_tags:
-                self.text_area.tag_remove(tag, start, end)
-            else:
-                self.text_area.tag_add(tag, start, end)
-
-            # Ensure the base font is applied
-            self.text_area.tag_add("base_font", start, end)
-
-            self.update_button_states(tag)
-        else:
-            self.status_var.set("Please select text to format")
-
-        # Recreate tags to ensure they use the current font
-        self.create_tags()
+        
+        # Ensure the base font is applied
+        self.text_area.tag_add("base_font", "1.0", "end")
 
     def create_font_controls(self, parent):
         font_frame = ctk.CTkFrame(parent)
@@ -463,7 +462,21 @@ class ScriptEditorView(ctk.CTkFrame):
         self.text_area.delete("1.0", tk.END)
         self.text_area.insert(tk.END, text)
         self.text_area.tag_add("base_font", "1.0", "end")
-    
+
+    def update_button_states(self, active_tag):
+        self.bold_button.configure(fg_color="darkblue" if self.format_states['bold'] else ["#3B8ED0", "#1F6AA5"])
+        self.italic_button.configure(fg_color="darkblue" if self.format_states['italic'] else ["#3B8ED0", "#1F6AA5"])
+        self.underline_button.configure(fg_color="darkblue" if self.format_states['underline'] else ["#3B8ED0", "#1F6AA5"])
+        self.speaker_button.set_active(active_tag.startswith("speaker"))
+        self.sfx_button.configure(fg_color="darkblue" if active_tag == "sfx" else ["#3B8ED0", "#1F6AA5"])
+        self.music_button.configure(fg_color="darkblue" if active_tag == "music" else ["#3B8ED0", "#1F6AA5"])
+
+    def apply_current_formatting(self, event):
+        index = self.text_area.index("insert")
+        for tag, state in self.format_states.items():
+            if state:
+                self.text_area.tag_add(tag, index)
+
     def import_pdf(self):
         if self.import_pdf_callback:
             self.import_pdf_callback()
