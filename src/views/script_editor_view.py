@@ -2,8 +2,10 @@ import customtkinter as ctk
 import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import font
-
 import customtkinter as ctk
+from utils.keyboard_shortcuts import KeyboardShortcuts
+import logging
+
 
 class SplitButton(ctk.CTkFrame):
     def __init__(self, master, options, command, **kwargs):
@@ -84,11 +86,15 @@ class ScriptEditorView(ctk.CTkFrame):
         self.current_speaker = ctk.StringVar(value="Speaker 1")
         self.current_font = tkfont.Font(family="TkDefaultFont", size=12)
         self.format_states = {'bold': False, 'italic': False, 'underline': False}
+        self.keyboard_shortcuts = None
         self.create_widgets()
         self.create_tags()
         self.text_area.tag_add("base_font", "1.0", "end")
-        self.bind_shortcuts()
         self.bind_text_protection()
+
+    def setup_keyboard_shortcuts(self, controller):
+        logging.info("Setting up keyboard shortcuts for ScriptEditorView")
+        self.keyboard_shortcuts = KeyboardShortcuts(self, controller)
 
     def create_widgets(self):
         self.create_toolbar()
@@ -190,15 +196,6 @@ class ScriptEditorView(ctk.CTkFrame):
         self.text_area.tag_configure("bold", font=(self.current_font.actual()['family'], self.current_font.actual()['size'], "bold"))
         self.text_area.tag_configure("italic", font=(self.current_font.actual()['family'], self.current_font.actual()['size'], "italic"))
         self.text_area.tag_configure("underline", underline=1)
-
-    def bind_shortcuts(self):
-        self.text_area.bind("<Control-b>", lambda e: self.format_text('bold'))
-        self.text_area.bind("<Control-i>", lambda e: self.format_text('italic'))
-        self.text_area.bind("<Control-u>", lambda e: self.format_text('underline'))
-        for i in range(5):
-            self.text_area.bind(f"<Control-{i+1}>", lambda e, i=i: self.format_as_speaker(f"Speaker {i+1}"))
-        self.text_area.bind("<Control-f>", lambda e: self.format_text('sfx'))
-        self.text_area.bind("<Control-m>", lambda e: self.format_text('music'))
 
     def format_text(self, tag):
         if tag in ['bold', 'italic', 'underline']:

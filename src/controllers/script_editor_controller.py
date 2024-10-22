@@ -29,6 +29,7 @@ class ScriptEditorController:
         self.view.font_family_var.set(default_font_family)
         self.view.font_size_var.set(default_font_size)
         self.view.update_font()
+        self.view.setup_keyboard_shortcuts(self)
 
         self.load_font_preferences()
 
@@ -43,8 +44,13 @@ class ScriptEditorController:
         self.view.on_font_change = self.save_font_preferences
 
 
-    def format_text(self, style):
-        self.view.format_text(style)
+    def format_text(self, tag):
+        """Handle text formatting requests from keyboard shortcuts"""
+        self.view.format_text(tag)
+
+    def format_as_speaker(self, speaker):
+        """Handle speaker formatting requests from keyboard shortcuts"""
+        self.view.format_as_speaker(speaker)
 
     def save_font_preferences(self):
         font_family = self.view.font_family_var.get()
