@@ -1,5 +1,7 @@
 import customtkinter as ctk
 import logging
+import threading
+import time
 from tkinter import messagebox
 from utils.audio_visualizer import AudioVisualizer
 from utils.audio_file_selector import AudioFileSelector
@@ -12,7 +14,12 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.project_model = project_model
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
+        self.controller = None  # Will be set later
         self.create_widgets()
+
+    def set_controller(self, controller):
+        """Set the audio controller for this view."""
+        self.controller = controller
 
     def create_widgets(self):
         self.create_top_bar()
@@ -162,6 +169,7 @@ class AudioGeneratorView(ctk.CTkFrame):
 
     def create_speech_widgets(self, parent):
         frame = ctk.CTkFrame(parent)
+        frame.grid_columnconfigure(1, weight=1)  # Make the second column expandable
         self.selected_voice = ctk.StringVar()
         
         # Existing voice selection
@@ -172,39 +180,322 @@ class AudioGeneratorView(ctk.CTkFrame):
         
         # Unique voice generation options
         self.use_unique_voice = ctk.BooleanVar(value=False)
-        self.unique_voice_checkbox = ctk.CTkCheckBox(frame, text="Generate Unique Voice", variable=self.use_unique_voice, command=self.toggle_unique_voice_options)
+        self.unique_voice_checkbox = ctk.CTkCheckBox(frame, text="Generate Unique Voice", 
+                                                variable=self.use_unique_voice, 
+                                                command=self.toggle_unique_voice_options)
         self.unique_voice_checkbox.grid(row=1, column=0, columnspan=2, pady=5, sticky="w")
         
-        self.gender_var = ctk.StringVar(value="female")
-        self.accent_var = ctk.StringVar(value="american")
-        self.age_var = ctk.StringVar(value="young")
-        self.accent_strength_var = ctk.DoubleVar(value=1.0)
+        # Voice description input
+        description_label = ctk.CTkLabel(frame, text="Voice Description:")
+        description_label.grid(row=2, column=0, padx=(0, 5), pady=2, sticky="w")
         
-        self.gender_dropdown = ctk.CTkOptionMenu(frame, variable=self.gender_var, values=["female", "male"], width=120)
-        self.accent_dropdown = ctk.CTkOptionMenu(frame, variable=self.accent_var, values=["american", "british", "african", "australian", "indian"], width=120)
-        self.age_dropdown = ctk.CTkOptionMenu(frame, variable=self.age_var, values=["young", "middle_aged", "old"], width=120)
-        self.accent_strength_slider = ctk.CTkSlider(frame, from_=0.3, to=2.0, variable=self.accent_strength_var, width=120)
+        self.voice_description = ctk.CTkTextbox(frame, height=60)
+        self.voice_description.grid(row=2, column=1, pady=2, sticky="ew")
+        self.voice_description._placeholder_text = "Example: A warm and friendly female voice with a slight British accent"
+        self.voice_description.insert("1.0", self.voice_description._placeholder_text)
+        self.voice_description.configure(text_color="gray60")  # Initial placeholder color
         
-        ctk.CTkLabel(frame, text="Gender:").grid(row=2, column=0, padx=(0, 5), pady=2, sticky="w")
-        self.gender_dropdown.grid(row=2, column=1, pady=2, sticky="w")
-        ctk.CTkLabel(frame, text="Accent:").grid(row=3, column=0, padx=(0, 5), pady=2, sticky="w")
-        self.accent_dropdown.grid(row=3, column=1, pady=2, sticky="w")
-        ctk.CTkLabel(frame, text="Age:").grid(row=4, column=0, padx=(0, 5), pady=2, sticky="w")
-        self.age_dropdown.grid(row=4, column=1, pady=2, sticky="w")
-        ctk.CTkLabel(frame, text="Accent Strength:").grid(row=5, column=0, padx=(0, 5), pady=2, sticky="w")
-        self.accent_strength_slider.grid(row=5, column=1, pady=2, sticky="w")
+        # Example text input with character counter
+        text_label = ctk.CTkLabel(frame, text="Example Text:")
+        text_label.grid(row=3, column=0, padx=(0, 5), pady=2, sticky="w")
         
+        # Frame to hold text input and counter
+        text_frame = ctk.CTkFrame(frame)
+        text_frame.grid(row=3, column=1, pady=2, sticky="ew")
+        text_frame.grid_columnconfigure(0, weight=1)
+        
+        self.example_text = ctk.CTkTextbox(text_frame, height=60)
+        self.example_text.grid(row=0, column=0, sticky="ew")
+        self.example_text._placeholder_text = "Enter text for the voice sample (minimum 100 characters)"
+        self.example_text.insert("1.0", self.example_text._placeholder_text)
+        self.example_text.configure(text_color="gray60")
+        
+        # Character counter label
+        self.char_counter = ctk.CTkLabel(text_frame, text="0/1000", text_color="gray60")
+        self.char_counter.grid(row=1, column=0, pady=(2, 0), sticky="e")
+        
+        # Bind text change events
+        self.example_text.bind("<FocusIn>", self.on_example_text_focus_in)
+        self.example_text.bind("<FocusOut>", self.on_example_text_focus_out)
+        self.example_text.bind("<KeyRelease>", self.update_char_counter)
+        
+        self.voice_description.bind("<FocusIn>", self.on_description_focus_in)
+        self.voice_description.bind("<FocusOut>", self.on_description_focus_out)
+        
+        # Preview button - moved to the left side
+        self.preview_button = ctk.CTkButton(frame, text="Generate Preview", 
+                                        command=self.generate_voice_preview)
+        self.preview_button.grid(row=4, column=0, pady=10, sticky="w")
+        
+        # Preview controls (initially hidden)
+        self.preview_frame = ctk.CTkFrame(frame)
+        self.preview_frame.grid(row=5, column=0, columnspan=2, pady=5, sticky="ew")
+        self.preview_frame.grid_columnconfigure(0, weight=1)  # Make preview frame expandable
+        self.preview_frame.grid_remove()  # Hidden by default
+        
+        # Preview navigation
+        nav_frame = ctk.CTkFrame(self.preview_frame)
+        nav_frame.grid(row=0, column=0, columnspan=2, pady=5, sticky="ew")
+        nav_frame.grid_columnconfigure(2, weight=1)  # Center the preview label
+        
+        self.prev_preview_button = ctk.CTkButton(nav_frame, text="←", width=30,
+                                            command=self.previous_preview)
+        self.prev_preview_button.grid(row=0, column=0, padx=5)
+        
+        self.preview_label = ctk.CTkLabel(nav_frame, text="Preview 1/3")
+        self.preview_label.grid(row=0, column=1, padx=20)
+        
+        self.next_preview_button = ctk.CTkButton(nav_frame, text="→", width=30,
+                                            command=self.next_preview)
+        self.next_preview_button.grid(row=0, column=2, padx=5)
+        
+        # Listen button
+        self.listen_button = ctk.CTkButton(nav_frame, text="Listen", width=80,
+                                        command=self.toggle_preview_playback)
+        self.listen_button.grid(row=0, column=3, padx=20)
+        
+        # Voice name input
+        name_label = ctk.CTkLabel(self.preview_frame, text="Voice Name:")
+        name_label.grid(row=1, column=0, padx=5, pady=5)
+        self.voice_name_entry = ctk.CTkEntry(self.preview_frame, width=150)
+        self.voice_name_entry.grid(row=1, column=1, padx=5, pady=5)
+        
+        # Save/Discard buttons
+        self.save_voice_button = ctk.CTkButton(self.preview_frame, text="Save to Library",
+                                            command=self.save_voice_to_library)
+        self.save_voice_button.grid(row=2, column=0, padx=5, pady=5)
+        
+        self.discard_voice_button = ctk.CTkButton(self.preview_frame, text="Discard",
+                                                command=self.discard_voice)
+        self.discard_voice_button.grid(row=2, column=1, padx=5, pady=5)
+
+        # Set initial state for text inputs
         self.toggle_unique_voice_options()
         
         return frame
 
+    def on_example_text_focus_in(self, event):
+        """Handle focus in event for example text."""
+        if self.example_text.get("1.0", "end-1c") == self.example_text._placeholder_text:
+            self.example_text.delete("1.0", "end")
+            self.example_text.configure(text_color=("black", "white"))
+            self.update_char_counter(None)
+
+    def on_example_text_focus_out(self, event):
+        """Handle focus out event for example text."""
+        if not self.example_text.get("1.0", "end-1c").strip():
+            self.example_text.insert("1.0", self.example_text._placeholder_text)
+            self.example_text.configure(text_color="gray60")
+            self.update_char_counter(None)
+
+    def on_description_focus_in(self, event):
+        """Handle focus in event for voice description."""
+        if self.voice_description.get("1.0", "end-1c") == self.voice_description._placeholder_text:
+            self.voice_description.delete("1.0", "end")
+            self.voice_description.configure(text_color=("black", "white"))
+
+    def on_description_focus_out(self, event):
+        """Handle focus out event for voice description."""
+        if not self.voice_description.get("1.0", "end-1c").strip():
+            self.voice_description.insert("1.0", self.voice_description._placeholder_text)
+            self.voice_description.configure(text_color="gray60")
+
+    def update_char_counter(self, event):
+        """Update the character counter and its appearance."""
+        text = self.example_text.get("1.0", "end-1c")
+        if text == self.example_text._placeholder_text:
+            count = 0
+        else:
+            count = len(text)
+        
+        # Update counter text and color based on count
+        self.char_counter.configure(text=f"{count}/1000")
+        
+        if count >= 100:
+            self.char_counter.configure(text_color=("green", "light green"))
+        elif count > 0:
+            self.char_counter.configure(text_color=("red", "red"))
+        else:
+            self.char_counter.configure(text_color="gray60")
+
     def toggle_unique_voice_options(self):
-        state = "normal" if self.use_unique_voice.get() else "disabled"
-        self.gender_dropdown.configure(state=state)
-        self.accent_dropdown.configure(state=state)
-        self.age_dropdown.configure(state=state)
-        self.accent_strength_slider.configure(state=state)
-        self.voice_dropdown.configure(state="disabled" if self.use_unique_voice.get() else "normal")
+        """Toggle between standard voice selection and unique voice generation."""
+        enable = self.use_unique_voice.get()
+        
+        if enable:
+            self.voice_description.configure(state="normal")
+            self.example_text.configure(state="normal")
+            self.preview_button.configure(state="normal")
+            self.voice_dropdown.configure(state="disabled")
+            
+            # Reset placeholder text
+            if not self.voice_description.get("1.0", "end-1c").strip():
+                self.voice_description.insert("1.0", self.voice_description._placeholder_text)
+                self.voice_description.configure(text_color="gray60")
+            if not self.example_text.get("1.0", "end-1c").strip():
+                self.example_text.insert("1.0", self.example_text._placeholder_text)
+                self.example_text.configure(text_color="gray60")
+        else:
+            # Clear and disable text inputs
+            self.voice_description.delete("1.0", "end")
+            self.example_text.delete("1.0", "end")
+            self.voice_description.configure(state="disabled")
+            self.example_text.configure(state="disabled")
+            self.preview_button.configure(state="disabled")
+            self.voice_dropdown.configure(state="normal")
+            
+            # Reset character counter
+            self.char_counter.configure(text="0/1000", text_color="gray60")
+            
+            # Hide preview frame if visible
+            if self.preview_frame.winfo_viewable():
+                self.preview_frame.grid_remove()
+
+    def toggle_preview_playback(self):
+        """Toggle play/pause for the current preview."""
+        if not self.controller:
+            return
+            
+        if self.controller.model.is_playing:
+            self.controller.model.stop()
+            self.listen_button.configure(text="Listen")
+            self.update_button_states(False)
+        else:
+            self.controller.model.play()
+            self.listen_button.configure(text="Stop")
+            self.update_button_states(True)
+
+    def update_preview_display(self, preview_file):
+        """Update the display with the current preview."""
+        self.update_preview_label()
+        # Update audio player and visualizer
+        if self.controller:
+            self.controller.model.stop()  # Stop any playing audio
+            self.listen_button.configure(text="Listen")  # Reset listen button
+            self.controller.model.load_audio(preview_file)
+            self.audio_visualizer.update_waveform(preview_file)
+            self.update_button_states(False)
+
+    def on_playback_finished(self):
+        """Handle playback finished event."""
+        self.listen_button.configure(text="Listen")
+        self.update_button_states(False)
+
+    def show_preview_controls(self):
+        """Show the preview controls and initialize preview navigation."""
+        self.preview_frame.grid()
+        self.current_preview_index = 0
+        self.update_preview_label()
+        self.voice_name_entry.delete(0, 'end')
+        self.voice_name_entry.insert(0, f"Custom Voice {time.strftime('%Y%m%d_%H%M%S')}")
+        self.listen_button.configure(text="Listen")  # Reset listen button state
+
+    def set_generate_preview_command(self, command):
+        """Set the command for generating voice previews."""
+        self.generate_preview_command = command
+
+    def set_save_preview_command(self, command):
+        """Set the command for saving voice previews."""
+        self.save_preview_command = command
+
+    def set_discard_preview_command(self, command):
+        """Set the command for discarding voice previews."""
+        self.discard_preview_command = command
+
+    def show_preview_controls(self):
+        """Show the preview controls and initialize preview navigation."""
+        self.preview_frame.grid()
+        self.current_preview_index = 0
+        self.update_preview_label()
+        self.voice_name_entry.delete(0, 'end')
+        self.voice_name_entry.insert(0, f"Custom Voice {time.strftime('%Y%m%d_%H%M%S')}")
+
+    def update_preview_label(self):
+        """Update the preview counter label."""
+        self.preview_label.configure(text=f"Preview {self.current_preview_index + 1}/3")
+
+    def generate_voice_preview(self):
+        """Generate previews of the unique voice."""
+        if not self.controller:
+            messagebox.showerror("Error", "Controller not initialized")
+            return
+
+        description = self.voice_description.get("1.0", "end-1c").strip()
+        text = self.example_text.get("1.0", "end-1c").strip()
+        
+        if not description or not text:
+            messagebox.showerror("Error", "Please provide both a voice description and example text.")
+            return
+            
+        if len(text) < 100:
+            messagebox.showerror("Error", "Example text must be at least 100 characters long.")
+            return
+        
+        # Show progress
+        self.show_progress_bar(determinate=False)
+        self.preview_button.configure(state="disabled")
+        
+        def preview_thread():
+            if self.controller:
+                success = self.controller.handle_voice_preview(description, text)
+                if success:
+                    self.after(0, self.show_preview_controls)
+                else:
+                    self.after(0, lambda: messagebox.showerror("Error", "Failed to generate voice previews"))
+            
+            self.after(0, self.hide_progress_bar)
+            self.after(0, lambda: self.preview_button.configure(state="normal"))
+        
+        threading.Thread(target=preview_thread, daemon=True).start()
+
+    def next_preview(self):
+        """Switch to the next voice preview."""
+        if self.controller:
+            preview_file = self.controller.speech_service.next_preview()
+            if preview_file:
+                self.current_preview_index = (self.current_preview_index + 1) % 3
+                self.update_preview_display(preview_file)
+
+    def previous_preview(self):
+        """Switch to the previous voice preview."""
+        if self.controller:
+            preview_file = self.controller.speech_service.previous_preview()
+            if preview_file:
+                self.current_preview_index = (self.current_preview_index - 1) % 3
+                self.update_preview_display(preview_file)
+
+    def update_preview_display(self, preview_file):
+        """Update the display with the current preview."""
+        self.update_preview_label()
+        # Update audio player and visualizer
+        if self.controller:
+            self.controller.model.load_audio(preview_file)
+            self.audio_visualizer.update_waveform(preview_file)
+            self.update_button_states(False)
+
+    def save_voice_to_library(self):
+        """Save the current preview voice to the library."""
+        if not self.controller:
+            messagebox.showerror("Error", "Controller not initialized")
+            return
+
+        voice_name = self.voice_name_entry.get().strip()
+        if not voice_name:
+            messagebox.showerror("Error", "Please provide a name for the voice")
+            return
+        
+        if self.controller.save_voice_preview(voice_name):
+            messagebox.showinfo("Success", f"Voice '{voice_name}' added to library")
+            self.preview_frame.grid_remove()
+            self.selected_voice.set(voice_name)
+        else:
+            messagebox.showerror("Error", "Failed to save voice to library")
+
+    def discard_voice(self):
+        """Discard all preview voices."""
+        if self.controller:
+            self.controller.discard_voice_preview()
+        self.preview_frame.grid_remove()
 
     def update_tab_widgets(self):
         current_tab = self.current_module.get()

@@ -32,6 +32,7 @@ class MainController:
 
         # Initialize AudioController
         self.audio_controller = AudioController(audio_model, audio_view, self.config)
+        audio_view.set_controller(self.audio_controller)
         self.audio_controller.load_voices()
         
         # Set the timeline_controller for the AudioController

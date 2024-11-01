@@ -26,6 +26,8 @@ class AudioController:
         self.setup_services()
         self.setup_view_commands()
         self.model.set_playback_finished_callback(self.on_playback_finished)
+        self.current_preview_file = None
+        self.setup_voice_preview_handlers()
 
     def setup_services(self):
         self.llama_service = LlamaService(self.config, self.update_status, self.update_output)
@@ -44,6 +46,7 @@ class AudioController:
         self.view.set_file_select_command(self.on_audio_file_select)
         self.view.set_visualizer_click_command(self.seek_audio)
         self.view.audio_visualizer.set_delete_callback(self.delete_audio_file)
+        self.model.set_playback_finished_callback(self.on_playback_finished)
 
     def set_timeline_controller(self, timeline_controller):
         self.timeline_controller = timeline_controller
@@ -144,6 +147,55 @@ class AudioController:
             self.view.update_output("Error: Invalid voice selected.")
             return None
 
+    def setup_voice_preview_handlers(self):
+        """Set up handlers for voice preview functionality."""
+        # Connect the view's preview handlers to controller methods
+        self.view.set_generate_preview_command(self.handle_voice_preview)
+        self.view.set_save_preview_command(self.save_voice_preview)
+        self.view.set_discard_preview_command(self.discard_voice_preview)
+
+    def handle_voice_preview(self, description: str, text: str):
+        """Handle the generation of a voice preview."""
+        try:
+            preview_file = self.speech_service.generate_voice_preview(description, text)
+            if preview_file:
+                self.current_preview_file = preview_file
+                self.model.load_audio(preview_file)
+                self.view.audio_visualizer.update_waveform(preview_file)
+                self.view.update_button_states(False)
+                return True
+            else:
+                self.view.update_output("Failed to generate voice preview")
+                return False
+        except Exception as e:
+            self.view.update_output(f"Error generating voice preview: {str(e)}")
+            return False
+
+    def save_voice_preview(self, voice_name: str):
+        """Save the previewed voice to the library."""
+        try:
+            if self.speech_service.save_preview_voice_to_library(voice_name):
+                self.load_voices()  # Refresh voice list
+                self.view.update_output(f"Voice '{voice_name}' saved to library")
+                return True
+            else:
+                self.view.update_output("Failed to save voice to library")
+                return False
+        except Exception as e:
+            self.view.update_output(f"Error saving voice to library: {str(e)}")
+            return False
+
+    def discard_voice_preview(self):
+        """Discard the current voice preview."""
+        try:
+            self.speech_service.discard_preview_voice()
+            self.current_preview_file = None
+            self.view.update_output("Voice preview discarded")
+            return True
+        except Exception as e:
+            self.view.update_output(f"Error discarding voice preview: {str(e)}")
+            return False
+        
     def process_sfx_request(self, synchronous=False):
         text_prompt = self.view.user_input.get("1.0", "end-1c").strip()
         duration = self.view.duration_var.get()
@@ -186,7 +238,8 @@ class AudioController:
             logging.warning("No audio file loaded")
     
     def on_playback_finished(self):
-        self.view.after(0, self._update_ui_after_playback)
+        """Handle playback finished event."""
+        self.view.after(0, self.view.on_playback_finished)
 
     def _update_ui_after_playback(self):
         self.model.seek(0)  # Reset the seek position to the start

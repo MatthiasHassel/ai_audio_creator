@@ -1,6 +1,7 @@
 import os
 import re
-import time
+import base64
+import io
 import requests
 from elevenlabs import VoiceSettings
 from elevenlabs.client import ElevenLabs
@@ -17,6 +18,11 @@ class SpeechService:
         self.output_dir = self.config['speech_gen']['output_dir']
         self.logger = logging.getLogger(self.__class__.__name__)
         self.status_update_callback = status_update_callback
+        self.preview_voices = []  # Store all preview voices
+        self.current_preview_index = 0  # Track which preview we're currently playing
+        self.preview_audio_files = []  # Store temporary preview files
+        self.current_voice_description = None  # Store the description used to generate previews
+
     
     def update_output_directory(self, new_output_dir):
         self.output_dir = new_output_dir
@@ -166,48 +172,149 @@ class SpeechService:
     def process_speech_request(self, text_prompt: str, voice_id: str):
         return self.text_to_speech_file(text_prompt, voice_id)
     
-    def generate_unique_voice(self, gender, accent, age, accent_strength, text):
-        url = "https://api.elevenlabs.io/v1/voice-generation/generate-voice"
-        
-        # Ensure text length is between 100 and 1000 characters
-        if len(text) < 100:
-            text = text * (100 // len(text) + 1)  # Repeat text to meet minimum length
-        text = text[:1000]  # Truncate if longer than 1000 characters
-        
-        payload = {
-            "gender": gender,
-            "accent": accent,
-            "age": age,
-            "accent_strength": float(accent_strength),  # Ensure this is a float
-            "text": text
-        }
-        headers = {
-            "xi-api-key": self.api_key,
-            "Content-Type": "application/json"
-        }
+    def generate_voice_preview(self, voice_description: str, text: str):
+        """Generate previews of unique voices."""
+        self.logger.info(f"Generating voice previews with description: {voice_description}")
+        self.current_voice_description = voice_description  # Store for later use
 
         try:
+            # Ensure text meets minimum requirements
+            if len(text) < 100:
+                text = text * (100 // len(text) + 1)
+            text = text[:1000]
+            
+            # Use the correct API endpoint for voice preview generation
+            url = "https://api.elevenlabs.io/v1/text-to-voice/create-previews"
+            
+            headers = {
+                "xi-api-key": self.api_key,
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "voice_description": voice_description,
+                "text": text
+            }
+            
             response = requests.post(url, json=payload, headers=headers)
             response.raise_for_status()
-
+            
             if response.status_code == 200:
-                # Generate a unique filename
-                filename = f"unique_voice_{int(time.time())}.mp3"
-                file_path = os.path.join(self.output_dir, filename)
-
-                with open(file_path, 'wb') as f:
-                    f.write(response.content)
-
-                return file_path
+                response_data = response.json()
+                previews = response_data.get('previews', [])
+                
+                if previews:
+                    self.cleanup_previews()  # Clean up any existing previews
+                    self.preview_voices = []
+                    self.preview_audio_files = []
+                    
+                    # Process each preview
+                    for i, preview in enumerate(previews):
+                        voice_id = preview.get('generated_voice_id')
+                        audio_base64 = preview.get('audio_base_64')
+                        
+                        if voice_id and audio_base64:
+                            # Create a temporary file for this preview
+                            temp_file = os.path.join(self.output_dir, f"temp_preview_{i}.mp3")
+                            
+                            # Decode and save the audio
+                            audio_bytes = base64.b64decode(audio_base64)
+                            with open(temp_file, 'wb') as f:
+                                f.write(audio_bytes)
+                            
+                            self.preview_voices.append(voice_id)
+                            self.preview_audio_files.append(temp_file)
+                    
+                    self.current_preview_index = 0
+                    self.logger.info(f"Successfully generated {len(self.preview_voices)} voice previews")
+                    
+                    # Return the first preview file
+                    return self.preview_audio_files[0] if self.preview_audio_files else None
+                else:
+                    self.logger.error("No previews received in API response")
+                    return None
             else:
-                self.logger.error(f"Failed to generate unique voice: {response.text}")
+                self.logger.error(f"API request failed with status {response.status_code}")
                 return None
-
-        except requests.exceptions.RequestException as e:
-            self.logger.error(f"Error generating unique voice: {str(e)}")
-            if hasattr(e.response, 'text'):
-                self.logger.error(f"Response content: {e.response.text}")
+                
+        except Exception as e:
+            self.logger.error(f"Error generating voice previews: {str(e)}")
             return None
 
-    def process_unique_voice_request(self, gender, accent, age, accent_strength, text):
-        return self.generate_unique_voice(gender, accent, age, accent_strength, text)
+    def next_preview(self):
+        """Switch to the next preview voice."""
+        if self.preview_audio_files:
+            self.current_preview_index = (self.current_preview_index + 1) % len(self.preview_audio_files)
+            return self.preview_audio_files[self.current_preview_index]
+        return None
+
+    def previous_preview(self):
+        """Switch to the previous preview voice."""
+        if self.preview_audio_files:
+            self.current_preview_index = (self.current_preview_index - 1) % len(self.preview_audio_files)
+            return self.preview_audio_files[self.current_preview_index]
+        return None
+
+    def get_current_preview_id(self):
+        """Get the voice ID of the currently selected preview."""
+        if self.preview_voices and 0 <= self.current_preview_index < len(self.preview_voices):
+            return self.preview_voices[self.current_preview_index]
+        return None
+
+    def save_preview_voice_to_library(self, voice_name: str):
+        """Save the current preview voice to the user's voice library."""
+        voice_id = self.get_current_preview_id()
+        if not voice_id or not self.current_voice_description:
+            self.logger.error("No preview voice ID or description available to save")
+            return False
+            
+        try:
+            url = "https://api.elevenlabs.io/v1/text-to-voice/create-voice-from-preview"
+            
+            headers = {
+                "xi-api-key": self.api_key,
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "voice_name": voice_name,
+                "voice_description": self.current_voice_description,
+                "generated_voice_id": voice_id,
+                "labels": {},  # Optional, can be empty
+                "played_not_selected_voice_ids": []  # Optional for RLHF
+            }
+            
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            
+            if response.status_code == 200:
+                self.logger.info(f"Voice '{voice_name}' successfully added to library")
+                return True
+            else:
+                self.logger.error(f"Failed to add voice to library: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Error saving voice to library: {str(e)}")
+            return False
+        finally:
+            self.cleanup_previews()
+            self.current_voice_description = None  # Clear stored description
+
+    def cleanup_previews(self):
+        """Clean up all temporary preview files and reset preview state."""
+        for temp_file in self.preview_audio_files:
+            if temp_file and os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                except Exception as e:
+                    self.logger.error(f"Error removing temporary preview file: {str(e)}")
+        
+        self.preview_voices = []
+        self.preview_audio_files = []
+        self.current_preview_index = 0
+
+    def discard_preview_voice(self):
+        """Discard all preview voices and clean up."""
+        self.cleanup_previews()
+        self.logger.info("Voice previews discarded")
