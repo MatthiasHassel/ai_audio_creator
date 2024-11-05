@@ -1,155 +1,165 @@
 # AI Audio Creator
 
-AI Audio Creator is a Python application that combines AI-generated audio content with a timeline interface for creating and editing audio projects. This tool is aimed for content creators, podcasters, and anyone looking to streamline their audio production workflow.
+AI Audio Creator is a Python-based desktop application that combines various AI technologies to help create, edit, and arrange audio content. Perfect for audiobook production, podcast creation, and general audio projects, it integrates multiple AI services to generate music, sound effects, and voice content based on text prompts.
 
-## Table of Contents
-1. [Features](#features)
-2. [Installation](#installation)
-3. [Usage Guide](#usage-guide)
-   - [Audio Generator](#audio-generator)
-   - [Script Editor](#script-editor)
-   - [Timeline](#timeline)
-4. [Project Management](#project-management)
-5. [Limitations and Future Improvements](#limitations-and-future-improvements)
-6. [Attributions](#attributions)
+![Application Screenshot Placeholder](AI_AUDIO_CREATOR_main_window.png)
 
 ## Features
 
-- AI-powered audio generation for music, sound effects (SFX), and speech
-- Script editor for writing and managing audio scripts
-- Timeline interface for arranging and mixing audio clips
-- Project management system for organizing your work
-- Integration with various AI services (ElevenLabs, OpenAI, etc.)
-- Waveform visualization and audio playback
+### Audio Generation
+- **AI Music Generation**: Create custom music pieces using text descriptions
+- **Sound Effects (SFX)**: Generate sound effects from textual descriptions
+- **AI Voice Generation**: Convert text to speech with customizable voices
+
+### Script Editor
+- **Rich Text Editing**: Format your scripts with character lines, SFX, and music cues
+- **Script Analysis**: Automatically analyze scripts to identify speakers, sound effects, and music cues
+- **PDF Import**: Import and convert PDF scripts into the editor format
+
+### Timeline Editor
+- **Multi-track Timeline**: Arrange audio clips across multiple tracks
+- **Drag & Drop**: Easily arrange audio clips with drag-and-drop functionality
+- **Track Controls**: Adjust volume, mute, and solo individual tracks
+- **Waveform Visualization**: Visual representation of audio clips
+- **Export**: Export your finished project as a single audio file
+
+## Requirements
+
+- Python 3.10 or higher
+- Operating System: Windows 10/11, macOS 10.15+, or Linux
+- API Keys for:
+  - OpenAI (for script analysis and prompt improvement)
+  - ElevenLabs (for voice generation)
+- Cookie and Session ID for:  (more information below)
+  - Suno (for music generation)
 
 ## Installation
 
 1. Clone the repository:
-   ```
-   git clone https://github.com/yourusername/ai-audio-creator.git
-   cd ai-audio-creator
-   ```
+```bash
+git clone https://github.com/yourusername/ai-audio-creator.git
+cd ai-audio-creator
+```
 
-2. Create a virtual environment:
-   ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
-   ```
+2. Create and activate a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows use: venv\Scripts\activate
+```
 
-3. Install the required packages:
-   ```
-   pip install -r requirements.txt
-   ```
-4. Install llama3 via ollama: https://ollama.com/
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
 
-5. Set up API keys:
-   - Adjust the .env_example file:
-   Add your ElevenLabs + ChatGPT API Keys:
-   ```
-   ELEVENLABS_API_KEY=your_elevenlabs_api_key
-   OPENAI_API_KEY=your_openai_api_key
-   ```
+4. Set up environment variables:
+   - Copy `.env.example` to `.env`
+   - Add your API keys:
+     ```
+     OPENAI_API_KEY=your_key_here
+     ELEVENLABS_API_KEY=your_key_here
+     SUNO_COOKIE=your_cookie_here
+     SUNO_SESSION_ID=your_session_id_here
+     ```
+5. Add your Suno-Cookie and Session ID. Instructions for this: https://github.com/gcui-art/suno-api/blob/main/public/get-cookie-demo.gif
 
-6. Add your Suno-Cookie and Session ID.
-   Instructions for this: https://github.com/gcui-art/suno-api/blob/main/public/get-cookie-demo.gif
+6. Run the application:
+```bash
+python src/main.py
+```
 
-7. Rename the .env_example file to just .env and place a copy of it in the suno_api directory.
-   (Temporary workaround. Should not be necessary in future versions)
+## Usage
 
-   Install Suno API:
-   ```
-   cd /<your_project_directory_here>/suno_api
-   npm install
-   ```
+### Getting Started
 
-   To check if the Suno API works, in suno_api run:
-   ```
-   npm run dev
-   ```
-   Visit http://localhost:3000/api/get_limit
-   If the following result is returned:
-   
-   {
-     "credits_left": 50,
-     "period": "day",
-     "monthly_limit": 50,
-     "monthly_usage": 50
-   }
-   
-   ...it means the program is running normally.
+1. **Create a New Project**
+   - Click File → New Project
+   - Enter a project name
+   - Choose a save location
 
+2. **Script Writing/Import**
+   - Use the script editor on the left side
+   - Format text using the toolbar or keyboard shortcuts
+   - Import existing scripts using the "Import PDF" button
 
-9. Configure the application:
-   - Review and modify `config/config.yaml` as needed
+3. **Audio Generation**
+   - Select the appropriate tab (Music, SFX, or Speech)
+   - Enter your text prompt
+   - Click "Generate" to create audio
+   - Preview generated audio in the player below
 
-10. Run the application:
-   ```
-   python src/main.py
-   ```
+4. **Timeline Arrangement**
+   - Open the timeline window
+   - Drag audio clips from the file list to the timeline
+   - Arrange clips across multiple tracks
+   - Adjust track volumes and settings
+   - Export final arrangement
 
-## Usage Guide
+### Keyboard Shortcuts
 
-### Audio Generator
+Script Editor:
+- `Ctrl+B`: Bold text
+- `Ctrl+I`: Italic text
+- `Ctrl+U`: Underline text
+- `Ctrl+1-5`: Format as Speaker 1-5
+- `Ctrl+F`: Insert SFX marker
+- `Ctrl+M`: Insert Music marker
 
-The Audio Generator allows you to create AI-generated audio content:
+Timeline:
+- `Space`: Play/Pause
+- `S`: Toggle Solo on selected track
+- `M`: Toggle Mute on selected track
+- `↑/↓`: Select track above/below
+- `Delete`: Remove selected clip
+- `Ctrl+Z`: Undo
+- `Ctrl+Shift+Z`: Redo
 
-1. Select the desired tab (Music, SFX, or Speech)
-2. Enter a text prompt describing the audio you want to generate
-3. Use the "Generate" button to create the audio
-4. Preview the generated audio using the built-in player
-5. Optionally, use the "Input to Llama3" button for AI-assisted prompt refinement (Music and SFX only)
+## Project Structure
 
-### Script Editor
+```
+ai_audio_creator/
+├── src/                 # Source code
+│   ├── models/         # Data models
+│   ├── views/          # UI components
+│   ├── controllers/    # Application logic
+│   ├── services/       # External service integrations
+│   └── utils/          # Utility functions
+├── config/             # Configuration files
+├── docs/               # Documentation
+└── Projects/           # Project storage
+```
 
-The Script Editor helps you write and manage scripts for your audio projects:
+## Configuration
 
-1. Use the text area to write or edit your script
-2. Format text using the toolbar buttons (Bold, Italic, Underline)
-3. Use speaker tags to denote different characters (e.g., `**Speaker 1:** "Dialogue here"`)
-4. Add sound effects and music cues using tags (e.g., `[SFX: description]`, `[MUSIC: description]`)
-5. Save and load scripts using the buttons at the bottom
-6. Import PDF scripts and analyze them for automatic formatting
+The application can be configured through:
+- `config/config.yaml`: Main configuration file
+- `.env`: API keys and sensitive information
+- Preferences dialog in the application
 
-### Timeline
+## Contributing
 
-The Timeline interface allows you to arrange and mix your audio clips:
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
-1. Open the Timeline window using the "Show Timeline" button
-2. Drag and drop audio files from the Audio Generator to add them to the timeline
-3. Arrange clips by dragging them within tracks
-4. Add new tracks using the "Add Track" button
-5. Use the playhead to preview your project
-6. Adjust volume levels and apply solo/mute to individual tracks
-7. Zoom in/out using the slider controls for precise editing
+Please ensure your code follows the project's coding style and includes appropriate tests.
 
-## Project Management
+## License
 
-AI Audio Creator uses a project-based system to organize your work:
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-1. Create a new project using File > New Project
-2. Open existing projects with File > Open Project
-3. Save your progress frequently with File > Save Project
-4. All project files (scripts, generated audio, timeline data) are stored in the project folder
+## Support
 
-## Limitations and Future Improvements
+For support, please:
+1. Check the [Documentation](docs/AI_Audio_Creator_User_Manual.md)
+2. Search existing [Issues](https://github.com/yourusername/ai-audio-creator/issues)
+3. Create a new issue if needed
 
-While AI Audio Creator offers a robust set of features, there are some limitations and areas for future improvement:
+## Acknowledgments
 
-- Currently limited to specific AI services (ElevenLabs, OpenAI)
-- No built-in audio effects or mixing capabilities
-- Limited undo/redo functionality
-
-
-Future improvements could include:
-
-- Support for additional AI audio generation services
-- Support for running generative AI models locally + replacing ChatGPT fully with Llama
-- Advanced audio editing and effects processing
-- Improved project version control and backup
-- Export options for various audio formats and platforms
-
-Contributions and suggestions for improving AI Audio Creator are very welcome!
-
-## Attributions
-Suno-API provided by: https://github.com/gcui-art/suno-api/tree/main
-
+- OpenAI GPT-4 for script analysis and prompt improvement
+- ElevenLabs for voice generation
+- Suno for AI music generation
+- CustomTkinter for the UI framework
