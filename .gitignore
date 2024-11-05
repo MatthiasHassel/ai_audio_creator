@@ -34,3 +34,5 @@ api_info.txt
 
 .DS_Store
 /suno_api/.DS_Store
+
+.vscode

@@ -148,7 +148,7 @@ Please ensure your code follows the project's coding style and includes appropri
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU LESSER GENERAL PUBLIC License - see the [LICENSE](LICENSE) file for details.
 
 ## Support
 
@@ -163,3 +163,4 @@ For support, please:
 - ElevenLabs for voice generation
 - Suno for AI music generation
 - CustomTkinter for the UI framework
+- Suno-API provided by: https://github.com/gcui-art/suno-api/tree/main
