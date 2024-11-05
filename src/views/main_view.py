@@ -149,6 +149,9 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
         self.menu.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="User Manual", command=self.open_user_manual)
 
+        settings_menu = tk.Menu(self.menu, tearoff=0)
+        self.menu.add_cascade(label="Settings", menu=settings_menu)
+        settings_menu.add_command(label="Preferences", command=self.show_preferences)
 
     def create_main_content(self):
         self.paned_window = tk.PanedWindow(self, orient=tk.HORIZONTAL, sashwidth=10, sashrelief=tk.RAISED, bg='#3E3E3E')
@@ -161,6 +164,10 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
         self.paned_window.add(self.audio_generator_view, stretch="always")
 
         self.paned_window.after(10, self.set_initial_sash_position)
+
+    def show_preferences(self):
+        from views.preferences_view import PreferencesWindow
+        PreferencesWindow(self, self.config_data)
 
     def create_status_bar(self):
         self.status_var = tk.StringVar()

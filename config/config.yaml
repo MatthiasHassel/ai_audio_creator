@@ -5,6 +5,8 @@ api:
   base_url: 'http://localhost:3000'
   elevenlabs_api_key: ${ELEVENLABS_API_KEY}
   openai_api_key: ${OPENAI_API_KEY}
+  suno_cookie: ${SUNO_COOKIE}
+  suno_session_id: ${SUNO_SESSION_ID}
 
 # Llama Configuration
 llama:
