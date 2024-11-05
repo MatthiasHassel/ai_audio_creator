@@ -1,4 +1,4 @@
-from controllers.audio_controller import AudioController
+from controllers.audio_generator_controller import AudioGeneratorController
 from controllers.script_editor_controller import ScriptEditorController
 from controllers.timeline_controller import TimelineController
 from tkinter import filedialog, simpledialog, messagebox
@@ -30,12 +30,12 @@ class MainController:
         self.timeline_controller.master_controller = self
         self.view.set_timeline_controller(self.timeline_controller)
 
-        # Initialize AudioController
-        self.audio_controller = AudioController(audio_model, audio_view, self.config)
+        # Initialize AudioGeneratorController
+        self.audio_controller = AudioGeneratorController(audio_model, audio_view, self.config)
         audio_view.set_controller(self.audio_controller)
         self.audio_controller.load_voices()
         
-        # Set the timeline_controller for the AudioController
+        # Set the timeline_controller for the AudioGeneratorController
         self.audio_controller.set_timeline_controller(self.timeline_controller)
         
         script_model = self.model.get_script_model()

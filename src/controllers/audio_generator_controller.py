@@ -1,6 +1,6 @@
 import threading
 import os
-from models.audio_model import AudioModel
+from models.audio_generator_model import AudioGeneratorModel
 from services.llama_service import LlamaService
 from services.music_service import MusicService
 from services.sfx_service import SFXService
@@ -9,8 +9,8 @@ from tkinter import messagebox
 import logging
 from utils.file_utils import read_audio_prompt
 
-class AudioController:
-    def __init__(self, model: AudioModel, view, config):
+class AudioGeneratorController:
+    def __init__(self, model: AudioGeneratorModel, view, config):
         self.model = model
         self.view = view
         self.config = config

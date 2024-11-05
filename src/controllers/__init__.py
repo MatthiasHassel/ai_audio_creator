@@ -1,4 +1,4 @@
 from .main_controller import MainController
-from .audio_controller import AudioController
+from .audio_generator_controller import AudioGeneratorController
 from .script_editor_controller import ScriptEditorController
 from .timeline_controller import TimelineController

@@ -2,7 +2,7 @@ import pygame
 import time
 import threading
 
-class AudioModel:
+class AudioGeneratorModel:
     def __init__(self):
         self.current_audio_file = None
         self.is_playing = False

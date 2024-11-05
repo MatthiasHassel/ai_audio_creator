@@ -1,12 +1,12 @@
 # main_model.py
 
-from models.audio_model import AudioModel
+from models.audio_generator_model import AudioGeneratorModel
 from models.script_model import ScriptModel
 from models.timeline_model import TimelineModel
 
 class MainModel:
     def __init__(self):
-        self.audio_model = AudioModel()
+        self.audio_model = AudioGeneratorModel()
         self.script_model = ScriptModel()
         self.timeline_model = TimelineModel()
 
