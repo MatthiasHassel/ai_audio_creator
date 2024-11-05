@@ -1,7 +1,7 @@
 import threading
 import os
 from models.audio_generator_model import AudioGeneratorModel
-from services.llama_service import LlamaService
+from services.llm_service import LLMService
 from services.music_service import MusicService
 from services.sfx_service import SFXService
 from services.speech_service import SpeechService
@@ -30,7 +30,7 @@ class AudioGeneratorController:
         self.setup_voice_preview_handlers()
 
     def setup_services(self):
-        self.llama_service = LlamaService(self.config, self.update_status, self.update_output)
+        self.llm_service = LLMService(self.config, self.update_status, self.update_output)
         self.music_service = MusicService(self.config, self.update_status)
         self.sfx_service = SFXService(self.config, self.update_status)
         self.speech_service = SpeechService(self.config, self.update_status)
@@ -86,7 +86,7 @@ class AudioGeneratorController:
         self.view.show_progress_bar(determinate=False)
 
         # Process the Llama request
-        self.llama_service.process_llama_request(user_input, current_module == "Music")
+        self.llm_service.process_llm_request(user_input, current_module == "Music")
 
     def set_add_to_timeline_callback(self, callback):
             self.add_to_timeline_callback = callback

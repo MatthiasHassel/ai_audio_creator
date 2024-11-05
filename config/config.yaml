@@ -8,10 +8,6 @@ api:
   suno_cookie: ${SUNO_COOKIE}
   suno_session_id: ${SUNO_SESSION_ID}
 
-# Llama Configuration
-llama:
-  model: 'llama3:latest'
-
 # Project Configuration
 projects:
   base_dir: './Projects'

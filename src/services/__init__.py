@@ -1,6 +1,6 @@
-from .llama_service import LlamaService
+from .llm_service import LLMService
 from .music_service import MusicService
 from .sfx_service import SFXService
 from .speech_service import SpeechService
 
-__all__ = ['LlamaService', 'MusicService', 'SFXService', 'SpeechService']
+__all__ = ['LLMService', 'MusicService', 'SFXService', 'SpeechService']
