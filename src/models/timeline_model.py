@@ -123,16 +123,17 @@ class TimelineModel:
         """Cleanup audio stream in a separate thread"""
         try:
             # Stop and close the audio stream
-            if self.audio_stream:
+            if self.audio_stream is not None:  # Check if stream exists
                 logging.info("Stopping audio stream...")
                 try:
-                    if self.audio_stream.active:
-                        self.audio_stream.stop()
-                    self.audio_stream.close()
+                    if hasattr(self.audio_stream, 'active') and self.audio_stream.active:
+                         self.audio_stream.stop()
+                    if hasattr(self.audio_stream, 'close'):  # Check if close method exists
+                        self.audio_stream.close()
                 except Exception as e:
                     logging.error(f"Error stopping audio stream: {str(e)}")
                 finally:
-                    self.audio_stream = None
+                     self.audio_stream = None
 
             with self.state_lock:
                 self.is_stopping = False
