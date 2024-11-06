@@ -61,8 +61,8 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.timeline_width = 10000  # Initial width, will be adjusted based on clips
         self.playhead_line = None
         self.playhead_position = 0
-        self.is_playing = False
         self.after_id = None
+        self.after_ids = []
         self.start_time = 0
         self.selected_clip = None
         self.dragging = False
@@ -550,30 +550,43 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.remove_track_callback = callback
 
     def play_timeline(self):
-        if not self.is_playing:
-            self.is_playing = True
-            self.play_button.configure(state="disabled")
-            self.stop_button.configure(state="normal")
-            self.restart_button.configure(state="normal")
-            logging.info("Timeline playback started in view")
-            initial_position = self.controller.get_playhead_position()
-            self.update_playhead_position(initial_position)
+        """Called when user clicks play button"""
+        if self.controller:
+            self.controller.play_timeline()
 
     def stop_timeline(self):
-        self.is_playing = False
+        """Called when user clicks stop button"""
+        if self.controller:
+            self.controller.stop_timeline()
+
+    def restart_timeline(self):
+        """Called when user clicks restart button"""
+        if self.controller:
+            self.controller.restart_timeline()
+
+    def on_playback_started(self, position):
+        self.play_button.configure(state="disabled")
+        self.stop_button.configure(state="normal")
+        self.restart_button.configure(state="normal")
+        self.update_playhead_position(position)
+        logging.info("Timeline playback started in view")
+
+    def on_playback_stopped(self, position):
+        """Called by the controller when playback stops"""
         self.play_button.configure(state="normal")
         self.stop_button.configure(state="disabled")
         self.restart_button.configure(state="normal")
+        self.update_playhead_position(position)
         # Cancel any pending playhead updates
-        self.after_cancel(self.after(0, lambda: None))
+        while self.after_ids:
+            try:
+                self.after_cancel(self.after_ids.pop())
+            except Exception as e:
+                logging.error(f"Error cancelling after event: {str(e)}")
 
     def restart_timeline(self):
-        self.stop_timeline()
-        self.playhead_position = 0
         if self.controller:
-            self.controller.set_playhead_position(0)
-        self.draw_playhead(0)
-        self.stop_button.configure(state="normal")
+            self.controller.restart_timeline()
 
     def update_playhead_position(self, position):
         self.playhead_position = min(position, self.timeline_duration)
