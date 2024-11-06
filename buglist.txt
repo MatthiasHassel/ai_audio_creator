@@ -3,6 +3,9 @@
     * tracklabels can be scrolled individually for a little bit, when all tracks fit in the frame and vertical scroll is meant to be disabled.
 
 - Audio Playback issues:
-    * timeline audio playback sometimes causes the program to freeze
+    * timeline audio playback sometimes causes the program to freeze [partly fixed]
+    --> fixed freezing. On a Mac the following error messages are displayed: 
+    ||PaMacCore (AUHAL)|| Error on line 2796: err='-50', msg=Unknown Error      ...after pressing stop
+    ||PaMacCore (AUHAL)|| Error on line 2796: err='-66748', msg=Unknown Error   ...after pressing restart while timeline is playing
 
 
