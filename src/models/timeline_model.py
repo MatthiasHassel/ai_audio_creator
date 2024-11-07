@@ -9,24 +9,26 @@ from pydub import AudioSegment
 from utils.audio_clip import AudioClip
 from utils.audio_buffer_manager import AudioBufferManager
 
+
 class TimelineModel:
     def __init__(self):
         self.tracks = []
         self.is_playing = False
         self.playhead_position = 0
         self.start_time = 0
-        self.p = pyaudio.PyAudio()
-        self.stream = None
         self.audio_stream = None
         self.active_clips = []
         self.audio_cache = {}
         self.cache_lock = threading.Lock()
+        self.stop_event = threading.Event()
+        self.state_lock = threading.Lock()
+        self.is_stopping = False
+        self.state_change_callbacks = []
         self.sample_rate = 44100
         self.target_sample_rate = 44100
         self.channels = 2
-        self.max_playhead_position = 1800  # Set a maximum playhead position in sec (e.g., 30min -> 1800s)
-        self.quantization_interval = 1 / 44100  # Quantize to sample rate
-
+        self.max_playhead_position = 1800
+        self.quantization_interval = 1 / 44100
 
         self.undo_stack = []
         self.redo_stack = []
@@ -34,9 +36,26 @@ class TimelineModel:
 
         self.buffer_manager = AudioBufferManager(self, buffer_size=2048)
 
+    def add_state_change_callback(self, callback):
+        self.state_change_callbacks.append(callback)
+
+    def _notify_state_change(self, is_playing, position):
+        for callback in self.state_change_callbacks:
+            try:
+                callback(is_playing, position)
+            except Exception as e:
+                logging.error(f"Error in state change callback: {str(e)}")
+
     def play_timeline(self, active_tracks):
-        if not self.is_playing:
-            self.is_playing = True
+        logging.info("Starting timeline playback...")
+        try:
+            with self.state_lock:
+                if self.is_playing or self.is_stopping:
+                    return
+                self.is_playing = True
+                self.stop_event.clear()
+
+            self._notify_state_change(True, self.playhead_position)
             self.buffer_manager.is_playing = True
             self.buffer_manager.reset()
             self.buffer_manager.playhead_position = self.playhead_position
@@ -44,27 +63,113 @@ class TimelineModel:
 
             def audio_callback(outdata, frames, time, status):
                 if status:
-                    print(status)
-                data, _ = self.buffer_manager.get_audio_data(None, frames, None, None)
-                outdata[:] = data
-                self.update_playhead()
+                    logging.warning(f"Audio callback status: {status}")
+                
+                # Check stop event first
+                if self.stop_event.is_set():
+                    raise sd.CallbackStop
 
+                try:
+                    # Don't acquire any locks in the callback
+                    if not self.is_playing:
+                        raise sd.CallbackStop
+                    
+                    data, _ = self.buffer_manager.get_audio_data(None, frames, None, None)
+                    outdata[:] = data
+                    self.update_playhead()
+                except Exception as e:
+                    logging.error(f"Error in audio callback: {str(e)}")
+                    raise sd.CallbackStop
+
+            logging.info("Creating audio stream...")
             self.audio_stream = sd.OutputStream(
                 samplerate=self.sample_rate,
                 channels=2,
                 callback=audio_callback,
-                blocksize=2048
+                blocksize=2048,
+                finished_callback=self.on_stream_finished
             )
             self.audio_stream.start()
+            logging.info("Audio stream started successfully")
+        except Exception as e:
+            logging.error(f"Error starting playback: {str(e)}", exc_info=True)
+            self._safe_cleanup()
 
     def stop_timeline(self):
-        if self.is_playing:
-            self.is_playing = False
+        """Non-blocking stop operation"""
+        logging.info("Stopping timeline playback...")
+        try:
+            with self.state_lock:
+                if not self.is_playing or self.is_stopping:
+                    return
+                self.is_stopping = True
+                self.is_playing = False  # Set this early to stop audio callback
+
+            # Signal stop to all components
+            self.stop_event.set()
             self.buffer_manager.is_playing = False
-            if self.audio_stream:
-                self.audio_stream.stop()
-                self.audio_stream.close()
-                self.audio_stream = None
+            
+            # Start cleanup in a separate thread
+            threading.Thread(target=self._cleanup_audio_stream, daemon=True).start()
+            
+            # Notify state change immediately
+            self._notify_state_change(False, self.playhead_position)
+            
+        except Exception as e:
+            logging.error(f"Error in stop_timeline: {str(e)}", exc_info=True)
+            self._safe_cleanup()
+
+    def _cleanup_audio_stream(self):
+        """Cleanup audio stream in a separate thread"""
+        try:
+            # Stop and close the audio stream
+            if self.audio_stream is not None:  # Check if stream exists
+                logging.info("Stopping audio stream...")
+                try:
+                    if hasattr(self.audio_stream, 'active') and self.audio_stream.active:
+                         self.audio_stream.stop()
+                    if hasattr(self.audio_stream, 'close'):  # Check if close method exists
+                        self.audio_stream.close()
+                except Exception as e:
+                    logging.error(f"Error stopping audio stream: {str(e)}")
+                finally:
+                     self.audio_stream = None
+
+            with self.state_lock:
+                self.is_stopping = False
+            
+            logging.info("Audio stream cleanup completed")
+            
+        except Exception as e:
+            logging.error(f"Error in cleanup_audio_stream: {str(e)}")
+            with self.state_lock:
+                self.is_stopping = False
+
+    def _safe_cleanup(self):
+        """Safe cleanup that can be called from any thread"""
+        try:
+            # Set flags first
+            self.stop_event.set()
+            self.buffer_manager.is_playing = False
+            
+            with self.state_lock:
+                self.is_playing = False
+                self.is_stopping = False
+            
+            # Start cleanup in background
+            threading.Thread(target=self._cleanup_audio_stream, daemon=True).start()
+            
+            self._notify_state_change(False, self.playhead_position)
+            
+        except Exception as e:
+            logging.error(f"Error in safe cleanup: {str(e)}")
+        finally:
+            self.stop_event.clear()
+
+    def on_stream_finished(self):
+        """Callback when the audio stream finishes"""
+        logging.info("Audio stream finished callback triggered")
+        self._safe_cleanup()
 
     def preload_audio_files(self):
         threading.Thread(target=self._preload_audio_files_thread, daemon=True).start()
@@ -278,10 +383,12 @@ class TimelineModel:
         self.is_modified = False
 
     def __del__(self):
-        if self.stream:
-            self.stream.stop_stream()
-            self.stream.close()
-        self.p.terminate()
+        if self.audio_stream:
+            try:
+                self.audio_stream.stop()
+                self.audio_stream.close()
+            except:
+                pass
 
     def set_modified(self, value):
         self.is_modified = value

@@ -20,6 +20,7 @@ class TimelineController:
         self.imported_audio_files = set()
         self.max_playhead_position = 1800  # Set a maximum playhead position in sec (e.g., 30m -> 1800s)
         self.timeline_model.on_playhead_update = self.update_playhead_view
+        self.timeline_model.add_state_change_callback(self.on_playback_state_change)
 
     def show(self):
         if self.view is None or not self.view.winfo_exists():
@@ -304,17 +305,20 @@ class TimelineController:
             return solo_tracks
         return [track for track in tracks if not track.get("mute", False)]
 
+    def on_playback_state_change(self, is_playing, position):
+        if self.view and self.view.winfo_exists():
+            if is_playing:
+                self.view.on_playback_started(position)
+            else:
+                self.view.on_playback_stopped(position)
+
     def play_timeline(self):
         active_tracks = self.get_active_tracks()
         self.timeline_model.play_timeline(active_tracks)
-        if self.view:
-            self.view.play_timeline()
         logging.info(f"Timeline playback initiated from controller. Initial position: {self.timeline_model.playhead_position}")
 
     def stop_timeline(self):
         self.timeline_model.stop_timeline()
-        if self.view:
-            self.view.stop_timeline()
         logging.info("Timeline playback stopped from controller")
 
     def update_playhead_view(self, position):
@@ -328,10 +332,12 @@ class TimelineController:
         logging.info(f"Playhead position set to {position}")
 
     def restart_timeline(self):
-        self.stop_timeline()
-        self.set_playhead_position(0)
-        if self.view:
-            self.view.restart_button.configure(state="normal")
+        if self.timeline_model.is_playing:
+            self.stop_timeline()
+            # Add small delay to ensure stop is processed
+            self.view.after(100, lambda: self.set_playhead_position(0))
+        else:
+            self.set_playhead_position(0)
 
     def get_playhead_position(self):
         position = self.timeline_model.get_playhead_position()
