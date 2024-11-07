@@ -20,6 +20,7 @@ setup(
         'PyPDF2==3.0.1',
         'requests==2.32.3',
         'python-dotenv==1.0.1',
+        'python-reapy==0.10.0',
     ],
     entry_points={
         'console_scripts': [

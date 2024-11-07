@@ -80,8 +80,8 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.clear_button = ctk.CTkButton(action_frame, text="Clear")
         self.clear_button.grid(row=0, column=1, padx=5)
 
-        self.llama_button = ctk.CTkButton(action_frame, text="Improve Prompt")
-        self.llama_button.grid(row=0, column=2, padx=5)
+        self.llm_button = ctk.CTkButton(action_frame, text="Improve Prompt")
+        self.llm_button.grid(row=0, column=2, padx=5)
 
     def create_tab_specific_options(self, parent):
         self.tab_widgets = {
@@ -135,6 +135,9 @@ class AudioGeneratorView(ctk.CTkFrame):
 
         self.add_to_timeline_button = ctk.CTkButton(control_frame, text="Add to Timeline", state="disabled", width=120)
         self.add_to_timeline_button.grid(row=0, column=3, padx=2)
+
+        self.add_to_reaper_button = ctk.CTkButton(control_frame, text="Add to Reaper", state="disabled", width=120)
+        self.add_to_reaper_button.grid(row=0, column=4, padx=2)
 
     def create_progress_and_status_bar(self, parent):
         progress_status_frame = ctk.CTkFrame(parent)
@@ -504,9 +507,9 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.current_tab_widget.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         
         if current_tab in ["Music", "SFX"]:
-            self.llama_button.grid()
+            self.llm_button.grid()
         else:
-            self.llama_button.grid_remove()
+            self.llm_button.grid_remove()
 
         # Update the audio file selector
         self.audio_file_selector.update_module(current_tab.lower())
@@ -597,8 +600,8 @@ class AudioGeneratorView(ctk.CTkFrame):
     def set_clear_command(self, command):
         self.clear_button.configure(command=command)
 
-    def set_llama_command(self, command):
-        self.llama_button.configure(command=command)
+    def set_llm_command(self, command):
+        self.llm_button.configure(command=command)
 
     def set_play_command(self, command):
         self.play_button.configure(command=command)
@@ -625,3 +628,6 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.voice_dropdown.configure(values=[voice[0] for voice in voices])
         if voices:
             self.selected_voice.set(voices[0][0])
+    
+    def set_add_to_reaper_command(self, command):
+        self.add_to_reaper_button.configure(command=command)

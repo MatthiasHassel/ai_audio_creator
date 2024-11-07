@@ -17,7 +17,7 @@ class AudioGeneratorController:
         self.timeline_controller = None 
         self.add_to_timeline_callback = None
         self.add_to_new_audio_files_callback = None
-        self.llama_service = None
+        self.llm_service = None
         self.music_service = None
         self.sfx_service = None
         self.speech_service = None
@@ -38,11 +38,12 @@ class AudioGeneratorController:
     def setup_view_commands(self):
         self.view.set_generate_command(self.process_input)
         self.view.set_clear_command(self.clear_input)
-        self.view.set_llama_command(self.improve_prompt)
+        self.view.set_llm_command(self.improve_prompt)
         self.view.set_play_command(self.play_audio)
         self.view.set_stop_command(self.stop_audio)
         self.view.set_restart_command(self.restart_audio)
         self.view.set_add_to_timeline_command(self.add_audio_to_timeline)
+        self.view.set_add_to_reaper_command(self.add_audio_to_reaper)
         self.view.set_file_select_command(self.on_audio_file_select)
         self.view.set_visualizer_click_command(self.seek_audio)
         self.view.audio_visualizer.set_delete_callback(self.delete_audio_file)
@@ -74,7 +75,7 @@ class AudioGeneratorController:
 
         current_module = self.view.current_module.get()
         if current_module not in ["Music", "SFX"]:
-            self.view.update_output("Error: Llama input is only available for Music and SFX modules.")
+            self.view.update_output("Error: LLM input is only available for Music and SFX modules.")
             return
 
         # Clear the output field
@@ -85,7 +86,7 @@ class AudioGeneratorController:
         # Show the progress bar
         self.view.show_progress_bar(determinate=False)
 
-        # Process the Llama request
+        # Process the LLM request
         self.llm_service.process_llm_request(user_input, current_module == "Music")
 
     def set_add_to_timeline_callback(self, callback):
@@ -283,6 +284,7 @@ class AudioGeneratorController:
             self.view.update_button_states(False)
             self.current_audio_file = file_path
             self.view.add_to_timeline_button.configure(state="normal")
+            self.view.add_to_reaper_button.configure(state="normal")
             
             # Display the prompt used to generate the audio
             prompt = read_audio_prompt(file_path)
@@ -295,6 +297,7 @@ class AudioGeneratorController:
         else:
             logging.warning(f"Invalid file path: {file_path}")
             self.view.add_to_timeline_button.configure(state="disabled")
+            self.view.add_to_reaper_button.configure(state="disabled")
 
     def clear_input(self):
         self.view.clear_input()
@@ -381,3 +384,36 @@ class AudioGeneratorController:
             logging.error(f"Error deleting file {file_path}: {str(e)}", exc_info=True)
             self.view.update_status(f"Error deleting file: {str(e)}")
 
+    def add_audio_to_reaper(self):
+        """Handle adding the selected audio file to Reaper"""
+        selected_file = self.view.audio_file_selector.get_selected_file()
+        if not selected_file:
+            self.view.update_status("No audio file selected")
+            return
+
+        try:
+            from services.reaper_service import ReaperService
+            reaper_service = ReaperService()
+            
+            if not reaper_service.is_reaper_running():
+                self.view.update_status("Please start Reaper first")
+                messagebox.showwarning("Reaper Not Running", 
+                    "Please start Reaper and ensure Python ReaScript is enabled in:\n"
+                    "Preferences -> Plug-ins -> ReaScript")
+                return
+            
+            # Get file name for track name
+            track_name = os.path.splitext(os.path.basename(selected_file))[0]
+            
+            success, message = reaper_service.add_audio_file(selected_file, track_name)
+            
+            if success:
+                self.view.update_status("Audio added to Reaper successfully")
+            else:
+                self.view.update_status(f"Failed to add audio to Reaper: {message}")
+                messagebox.showerror("Error", f"Failed to add audio to Reaper:\n{message}")
+
+        except Exception as e:
+            error_msg = f"Error adding audio to Reaper: {str(e)}"
+            self.view.update_status(error_msg)
+            messagebox.showerror("Error", error_msg)

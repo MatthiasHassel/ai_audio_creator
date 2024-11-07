@@ -33,7 +33,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.grid_columnconfigure(0, weight=1)
         self.create_widgets()
         
-
         self.setup_scrolling()
 
         self.setup_bindings()
