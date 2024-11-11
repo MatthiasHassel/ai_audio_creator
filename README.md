@@ -154,7 +154,7 @@ This project is licensed under the GNU LESSER GENERAL PUBLIC License - see the [
 
 For support, please:
 1. Check the [Documentation](docs/AI_Audio_Creator_User_Manual.md)
-2. Search existing [Issues](https://github.com/yourusername/ai-audio-creator/issues)
+2. Search existing [Issues](https://github.com/MatthiasHassel/ai_audio_creator/issues)
 3. Create a new issue if needed
 
 ## Acknowledgments
