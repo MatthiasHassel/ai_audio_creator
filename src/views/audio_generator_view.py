@@ -173,38 +173,43 @@ class AudioGeneratorView(ctk.CTkFrame):
     def create_speech_widgets(self, parent):
         frame = ctk.CTkFrame(parent)
         frame.grid_columnconfigure(1, weight=1)  # Make the second column expandable
+
+        # Standard voice selection
         self.selected_voice = ctk.StringVar()
-        
-        # Existing voice selection
         label = ctk.CTkLabel(frame, text="Select Voice:")
         self.voice_dropdown = ctk.CTkOptionMenu(frame, variable=self.selected_voice, width=120)
         label.grid(row=0, column=0, padx=(0, 5), pady=5, sticky="w")
         self.voice_dropdown.grid(row=0, column=1, pady=5, sticky="w")
-        
-        # Unique voice generation options
+
+        # Checkbox for unique voice generation
         self.use_unique_voice = ctk.BooleanVar(value=False)
         self.unique_voice_checkbox = ctk.CTkCheckBox(frame, text="Generate Unique Voice", 
                                                 variable=self.use_unique_voice, 
                                                 command=self.toggle_unique_voice_options)
         self.unique_voice_checkbox.grid(row=1, column=0, columnspan=2, pady=5, sticky="w")
+
+        # Create container frame for unique voice options
+        self.unique_voice_frame = ctk.CTkFrame(frame)
+        self.unique_voice_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=5)
+        self.unique_voice_frame.grid_columnconfigure(1, weight=1)  # Make second column expandable
+        self.unique_voice_frame.grid_remove()  # Initially hidden
+
+        # Voice description
+        description_label = ctk.CTkLabel(self.unique_voice_frame, text="Voice Description:")
+        description_label.grid(row=0, column=0, padx=(0, 5), pady=2, sticky="w")
         
-        # Voice description input
-        description_label = ctk.CTkLabel(frame, text="Voice Description:")
-        description_label.grid(row=2, column=0, padx=(0, 5), pady=2, sticky="w")
-        
-        self.voice_description = ctk.CTkTextbox(frame, height=60)
-        self.voice_description.grid(row=2, column=1, pady=2, sticky="ew")
+        self.voice_description = ctk.CTkTextbox(self.unique_voice_frame, height=60)
+        self.voice_description.grid(row=0, column=1, pady=2, sticky="ew")
         self.voice_description._placeholder_text = "Example: A warm and friendly female voice with a slight British accent"
         self.voice_description.insert("1.0", self.voice_description._placeholder_text)
-        self.voice_description.configure(text_color="gray60")  # Initial placeholder color
-        
+        self.voice_description.configure(text_color="gray60")
+
         # Example text input with character counter
-        text_label = ctk.CTkLabel(frame, text="Example Text:")
-        text_label.grid(row=3, column=0, padx=(0, 5), pady=2, sticky="w")
+        text_label = ctk.CTkLabel(self.unique_voice_frame, text="Example Text:")
+        text_label.grid(row=1, column=0, padx=(0, 5), pady=2, sticky="w")
         
-        # Frame to hold text input and counter
-        text_frame = ctk.CTkFrame(frame)
-        text_frame.grid(row=3, column=1, pady=2, sticky="ew")
+        text_frame = ctk.CTkFrame(self.unique_voice_frame)
+        text_frame.grid(row=1, column=1, pady=2, sticky="ew")
         text_frame.grid_columnconfigure(0, weight=1)
         
         self.example_text = ctk.CTkTextbox(text_frame, height=60)
@@ -213,26 +218,17 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.example_text.insert("1.0", self.example_text._placeholder_text)
         self.example_text.configure(text_color="gray60")
         
-        # Character counter label
         self.char_counter = ctk.CTkLabel(text_frame, text="0/1000", text_color="gray60")
         self.char_counter.grid(row=1, column=0, pady=(2, 0), sticky="e")
-        
-        # Bind text change events
-        self.example_text.bind("<FocusIn>", self.on_example_text_focus_in)
-        self.example_text.bind("<FocusOut>", self.on_example_text_focus_out)
-        self.example_text.bind("<KeyRelease>", self.update_char_counter)
-        
-        self.voice_description.bind("<FocusIn>", self.on_description_focus_in)
-        self.voice_description.bind("<FocusOut>", self.on_description_focus_out)
-        
-        # Preview button - moved to the left side
-        self.preview_button = ctk.CTkButton(frame, text="Generate Preview", 
+
+        # Preview button
+        self.preview_button = ctk.CTkButton(self.unique_voice_frame, text="Generate Preview", 
                                         command=self.generate_voice_preview)
-        self.preview_button.grid(row=4, column=0, pady=10, sticky="w")
-        
-        # Preview controls (initially hidden)
+        self.preview_button.grid(row=2, column=0, columnspan=2, pady=10)
+
+        # Preview controls frame (initially hidden)
         self.preview_frame = ctk.CTkFrame(frame)
-        self.preview_frame.grid(row=5, column=0, columnspan=2, pady=5, sticky="ew")
+        self.preview_frame.grid(row=3, column=0, columnspan=2, pady=5, sticky="ew")
         self.preview_frame.grid_columnconfigure(0, weight=1)  # Make preview frame expandable
         self.preview_frame.grid_remove()  # Hidden by default
         
@@ -271,6 +267,14 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.discard_voice_button = ctk.CTkButton(self.preview_frame, text="Discard",
                                                 command=self.discard_voice)
         self.discard_voice_button.grid(row=2, column=1, padx=5, pady=5)
+
+        # Bind text change events
+        self.example_text.bind("<FocusIn>", self.on_example_text_focus_in)
+        self.example_text.bind("<FocusOut>", self.on_example_text_focus_out)
+        self.example_text.bind("<KeyRelease>", self.update_char_counter)
+        
+        self.voice_description.bind("<FocusIn>", self.on_description_focus_in)
+        self.voice_description.bind("<FocusOut>", self.on_description_focus_out)
 
         # Set initial state for text inputs
         self.toggle_unique_voice_options()
@@ -326,12 +330,15 @@ class AudioGeneratorView(ctk.CTkFrame):
         enable = self.use_unique_voice.get()
         
         if enable:
+            self.voice_dropdown.configure(state="disabled")
+            self.unique_voice_frame.grid()  # Show the unique voice options
+            
+            # Enable all the controls
             self.voice_description.configure(state="normal")
             self.example_text.configure(state="normal")
             self.preview_button.configure(state="normal")
-            self.voice_dropdown.configure(state="disabled")
             
-            # Reset placeholder text
+            # Reset placeholder text if needed
             if not self.voice_description.get("1.0", "end-1c").strip():
                 self.voice_description.insert("1.0", self.voice_description._placeholder_text)
                 self.voice_description.configure(text_color="gray60")
@@ -339,13 +346,15 @@ class AudioGeneratorView(ctk.CTkFrame):
                 self.example_text.insert("1.0", self.example_text._placeholder_text)
                 self.example_text.configure(text_color="gray60")
         else:
-            # Clear and disable text inputs
+            self.voice_dropdown.configure(state="normal")
+            self.unique_voice_frame.grid_remove()  # Hide the unique voice options
+            
+            # Clear and disable controls
             self.voice_description.delete("1.0", "end")
             self.example_text.delete("1.0", "end")
             self.voice_description.configure(state="disabled")
             self.example_text.configure(state="disabled")
             self.preview_button.configure(state="disabled")
-            self.voice_dropdown.configure(state="normal")
             
             # Reset character counter
             self.char_counter.configure(text="0/1000", text_color="gray60")
