@@ -1,4 +1,4 @@
-class ScriptModel:
+class ScriptEditorModel:
     def __init__(self):
         self.content = ""
 

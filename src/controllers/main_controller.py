@@ -39,10 +39,10 @@ class MainController:
         # Set the timeline_controller for the AudioGeneratorController
         self.audio_controller.set_timeline_controller(self.timeline_controller)
         
-        script_model = self.model.get_script_model()
+        script_editor_model = self.model.get_script_editor_model()
         script_view = self.view.get_script_editor_view()
         self.script_editor_controller = ScriptEditorController(
-            script_model, 
+            script_editor_model, 
             script_view, 
             self.config, 
             self.project_model, 
