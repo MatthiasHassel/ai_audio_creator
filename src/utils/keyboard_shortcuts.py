@@ -96,24 +96,32 @@ class KeyboardShortcuts:
     # Timeline shortcut handlers
     def save_project(self, event):
         logging.debug("Save project shortcut triggered")
+        if hasattr(self.view, "is_renaming") and self.view.is_renaming:
+            return "break"
         if hasattr(self.view, "controller") and self.view.controller:
             self.view.controller.save_project()
         return "break"
 
     def open_project(self, event):
         logging.debug("Open project shortcut triggered")
+        if hasattr(self.view, "is_renaming") and self.view.is_renaming:
+            return "break"
         if hasattr(self.view, "controller") and self.view.controller:
             self.view.controller.open_project()
         return "break"
 
     def new_project(self, event):
         logging.debug("New project shortcut triggered")
+        if hasattr(self.view, "is_renaming") and self.view.is_renaming:
+            return "break"
         if hasattr(self.view, "controller") and self.view.controller:
             self.view.controller.new_project()
         return "break"
 
     def toggle_playback(self, event):
         logging.debug("Toggle playback shortcut triggered")
+        if hasattr(self.view, "is_renaming") and self.view.is_renaming:
+            return "break"
         if hasattr(self.view, "controller") and self.view.controller:
             if self.view.controller.is_playing():
                 self.view.controller.stop_timeline()
@@ -123,18 +131,24 @@ class KeyboardShortcuts:
 
     def toggle_solo(self, event):
         logging.debug("Toggle solo shortcut triggered")
+        if hasattr(self.view, "is_renaming") and self.view.is_renaming:
+            return "break"
         if hasattr(self.view, "controller") and self.view.controller and self.view.selected_track:
             self.view.controller.toggle_solo(self.view.selected_track)
         return "break"
 
     def toggle_mute(self, event):
         logging.debug("Toggle mute shortcut triggered")
+        if hasattr(self.view, "is_renaming") and self.view.is_renaming:
+            return "break"
         if hasattr(self.view, "controller") and self.view.controller and self.view.selected_track:
             self.view.controller.toggle_mute(self.view.selected_track)
         return "break"
 
     def select_track_up(self, event):
         logging.debug("Select track up shortcut triggered")
+        if hasattr(self.view, "is_renaming") and self.view.is_renaming:
+            return "break"
         if self.view.selected_track:
             current_index = self.view.tracks.index(self.view.selected_track)
             if current_index > 0:
@@ -143,6 +157,8 @@ class KeyboardShortcuts:
 
     def select_track_down(self, event):
         logging.debug("Select track down shortcut triggered")
+        if hasattr(self.view, "is_renaming") and self.view.is_renaming:
+            return "break"
         if self.view.selected_track:
             current_index = self.view.tracks.index(self.view.selected_track)
             if current_index < len(self.view.tracks) - 1:
@@ -151,18 +167,24 @@ class KeyboardShortcuts:
 
     def add_new_track(self, event):
         logging.debug("Add new track shortcut triggered")
+        if hasattr(self.view, "is_renaming") and self.view.is_renaming:
+            return "break"
         if hasattr(self.view, "controller") and self.view.controller:
             self.view.controller.add_track()
         return "break"
 
     def undo(self, event):
         logging.debug("Undo shortcut triggered")
+        if hasattr(self.view, "is_renaming") and self.view.is_renaming:
+            return "break"
         if hasattr(self.view, "controller") and self.view.controller:
             self.view.controller.undo_action()
         return "break"
 
     def redo(self, event):
         logging.debug("Redo shortcut triggered")
+        if hasattr(self.view, "is_renaming") and self.view.is_renaming:
+            return "break"
         if hasattr(self.view, "controller") and self.view.controller:
             self.view.controller.redo_action()
         return "break"

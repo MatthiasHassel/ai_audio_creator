@@ -26,6 +26,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.protocol("WM_DELETE_WINDOW", self.withdraw)
         self.keyboard_shortcuts = KeyboardShortcuts(self)
         self.audio_visualizer = AudioVisualizer(self)
+        self.is_renaming = False  # Flag to track renaming state
         
         self.initialize_variables()
 
@@ -399,7 +400,11 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             y = i * self.track_height - self.scroll_offset
             fill_color = "gray35" if track == self.selected_track else "gray25"
             self.track_label_canvas.create_rectangle(0, y, 200, y + self.track_height, fill=fill_color, tags=f"track_{i}")
-            self.track_label_canvas.create_text(10, y + self.track_height // 2, text=track["name"], anchor="w", fill="white", tags=f"track_{i}")
+            
+            # Create track name slightly higher
+            self.track_label_canvas.create_text(10, y + (self.track_height // 2) - 10, 
+                                              text=track["name"], anchor="w", fill="white", 
+                                              tags=f"track_{i}")
             
             # Add Solo button
             solo_button = ctk.CTkButton(self.track_label_canvas, text="S", width=20, height=20, 
@@ -444,14 +449,14 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             self.track_volume_vars[track_index].set(track.get("volume", 1.0))
 
     def toggle_solo(self, track):
-        if self.controller:
+        if not self.is_renaming and self.controller:
             self.controller.toggle_solo(track)
-        self.update_single_track_label(track)
+            self.update_single_track_label(track)
 
     def toggle_mute(self, track):
-        if self.controller:
+        if not self.is_renaming and self.controller:
             self.controller.toggle_mute(track)
-        self.update_single_track_label(track)
+            self.update_single_track_label(track)
 
     def update_volume(self, track, value):
         track["volume"] = value
@@ -460,7 +465,7 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.update_single_track_label(track)
                     
     def add_track(self, track_name=None):
-        if self.controller:
+        if not self.is_renaming and self.controller:
             self.controller.add_track(track_name)
         self.update_scrollregion()
         # The view will be updated via update_tracks method
@@ -492,23 +497,123 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.timeline_canvas.tag_lower("track_highlight", "grid")
 
     def start_rename_track(self, track):
-        track_index = self.tracks.index(track)
-        y = track_index * self.track_height
-        entry = ctk.CTkEntry(self.track_label_canvas, fg_color="gray35", text_color="white", border_width=0)
-        entry.insert(0, track["name"])
-        entry_window = self.track_label_canvas.create_window(10, y + self.track_height // 2, anchor="w", window=entry, width=180)
-        entry.focus_set()
-        entry.bind("<Return>", lambda e, t=track, ew=entry_window: self.finish_rename_track(t, e.widget, ew))
-        entry.bind("<FocusOut>", lambda e, t=track, ew=entry_window: self.finish_rename_track(t, e.widget, ew))
+        """Start track renaming"""
+        try:
+            track_index = self.tracks.index(track)
+            y = track_index * self.track_height - self.scroll_offset
+            
+            # Create and configure entry widget
+            entry = ctk.CTkEntry(self.track_label_canvas, fg_color="gray35", text_color="white", border_width=0)
+            entry.insert(0, track["name"])
+            
+            # Create entry window
+            entry_window = self.track_label_canvas.create_window(
+                10, 
+                y + (self.track_height // 2) - 10,
+                anchor="w", 
+                window=entry, 
+                width=180
+            )
+            
+            # Store references to current rename widgets
+            self.current_rename_data = {
+                'track': track,
+                'entry': entry,
+                'window': entry_window
+            }
+            
+            # Set focus and bind events
+            entry.focus_set()
+            
+            # Bind events with specific tags for easy cleanup
+            entry.bind("<Return>", self._handle_rename_return, add="+")
+            entry.bind("<FocusOut>", self._handle_rename_focus_out, add="+")
+            entry.bind("<Escape>", self._handle_rename_escape, add="+")
+            
+        except Exception as e:
+            logging.error(f"Error starting rename: {str(e)}")
+            self.cancel_rename_track()
 
-    def finish_rename_track(self, track, entry, entry_window):
-        new_name = entry.get()
-        self.track_label_canvas.delete(entry_window)
-        if new_name != track["name"]:
-            track["name"] = new_name
-            if hasattr(self, 'rename_track_callback'):
-                self.rename_track_callback(track, new_name)
+    def _handle_rename_return(self, event):
+        """Handle Return key press during rename"""
+        if hasattr(self, 'current_rename_data'):
+            self.finish_rename_track()
+        return "break"
+
+    def _handle_rename_focus_out(self, event):
+        """Handle focus loss during rename"""
+        if hasattr(self, 'current_rename_data'):
+            self.finish_rename_track()
+        return "break"
+
+    def _handle_rename_escape(self, event):
+        """Handle Escape key press during rename"""
+        if hasattr(self, 'current_rename_data'):
+            self.cancel_rename_track()
+        return "break"
+
+    def finish_rename_track(self):
+        """Finish track renaming"""
+        try:
+            if hasattr(self, 'current_rename_data'):
+                track = self.current_rename_data['track']
+                entry = self.current_rename_data['entry']
+                entry_window = self.current_rename_data['window']
+                
+                new_name = entry.get()
+                
+                # Clean up entry widget and bindings
+                self.track_label_canvas.delete(entry_window)
+                entry.destroy()
+                
+                # Update track name if changed
+                if new_name and new_name != track["name"]:
+                    track["name"] = new_name
+                    if hasattr(self, 'rename_track_callback'):
+                        self.rename_track_callback(track, new_name)
+                
+                # Clean up rename data
+                delattr(self, 'current_rename_data')
+                
+                # Reset state and update view
+                self.is_renaming = False
+                self.set_keyboard_shortcuts_enabled(True)
+                self.update_track_labels()
+                
+        except Exception as e:
+            logging.error(f"Error finishing rename: {str(e)}")
+            self.cancel_rename_track()
+
+    def cancel_rename_track(self):
+        """Cancel renaming without saving changes"""
+        try:
+            if hasattr(self, 'current_rename_data'):
+                entry_window = self.current_rename_data['window']
+                entry = self.current_rename_data['entry']
+                
+                # Clean up entry widget and bindings
+                self.track_label_canvas.delete(entry_window)
+                entry.destroy()
+                
+                # Clean up rename data
+                delattr(self, 'current_rename_data')
+            
+            # Reset state and update view
+            self.is_renaming = False
+            self.set_keyboard_shortcuts_enabled(True)
             self.update_track_labels()
+            
+        except Exception as e:
+            logging.error(f"Error canceling rename: {str(e)}")
+        
+        return "break"
+
+    def handle_rename_context_menu(self, track):
+        """Handle rename selection from context menu"""
+        if not self.is_renaming:  # Only start new rename if not already renaming
+            self.is_renaming = True
+            self.set_keyboard_shortcuts_enabled(False)
+            self.start_rename_track(track)
 
     def deselect_all_tracks(self):
         self.selected_track = None
@@ -516,25 +621,29 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.redraw_timeline()
 
     def handle_delete(self, event):
-        if self.selected_clip and self.controller:
-            self.controller.delete_clip(self.selected_clip)
-        elif self.selected_track:
-            self.remove_track(self.selected_track)
+        if not self.is_renaming:
+            if self.selected_clip and self.controller:
+                self.controller.delete_clip(self.selected_clip)
+            elif self.selected_track:
+                self.remove_track(self.selected_track)
 
     def remove_track(self, track):
-        if track in self.tracks:
+        if not self.is_renaming and track in self.tracks:
             if self.remove_track_callback:
                 self.remove_track_callback(track)
         self.update_scrollregion()
 
     def show_track_context_menu(self, event):
-        track_index = int(event.y // self.track_height)
-        if 0 <= track_index < len(self.tracks):
-            track = self.tracks[track_index]
-            context_menu = tk.Menu(self, tearoff=0)
-            context_menu.add_command(label="Rename", command=lambda: self.start_rename_track(track))
-            context_menu.add_command(label="Remove", command=lambda: self.remove_track(track))
-            context_menu.tk_popup(event.x_root, event.y_root)
+        if not self.is_renaming:
+            track_index = int(event.y // self.track_height)
+            if 0 <= track_index < len(self.tracks):
+                track = self.tracks[track_index]
+                context_menu = tk.Menu(self, tearoff=0)
+                context_menu.add_command(label="Rename", 
+                                       command=lambda t=track: self.handle_rename_context_menu(t))
+                context_menu.add_command(label="Remove", 
+                                       command=lambda: self.remove_track(track))
+                context_menu.tk_popup(event.x_root, event.y_root)
 
     def clear_tracks(self):
         self.tracks.clear()
@@ -550,17 +659,17 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
 
     def play_timeline(self):
         """Called when user clicks play button"""
-        if self.controller:
+        if not self.is_renaming and self.controller:
             self.controller.play_timeline()
 
     def stop_timeline(self):
         """Called when user clicks stop button"""
-        if self.controller:
+        if not self.is_renaming and self.controller:
             self.controller.stop_timeline()
 
     def restart_timeline(self):
         """Called when user clicks restart button"""
-        if self.controller:
+        if not self.is_renaming and self.controller:
             self.controller.restart_timeline()
 
     def on_playback_started(self, position):
@@ -981,3 +1090,16 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
             else:
                 self.selected_clips.remove(clicked_clip)
             self.redraw_timeline()
+
+    def set_keyboard_shortcuts_enabled(self, enabled):
+        """Enable or disable keyboard shortcuts"""
+        if enabled:
+            # Re-bind keyboard shortcuts
+            self.keyboard_shortcuts = KeyboardShortcuts(self)
+        else:
+            # Unbind keyboard shortcuts
+            if self.keyboard_shortcuts:
+                for key, callback in self.keyboard_shortcuts.__dict__.items():
+                    if isinstance(callback, str) and callback.startswith('<'):
+                        self.unbind(callback)
+            self.keyboard_shortcuts = None
