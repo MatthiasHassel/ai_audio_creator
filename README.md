@@ -37,7 +37,7 @@ AI Audio Creator is a Python-based desktop application that combines various AI 
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/ai-audio-creator.git
+git clone https://github.com/matthiashassel/ai-audio-creator.git
 cd ai-audio-creator
 ```
 

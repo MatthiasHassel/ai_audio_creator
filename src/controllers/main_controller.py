@@ -6,6 +6,7 @@ import tkinter as tk
 import os
 import logging
 import webbrowser
+from datetime import datetime
 
 class MainController:
     def __init__(self, model, view, config, project_model):
@@ -56,6 +57,7 @@ class MainController:
         self.view.set_edit_delete_project_callback(self.edit_delete_project)
         self.view.set_import_audio_callback(self.import_audio)
         self.view.set_export_audio_callback(self.export_audio)
+        self.view.set_sync_to_reaper_callback(self.sync_to_reaper)
         self.view.set_open_user_manual_callback(self.open_user_manual)
 
         
@@ -64,6 +66,7 @@ class MainController:
         self.audio_controller.set_show_timeline_command(self.timeline_controller.show)
         self.audio_controller.set_add_to_timeline_callback(self.add_audio_to_timeline)
         self.audio_controller.set_add_to_new_audio_files_callback(self.add_to_new_audio_files)
+    
     
     def load_default_project(self):
         try:
@@ -327,3 +330,39 @@ class MainController:
             webbrowser.open('file://' + os.path.realpath(manual_path))
         else:
             self.view.show_error("Error", "User manual not found.")
+        
+    def sync_to_reaper(self):
+        if not self.project_model.current_project:
+            self.view.show_warning("No Project", "Please open a project before syncing to Reaper.")
+            return
+            
+        try:
+            from services.reaper_service import ReaperService
+            reaper_service = ReaperService()
+            
+            if not reaper_service.is_reaper_running():
+                self.view.show_warning("Reaper Not Running", 
+                    "Please start Reaper and ensure Python ReaScript is enabled in:\n"
+                    "Preferences -> Plug-ins -> ReaScript")
+                return
+            
+            # Get the current timeline data
+            timeline_data = self.project_model.get_timeline_data()
+            
+            logging.info(f"Syncing project '{self.project_model.current_project}' to Reaper")
+            
+            # Sync to Reaper
+            success, message = reaper_service.sync_timeline_to_reaper(timeline_data)
+            
+            if success:
+                self.view.show_info("Success", message)
+                self.view.update_status("Timeline synced to Reaper successfully")
+            else:
+                self.view.show_error("Sync Error", f"Failed to sync to Reaper: {message}")
+                self.view.update_status("Failed to sync to Reaper")
+                
+        except Exception as e:
+            error_msg = f"Error syncing to Reaper: {str(e)}"
+            logging.error(error_msg, exc_info=True)
+            self.view.show_error("Sync Error", error_msg)
+            self.view.update_status("Failed to sync to Reaper")

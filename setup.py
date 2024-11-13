@@ -13,6 +13,7 @@ setup(
         'pygame==2.6.0',
         'pyaudio==0.2.13',
         'sounddevice==0.4.7',
+        'soundfile==0.12.1',
         'openai==1.37.1',
         'elevenlabs==1.3.1',
         'numpy==2.0.1',

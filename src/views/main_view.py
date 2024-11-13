@@ -19,6 +19,7 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
         self.create_components()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.timeline_controller = None
+        self.sync_to_reaper_callback = None
 
     def setup_audio_generator_window(self):
         self.base_title = "Audio Creator"
@@ -139,6 +140,7 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
         self.menu.add_cascade(label="Edit", menu=edit_menu)
         edit_menu.add_command(label="Import Audio", command=self.import_audio)
         edit_menu.add_command(label="Export Audio", command=self.export_audio)
+        edit_menu.add_command(label="Sync to Reaper", command=self.sync_to_reaper)  
 
         self.window_menu = tk.Menu(self.menu, tearoff=0)
         self.menu.add_cascade(label="Window", menu=self.window_menu)
@@ -226,3 +228,10 @@ class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
 
     def set_open_user_manual_callback(self, callback):
         self.open_user_manual_callback = callback
+
+    def sync_to_reaper(self):
+        if self.sync_to_reaper_callback:
+            self.sync_to_reaper_callback()
+
+    def set_sync_to_reaper_callback(self, callback):
+        self.sync_to_reaper_callback = callback
