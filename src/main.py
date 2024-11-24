@@ -1,5 +1,4 @@
 import customtkinter as ctk
-from tkinterdnd2 import TkinterDnD
 from models.main_model import MainModel
 from models.project_model import ProjectModel
 from views.main_view import MainView
@@ -9,7 +8,7 @@ import logging
 import os
 
 def setup_logging(config):
-     # Get the directory of the main.py file
+    # Get the directory of the main.py file
     src_dir = os.path.dirname(os.path.abspath(__file__))
     base_dir = os.path.dirname(src_dir)
     
@@ -39,7 +38,7 @@ def main():
     logging.info("Application starting")
     
     # Create main components
-    root = TkinterDnD.Tk()
+    root = ctk.CTk()
     root.withdraw()  # Hide the root window
     
     main_model = MainModel()

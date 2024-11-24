@@ -2,16 +2,13 @@ import customtkinter as ctk
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import tkinter.simpledialog as simpledialog
-from tkinterdnd2 import DND_FILES, TkinterDnD
 import os
 from views.audio_generator_view import AudioGeneratorView
 from views.script_editor_view import ScriptEditorView
 
-class MainView(tk.Toplevel, TkinterDnD.DnDWrapper):
+class MainView(tk.Toplevel):
     def __init__(self, master, config, project_model):
         tk.Toplevel.__init__(self, master)
-        self.TkdndVersion = TkinterDnD._require(self)
-        
         self.config_data = config
         self.project_model = project_model
         self.setup_audio_generator_window()

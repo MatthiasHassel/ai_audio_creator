@@ -6,16 +6,14 @@ import logging
 import os 
 import textwrap
 from tkinter import messagebox
-from tkinterdnd2 import DND_FILES, TkinterDnD
 from utils.audio_clip import AudioClip
 from utils.audio_visualizer import AudioVisualizer
 from utils.keyboard_shortcuts import KeyboardShortcuts
 
 
-class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
+class TimelineView(ctk.CTkToplevel):
     def __init__(self, master, project_model, timeline_model):
         super().__init__(master)
-        self.TkdndVersion = TkinterDnD._require(self)
         self.project_model = project_model
         self.timeline_model = timeline_model
         self.controller = None
@@ -94,8 +92,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         self.timeline_canvas.bind("<B1-Motion>", self.on_drag)
         self.timeline_canvas.bind("<ButtonRelease-1>", self.on_drag_release)
         self.timeline_canvas.bind("<Button-2>", self.show_clip_context_menu)
-        self.timeline_canvas.drop_target_register(DND_FILES)
-        self.timeline_canvas.dnd_bind('<<Drop>>', self.on_drop)
         
         self.track_label_canvas.bind("<Button-2>", self.show_track_context_menu)
         self.track_label_canvas.bind("<Button-1>", self.on_track_label_click)
@@ -802,29 +798,6 @@ class TimelineView(ctk.CTkToplevel, TkinterDnD.DnDWrapper):
         if project_name:
             self.current_project = project_name
         self.title(f"{self.base_title} - {self.current_project}")
-
-    def on_drop(self, event):
-        files = self.tk.splitlist(event.data)
-        x = self.timeline_canvas.canvasx(event.x_root - self.timeline_canvas.winfo_rootx())
-        y = self.timeline_canvas.canvasy(event.y_root - self.timeline_canvas.winfo_rooty())
-        
-        for file in files:
-            if file.lower().endswith(('.mp3', '.wav')):
-                try:
-                    new_file_path = self.project_model.import_audio_file(file)
-                    track_index = self.get_track_index_from_y(y)
-                    x_position = x * self.seconds_per_pixel
-                    x_position = self.find_next_available_position(track_index, x_position)
-                    clip = AudioClip(new_file_path, x_position)
-                    self.add_clip(clip, track_index)
-                    if self.controller:
-                        self.controller.unsaved_changes = True
-                    print(f'File {file} imported and added to timeline at position ({x_position}, {y}) on track {track_index}.')
-                except Exception as e:
-                    error_msg = f"Failed to import audio file: {str(e)}"
-                    print(error_msg)
-                    logging.error(error_msg, exc_info=True)
-                    self.show_error("Error", error_msg)
 
     def find_next_available_position(self, track_index, x_position):
         if track_index < len(self.tracks):
