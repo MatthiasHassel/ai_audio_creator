@@ -80,7 +80,10 @@ class AudioBufferManager:
                 if not self.is_playing:  # Check if we should stop
                     break
                     
-                track_volume = track.get("volume", 1.0)
+                # Convert track volume from dB to amplitude multiplier
+                track_volume_db = track.get("volume_db", 0.0)
+                track_volume = self.timeline_model.db_to_amplitude(track_volume_db)
+                
                 for clip in track['clips']:
                     if not self.is_playing:  # Check if we should stop
                         break

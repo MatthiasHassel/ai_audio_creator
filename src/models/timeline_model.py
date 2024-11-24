@@ -116,7 +116,7 @@ class TimelineModel:
             self._notify_state_change(False, self.playhead_position)
             
         except Exception as e:
-            logging.error(f"Error in stop_timeline: {str(e)}", exc_info=True)
+            logging.error(f"Error in stop_timeline: {str(e)}")
             self._safe_cleanup()
 
     def _cleanup_audio_stream(self):
@@ -233,6 +233,9 @@ class TimelineModel:
             self.active_clips = self.get_active_clips(active_tracks)
 
     def add_track(self, track_data):
+        # Initialize track with volume in decibels (0 dB by default)
+        if 'volume_db' not in track_data:
+            track_data['volume_db'] = 0.0
         self.tracks.append(track_data)
         self.is_modified = True
 
@@ -252,7 +255,11 @@ class TimelineModel:
     def add_clip_to_track(self, track_index, clip):
         if track_index >= len(self.tracks):
             # This shouldn't happen now, but keep it as a safeguard
-            self.tracks.append({"name": f"Track {len(self.tracks) + 1}", "clips": []})
+            self.tracks.append({
+                "name": f"Track {len(self.tracks) + 1}", 
+                "clips": [],
+                "volume_db": 0.0  # Initialize with 0 dB
+            })
         
         # Insert the clip at the correct position in the track
         track = self.tracks[track_index]
@@ -278,6 +285,10 @@ class TimelineModel:
         return self.tracks
 
     def set_tracks(self, tracks_data):
+        # Ensure all tracks have volume_db
+        for track in tracks_data:
+            if 'volume_db' not in track:
+                track['volume_db'] = 0.0  # Default to 0 dB
         self.tracks = tracks_data
         self.is_modified = True
 
@@ -294,8 +305,15 @@ class TimelineModel:
     def update_track_volume(self, track):
         track_index = self.get_track_index(track)
         if 0 <= track_index < len(self.tracks):
-            self.tracks[track_index]["volume"] = track.get("volume", 1.0)
+            # Update volume in decibels
+            self.tracks[track_index]["volume_db"] = track.get("volume_db", 0.0)
             self.is_modified = True
+
+    def db_to_amplitude(self, db):
+        """Convert decibels to amplitude multiplier"""
+        if db <= -70:  # Mute threshold
+            return 0.0
+        return 10 ** (db / 20.0)
 
     def update_playhead(self):
         if self.is_playing:
@@ -363,7 +381,7 @@ class TimelineModel:
                 'clips': serializable_clips,
                 'solo': track.get('solo', False),
                 'mute': track.get('mute', False),
-                'volume': track.get('volume', 1.0)
+                'volume_db': track.get('volume_db', 0.0)  # Store volume in dB
             })
         return serializable_tracks
 
@@ -378,7 +396,7 @@ class TimelineModel:
                 'clips': clips,
                 'solo': track_data.get('solo', False),
                 'mute': track_data.get('mute', False),
-                'volume': track_data.get('volume', 1.0)
+                'volume_db': track_data.get('volume_db', 0.0)  # Load volume in dB
             })
         self.is_modified = False
 

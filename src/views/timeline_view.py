@@ -77,6 +77,26 @@ class TimelineView(ctk.CTkToplevel):
         self.track_label_canvas = None
         self.timeline_duration = 300  # Default timeline duration in seconds
         self.max_timeline_duration = 1800  # Set a maximum timeline duration in sec (e.g. 30min -> 1800s )
+
+    def format_db(self, db_value):
+        """Format decibel value for display"""
+        if db_value <= -70:
+            return "-∞ dB"
+        return f"{db_value:+.1f} dB"
+    
+    def parse_db_input(self, input_str):
+        """Parse dB input string and return valid dB value"""
+        try:
+            # Remove 'dB' suffix and any whitespace
+            value_str = input_str.replace('dB', '').strip()
+            # Handle infinity case
+            if value_str in ['-∞', '-inf']:
+                return -70.0
+            # Convert to float and clamp to valid range
+            value = float(value_str)
+            return max(-70.0, min(3.0, value))
+        except ValueError:
+            return None
     
     def setup_scrolling(self):
         self.timeline_canvas.configure(xscrollcommand=self.x_scrollbar.set, 
@@ -416,33 +436,104 @@ class TimelineView(ctk.CTkToplevel):
             mute_button_window = self.track_label_canvas.create_window(170, y + self.track_height // 2 - 10, window=mute_button)
             self.mute_buttons[i] = mute_button
             
-            # Add volume slider if track height is sufficient
+            # Add volume slider and label if track height is sufficient
             if self.track_height >= self.min_track_height_for_slider:
-                volume_var = tk.DoubleVar(value=track.get("volume", 1.0))
-                volume_slider = ctk.CTkSlider(self.track_label_canvas, from_=0, to=1, variable=volume_var, width=180)
-                volume_slider_window = self.track_label_canvas.create_window(100, y + self.track_height - 15, window=volume_slider)
+                # Create volume entry
+                volume_db = track.get("volume_db", 0.0)
+                volume_entry = ctk.CTkEntry(self.track_label_canvas, 
+                                          width=70,
+                                          height=20,
+                                          fg_color="gray35",
+                                          text_color="white")
+                volume_entry.insert(0, self.format_db(volume_db))
+                volume_entry_window = self.track_label_canvas.create_window(
+                    40, y + self.track_height - 15, window=volume_entry)
                 
-                # Store references to the variables
-                self.track_volume_vars[i] = volume_var
+                # Create volume slider
+                volume_slider = ctk.CTkSlider(self.track_label_canvas, 
+                                            from_=-70, to=3,
+                                            width=100,
+                                            number_of_steps=730)  # 0.1 dB steps
+                volume_slider.set(volume_db)
+                volume_slider_window = self.track_label_canvas.create_window(
+                    140, y + self.track_height - 15, window=volume_slider)
                 
-                # Bind the volume slider to update function
+                # Store references to the widgets
+                self.track_volume_vars[i] = {
+                    'slider': volume_slider,
+                    'entry': volume_entry
+                }
+                
+                # Bind the volume slider to update function and double-click
                 volume_slider.configure(command=lambda value, t=track: self.update_volume(t, value))
+                volume_slider.bind('<Double-Button-1>', lambda e, t=track: self.reset_volume(t))
+                
+                # Bind entry events
+                volume_entry.bind('<Return>', lambda e, t=track: self.handle_volume_entry(e, t))
+                volume_entry.bind('<FocusOut>', lambda e, t=track: self.handle_volume_entry(e, t))
+
+    def handle_volume_entry(self, event, track):
+        """Handle volume entry events"""
+        entry = event.widget
+        value = self.parse_db_input(entry.get())
+        if value is not None:
+            self.update_volume(track, value)
+            track_index = self.tracks.index(track)
+            if track_index in self.track_volume_vars:
+                self.track_volume_vars[track_index]['slider'].set(value)
+        else:
+            # Reset to current value if input was invalid
+            track_index = self.tracks.index(track)
+            if track_index in self.track_volume_vars:
+                current_db = track.get("volume_db", 0.0)
+                entry.delete(0, tk.END)
+                entry.insert(0, self.format_db(current_db))
+
+    def reset_volume(self, track):
+        """Reset volume to 0dB on double-click"""
+        self.update_volume(track, 0.0)
+        track_index = self.tracks.index(track)
+        if track_index in self.track_volume_vars:
+            self.track_volume_vars[track_index]['slider'].set(0.0)
+            self.track_volume_vars[track_index]['entry'].delete(0, tk.END)
+            self.track_volume_vars[track_index]['entry'].insert(0, self.format_db(0.0))
+
+    def update_volume(self, track, value):
+        """Update track volume with decibel value"""
+        # Round to 0.1 dB precision
+        db_value = round(float(value), 1)
+        track["volume_db"] = db_value
+        
+        # Update the volume entry if it exists
+        track_index = self.tracks.index(track)
+        if track_index in self.track_volume_vars:
+            entry = self.track_volume_vars[track_index]['entry']
+            entry.delete(0, tk.END)
+            entry.insert(0, self.format_db(db_value))
+        
+        if self.controller:
+            self.controller.update_track_volume(track)
 
     def update_single_track_label(self, track):
         track_index = self.tracks.index(track)
-        y = track_index * self.track_height - self.scroll_offset
         
         # Update solo button
         if track_index in self.solo_buttons:
-            self.solo_buttons[track_index].configure(fg_color="green" if track.get("solo", False) else "gray50")
+            self.solo_buttons[track_index].configure(
+                fg_color="green" if track.get("solo", False) else "gray50")
         
         # Update mute button
         if track_index in self.mute_buttons:
-            self.mute_buttons[track_index].configure(fg_color="red" if track.get("mute", False) else "gray50")
+            self.mute_buttons[track_index].configure(
+                fg_color="red" if track.get("mute", False) else "gray50")
         
-        # Update volume slider
+        # Update volume slider and entry
         if track_index in self.track_volume_vars:
-            self.track_volume_vars[track_index].set(track.get("volume", 1.0))
+            widgets = self.track_volume_vars[track_index]
+            db_value = track.get("volume_db", 0.0)
+            widgets['slider'].set(db_value)
+            widgets['entry'].delete(0, tk.END)
+            widgets['entry'].insert(0, self.format_db(db_value))
 
     def toggle_solo(self, track):
         if not self.is_renaming and self.controller:
@@ -453,12 +544,6 @@ class TimelineView(ctk.CTkToplevel):
         if not self.is_renaming and self.controller:
             self.controller.toggle_mute(track)
             self.update_single_track_label(track)
-
-    def update_volume(self, track, value):
-        track["volume"] = value
-        if self.controller:
-            self.controller.update_track_volume(track)
-        self.update_single_track_label(track)
                     
     def add_track(self, track_name=None):
         if not self.is_renaming and self.controller:
