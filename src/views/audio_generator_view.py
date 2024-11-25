@@ -129,6 +129,11 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.s2s_status_label = ctk.CTkLabel(parent, text="")
         self.s2s_status_label.grid(row=0, column=2, padx=5, sticky="w")
 
+        # Add level meter canvas
+        self.level_meter = ctk.CTkCanvas(parent, width=150, height=20, bg='gray20', highlightthickness=0)
+        self.level_meter.grid(row=0, column=3, padx=5)
+        self.level_bar = self.level_meter.create_rectangle(0, 0, 0, 20, fill='#00ff00')
+
         # Preview frame
         self.s2s_preview_frame = ctk.CTkFrame(parent)
         self.s2s_preview_frame.grid(row=1, column=0, columnspan=3, sticky="ew", padx=5, pady=5)
@@ -622,6 +627,9 @@ class AudioGeneratorView(ctk.CTkFrame):
                 hover_color="dark red"
             )
             self.s2s_status_label.configure(text="Recording...")
+            
+            # Reset level meter
+            self.level_meter.coords(self.level_bar, 0, 0, 0, 20)
             self.preview_play_button.configure(state="disabled")
             self.preview_stop_button.configure(state="disabled")
             
@@ -680,6 +688,9 @@ class AudioGeneratorView(ctk.CTkFrame):
                 
                 self.s2s_status_label.configure(text="Recording saved")
                 
+                # Clear level meter
+                self.level_meter.coords(self.level_bar, 0, 0, 0, 20)
+                
             except Exception as e:
                 self.s2s_status_label.configure(text=f"Error saving recording: {str(e)}")
 
@@ -688,8 +699,31 @@ class AudioGeneratorView(ctk.CTkFrame):
         if status:
             print(status)
         # Append a copy of the data to our frames list
-        # indata shape is (frames, channels)
         self.audio_frames.append(indata.copy())
+        
+        # Calculate RMS level
+        rms = np.sqrt(np.mean(indata**2))
+        # Convert to dB and normalize
+        db = 20 * np.log10(max(1e-9, rms))
+        normalized_level = min(1.0, max(0, (db + 60) / 60))  # Normalize between -60dB and 0dB
+        
+        # Update level meter (using after to ensure thread safety)
+        self.after(0, lambda: self.update_level_meter(normalized_level))
+
+    def update_level_meter(self, level):
+        """Update the level meter visualization"""
+        width = self.level_meter.winfo_width()
+        bar_width = int(width * level)
+        self.level_meter.coords(self.level_bar, 0, 0, bar_width, 20)
+        
+        # Change color based on level
+        if level > 0.9:
+            color = '#ff0000'  # Red for high levels
+        elif level > 0.7:
+            color = '#ffff00'  # Yellow for medium levels
+        else:
+            color = '#00ff00'  # Green for normal levels
+        self.level_meter.itemconfig(self.level_bar, fill=color)
 
     def import_s2s_audio(self):
         """Import audio file for speech-to-speech conversion"""
