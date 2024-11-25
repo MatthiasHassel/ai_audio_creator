@@ -125,18 +125,18 @@ class AudioGeneratorView(ctk.CTkFrame):
         )
         self.import_button.grid(row=0, column=1, padx=5, pady=10)
 
-        # Status label
-        self.s2s_status_label = ctk.CTkLabel(parent, text="")
-        self.s2s_status_label.grid(row=0, column=2, padx=5, sticky="w")
-
         # Add level meter canvas
         self.level_meter = ctk.CTkCanvas(parent, width=150, height=20, bg='gray20', highlightthickness=0)
-        self.level_meter.grid(row=0, column=3, padx=5)
+        self.level_meter.grid(row=0, column=2, padx=(5, 10))
         self.level_bar = self.level_meter.create_rectangle(0, 0, 0, 20, fill='#00ff00')
+
+        # Status label
+        self.s2s_status_label = ctk.CTkLabel(parent, text="")
+        self.s2s_status_label.grid(row=0, column=3, padx=(20, 5), sticky="w")
 
         # Preview frame
         self.s2s_preview_frame = ctk.CTkFrame(parent)
-        self.s2s_preview_frame.grid(row=1, column=0, columnspan=3, sticky="ew", padx=5, pady=5)
+        self.s2s_preview_frame.grid(row=1, column=0, columnspan=4, sticky="ew", padx=5, pady=5)
         
         # Create audio visualizer for the preview
         self.s2s_visualizer = AudioVisualizer(self.s2s_preview_frame)
@@ -146,18 +146,64 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.preview_controls = ctk.CTkFrame(self.s2s_preview_frame)
         self.preview_controls.pack(fill="x", pady=5)
         
-        self.preview_play_button = ctk.CTkButton(self.preview_controls, text="Play", width=60,
-                                                command=lambda: self.controller.play_s2s_preview())
+        self.preview_play_button = ctk.CTkButton(
+            self.preview_controls, 
+            text="Play", 
+            width=60,
+            command=self.play_preview_recording
+        )
         self.preview_play_button.pack(side="left", padx=5)
         
-        self.preview_stop_button = ctk.CTkButton(self.preview_controls, text="Stop", width=60,
-                                                command=lambda: self.controller.stop_s2s_preview())
+        self.preview_stop_button = ctk.CTkButton(
+            self.preview_controls, 
+            text="Stop", 
+            width=60,
+            command=self.stop_preview_recording
+        )
         self.preview_stop_button.pack(side="left", padx=5)
         
         # Initially hide preview frame and disable buttons
         self.s2s_preview_frame.grid_remove()
         self.preview_play_button.configure(state="disabled")
         self.preview_stop_button.configure(state="disabled")
+
+    def play_preview_recording(self):
+        """Play the recorded preview and start updating playhead"""
+        if self.controller:
+            self.controller.play_s2s_preview()
+            self.preview_play_button.configure(state="disabled")
+            self.preview_stop_button.configure(state="normal")
+            self.start_preview_playhead_update()
+
+    def stop_preview_recording(self):
+        """Stop the preview playback and reset playhead"""
+        if self.controller:
+            self.controller.stop_s2s_preview()
+            self.preview_play_button.configure(state="normal")
+            self.preview_stop_button.configure(state="disabled")
+            self.stop_preview_playhead_update()
+            self.s2s_visualizer.update_playhead(0)
+
+    def start_preview_playhead_update(self):
+        """Start updating the playhead position during preview playback"""
+        self.update_preview_playhead()
+
+    def stop_preview_playhead_update(self):
+        """Stop updating the playhead"""
+        if hasattr(self, 'preview_update_id'):
+            self.after_cancel(self.preview_update_id)
+            self.preview_update_id = None
+
+    def update_preview_playhead(self):
+        """Update the preview playhead position"""
+        if hasattr(self, 'controller') and hasattr(self.controller.model, 'preview_channel'):
+            if self.controller.model.preview_channel and self.controller.model.preview_channel.get_busy():
+                position = time.time() - self.controller.model.start_time
+                self.s2s_visualizer.update_playhead(position)
+                self.preview_update_id = self.after(50, self.update_preview_playhead)
+            else:
+                # Playback finished
+                self.stop_preview_recording()
 
     def toggle_s2s_mode(self):
         """Switch between text input and Speech-to-Speech modes"""

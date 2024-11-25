@@ -25,11 +25,14 @@ class AudioGeneratorModel:
             if self.preview_channel and self.preview_channel.get_busy():
                 self.preview_channel.stop()
             self.preview_channel = self.preview_sound.play()
+            self.start_time = time.time()  # Add this line to track playback time
+            self.is_playing = True         # Add this line to track playback state
 
     def stop_preview(self):
         """Stop playing the preview audio"""
         if hasattr(self, 'preview_channel') and self.preview_channel:
             self.preview_channel.stop()
+            self.is_playing = False
 
     def load_audio(self, file_path):
         self.current_audio_file = file_path
