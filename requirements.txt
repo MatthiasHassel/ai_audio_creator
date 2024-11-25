@@ -11,6 +11,7 @@ pygame==2.6.0
 pyaudio==0.2.13
 sounddevice==0.4.7
 python-reapy==0.10.0
+librosa==0.10.0  # Required for MP3 to WAV conversion
 
 # AI
 openai==1.37.1
@@ -35,9 +36,6 @@ python-dotenv==1.0.1
 # Other
 pillow==11.0.0
 
-# Optional: for advanced audio processing (if needed)
-# librosa==0.10.0
-
 # Development Tools (optional, for development environment)
 # pytest==7.3.1
 # black==23.3.0
@@ -45,4 +43,3 @@ pillow==11.0.0
 
 # Note: Ensure you have the appropriate system-level dependencies installed,
 # such as PortAudio for PyAudio, and any required libraries for audio codecs. Tip: Use "brew install portaudio"
-

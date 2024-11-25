@@ -13,6 +13,24 @@ class AudioGeneratorModel:
         pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=1024)
         self.playback_finished_callback = None
 
+    def load_preview_audio(self, file_path):
+        """Load a preview audio file for playback"""
+        self.preview_audio_file = file_path
+        self.preview_sound = pygame.mixer.Sound(file_path)
+        self.preview_channel = None
+
+    def play_preview(self):
+        """Play the preview audio"""
+        if hasattr(self, 'preview_audio_file'):
+            if self.preview_channel and self.preview_channel.get_busy():
+                self.preview_channel.stop()
+            self.preview_channel = self.preview_sound.play()
+
+    def stop_preview(self):
+        """Stop playing the preview audio"""
+        if hasattr(self, 'preview_channel') and self.preview_channel:
+            self.preview_channel.stop()
+
     def load_audio(self, file_path):
         self.current_audio_file = file_path
         pygame.mixer.music.load(self.current_audio_file)

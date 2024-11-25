@@ -1,7 +1,7 @@
 import os
 import re
 import base64
-import io
+import json
 import requests
 from elevenlabs import VoiceSettings
 from elevenlabs.client import ElevenLabs
@@ -9,6 +9,7 @@ import logging
 from utils.file_utils import sanitize_filename
 from mutagen.id3 import ID3, TIT2, COMM
 from mutagen.mp3 import MP3
+import datetime
 
 class SpeechService:
     def __init__(self, config, status_update_callback):
@@ -171,6 +172,63 @@ class SpeechService:
 
     def process_speech_request(self, text_prompt: str, voice_id: str):
         return self.text_to_speech_file(text_prompt, voice_id)
+    
+    def process_s2s_request(self, audio_file_path: str, voice_id: str):
+        """Process a speech-to-speech generation request."""
+        self.logger.info("Initializing speech-to-speech generation...")
+
+        try:
+            # Verify voice_id is provided
+            if not voice_id:
+                raise ValueError("No voice ID provided for speech-to-speech conversion")
+
+            # Construct output filename
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_filename = f"s2s_{os.path.basename(audio_file_path)}_{timestamp}.mp3"
+            output_path = os.path.join(self.output_dir, output_filename)
+
+            # Ensure output directory exists
+            os.makedirs(self.output_dir, exist_ok=True)
+
+            self.logger.info("Sending request to ElevenLabs API...")
+            self.update_status("Processing speech-to-speech conversion...")
+
+            # Create voice settings and convert to JSON string
+            voice_settings = json.dumps({
+                "stability": 0.5,
+                "similarity_boost": 0.75,
+                "style": 0.0,
+                "use_speaker_boost": True
+            })
+
+            # Open the audio file
+            with open(audio_file_path, 'rb') as audio_file:
+                # Create the request using the ElevenLabs client
+                response = self.client.speech_to_speech.convert(
+                    voice_id=voice_id,
+                    audio=audio_file,
+                    model_id="eleven_english_sts_v2",
+                    output_format="mp3_44100_128",
+                    voice_settings=voice_settings  # Now passing as JSON string
+                )
+
+                # Save the response to a file
+                with open(output_path, 'wb') as f:
+                    for chunk in response:
+                        if chunk:
+                            f.write(chunk)
+
+                # Add ID3 tag with original audio filename as prompt
+                self.add_id3_tag(output_path, f"Speech-to-Speech conversion from: {os.path.basename(audio_file_path)}")
+                
+                self.update_status("Speech-to-speech conversion completed successfully")
+                return output_path
+
+        except Exception as e:
+            error_msg = f"Failed to generate speech-to-speech: {str(e)}"
+            self.logger.error(error_msg)
+            self.update_status(error_msg)
+            return None
     
     def generate_voice_preview(self, voice_description: str, text: str):
         """Generate previews of unique voices."""

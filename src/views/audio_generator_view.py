@@ -5,6 +5,13 @@ import time
 from tkinter import messagebox
 from utils.audio_visualizer import AudioVisualizer
 from utils.audio_file_selector import AudioFileSelector
+import sounddevice as sd
+import soundfile as sf
+import numpy as np
+from tkinter import filedialog
+import os
+import threading
+import tempfile
 
 
 class AudioGeneratorView(ctk.CTkFrame):
@@ -65,9 +72,98 @@ class AudioGeneratorView(ctk.CTkFrame):
         input_frame.grid_columnconfigure(0, weight=1)
         input_frame.grid_rowconfigure(1, weight=1)
 
-        ctk.CTkLabel(input_frame, text="Enter your text:").grid(row=0, column=0, sticky="w")
-        self.user_input = ctk.CTkTextbox(input_frame, height=100)
-        self.user_input.grid(row=1, column=0, sticky="nsew")
+        # Create a header frame for label and checkbox
+        header_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
+        header_frame.grid(row=0, column=0, sticky="ew", pady=(0, 5))
+        header_frame.grid_columnconfigure(1, weight=1)  # Make space between label and checkbox
+
+        # Input label
+        self.input_label = ctk.CTkLabel(header_frame, text="Enter your text:")
+        self.input_label.grid(row=0, column=0, sticky="w")
+
+        # S2S checkbox (only visible in speech tab)
+        self.use_s2s = ctk.BooleanVar(value=False)
+        self.s2s_checkbox = ctk.CTkCheckBox(header_frame, text="Use Speech-to-Speech Mode", 
+                                        variable=self.use_s2s,
+                                        command=self.toggle_s2s_mode)
+        self.s2s_checkbox.grid(row=0, column=1, sticky="e")
+        self.s2s_checkbox.grid_remove()  # Initially hidden
+
+        # Create container for input methods
+        self.input_container = ctk.CTkFrame(input_frame, fg_color="transparent")
+        self.input_container.grid(row=1, column=0, sticky="nsew")
+        self.input_container.grid_columnconfigure(0, weight=1)
+        self.input_container.grid_rowconfigure(0, weight=1)
+
+        # Text input
+        self.user_input = ctk.CTkTextbox(self.input_container, height=100)
+        self.user_input.grid(row=0, column=0, sticky="nsew")
+
+        # S2S controls (initially hidden)
+        self.s2s_controls = ctk.CTkFrame(self.input_container)
+        self.create_s2s_controls(self.s2s_controls)
+        return input_frame
+
+    def create_s2s_controls(self, parent):
+        """Create the S2S control buttons"""
+        parent.grid_columnconfigure(2, weight=1)  # Make space for status label
+
+        # Record button
+        self.is_recording = False
+        self.record_button = ctk.CTkButton(
+            parent, 
+            text="Start Recording",
+            command=self.toggle_recording
+        )
+        self.record_button.grid(row=0, column=0, padx=5, pady=10)
+
+        # Import button
+        self.import_button = ctk.CTkButton(
+            parent,
+            text="Import Audio File",
+            command=self.import_s2s_audio
+        )
+        self.import_button.grid(row=0, column=1, padx=5, pady=10)
+
+        # Status label
+        self.s2s_status_label = ctk.CTkLabel(parent, text="")
+        self.s2s_status_label.grid(row=0, column=2, padx=5, sticky="w")
+
+        # Preview frame
+        self.s2s_preview_frame = ctk.CTkFrame(parent)
+        self.s2s_preview_frame.grid(row=1, column=0, columnspan=3, sticky="ew", padx=5, pady=5)
+        
+        # Create audio visualizer for the preview
+        self.s2s_visualizer = AudioVisualizer(self.s2s_preview_frame)
+        self.s2s_visualizer.pack(fill="both", expand=True, pady=5)
+        
+        # Add play controls for the recorded/imported audio
+        self.preview_controls = ctk.CTkFrame(self.s2s_preview_frame)
+        self.preview_controls.pack(fill="x", pady=5)
+        
+        self.preview_play_button = ctk.CTkButton(self.preview_controls, text="Play", width=60,
+                                                command=lambda: self.controller.play_s2s_preview())
+        self.preview_play_button.pack(side="left", padx=5)
+        
+        self.preview_stop_button = ctk.CTkButton(self.preview_controls, text="Stop", width=60,
+                                                command=lambda: self.controller.stop_s2s_preview())
+        self.preview_stop_button.pack(side="left", padx=5)
+        
+        # Initially hide preview frame and disable buttons
+        self.s2s_preview_frame.grid_remove()
+        self.preview_play_button.configure(state="disabled")
+        self.preview_stop_button.configure(state="disabled")
+
+    def toggle_s2s_mode(self):
+        """Switch between text input and Speech-to-Speech modes"""
+        if self.use_s2s.get():
+            self.user_input.grid_remove()
+            self.s2s_controls.grid(row=0, column=0, sticky="ew")
+            self.input_label.configure(text="Reference Audio:")
+        else:
+            self.s2s_controls.grid_remove()
+            self.user_input.grid(row=0, column=0, sticky="nsew")
+            self.input_label.configure(text="Enter your text:")
 
     def create_action_buttons(self, parent):
         action_frame = ctk.CTkFrame(parent)
@@ -509,6 +605,143 @@ class AudioGeneratorView(ctk.CTkFrame):
             self.controller.discard_voice_preview()
         self.preview_frame.grid_remove()
 
+    def toggle_recording(self):
+        """Toggle audio recording state"""
+        if not self.is_recording:
+            self.start_recording()
+        else:
+            self.stop_recording()
+            
+    def start_recording(self):
+        """Start audio recording"""
+        try:
+            self.is_recording = True
+            self.record_button.configure(
+                text="Stop Recording",
+                fg_color="red",
+                hover_color="dark red"
+            )
+            self.s2s_status_label.configure(text="Recording...")
+            self.preview_play_button.configure(state="disabled")
+            self.preview_stop_button.configure(state="disabled")
+            
+            # Create temporary file for recording
+            self.temp_audio_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
+            
+            # Configure the audio stream with proper settings
+            # Using default device, mono recording (1 channel), with 44.1kHz sample rate
+            self.stream = sd.InputStream(
+                channels=1,  # Changed from 2 to 1 for mono recording
+                samplerate=44100,
+                dtype=np.float32,
+                callback=self.audio_callback,
+                blocksize=2048
+            )
+            self.audio_frames = []
+            self.stream.start()
+            
+        except Exception as e:
+            self.s2s_status_label.configure(text=f"Error: {str(e)}")
+            self.is_recording = False
+            self.record_button.configure(
+                text="Start Recording",
+                fg_color=["#3B8ED0", "#1F6AA5"],
+                hover_color=["#3B8ED0", "#1F6AA5"]
+            )
+
+    def stop_recording(self):
+        """Stop audio recording"""
+        if hasattr(self, 'stream'):
+            self.stream.stop()
+            self.stream.close()
+            self.is_recording = False
+            
+            # Reset button appearance
+            self.record_button.configure(
+                text="Start Recording",
+                fg_color=["#3B8ED0", "#1F6AA5"],
+                hover_color=["#3B8ED0", "#1F6AA5"]
+            )
+            
+            try:
+                # Save the recorded audio
+                audio_data = np.concatenate(self.audio_frames, axis=0)
+                
+                # Convert mono to stereo if needed
+                if len(audio_data.shape) == 1 or audio_data.shape[1] == 1:
+                    # Convert mono to stereo by duplicating the channel
+                    audio_data = np.column_stack((audio_data, audio_data))
+                
+                sf.write(self.temp_audio_file.name, audio_data, 44100)
+                
+                # Update the controller
+                if self.controller:
+                    self.controller.handle_recorded_audio(self.temp_audio_file.name)
+                
+                self.s2s_status_label.configure(text="Recording saved")
+                
+            except Exception as e:
+                self.s2s_status_label.configure(text=f"Error saving recording: {str(e)}")
+
+    def audio_callback(self, indata, frames, time, status):
+        """Callback for audio recording"""
+        if status:
+            print(status)
+        # Append a copy of the data to our frames list
+        # indata shape is (frames, channels)
+        self.audio_frames.append(indata.copy())
+
+    def import_s2s_audio(self):
+        """Import audio file for speech-to-speech conversion"""
+        try:
+            file_types = (
+                ('WAV files', '*.wav'),
+                ('MP3 files', '*.mp3'),
+                ('All files', '*.*')
+            )
+            
+            file_path = filedialog.askopenfilename(
+                title="Select Audio File",
+                filetypes=file_types
+            )
+            
+            if file_path:
+                try:
+                    # If it's an MP3 file, convert it to WAV
+                    if file_path.lower().endswith('.mp3'):
+                        import soundfile as sf
+                        import librosa
+                        
+                        # Load the audio file
+                        y, sr = librosa.load(file_path, sr=44100)
+                        
+                        # Create a temporary WAV file
+                        temp_wav = os.path.join(
+                            os.path.dirname(file_path),
+                            f"temp_{os.path.splitext(os.path.basename(file_path))[0]}.wav"
+                        )
+                        
+                        # Save as WAV
+                        sf.write(temp_wav, y, sr, format='WAV')
+                        
+                        # Update the file path to use the WAV file
+                        file_path = temp_wav
+                    
+                    self.current_s2s_audio = file_path
+                    self.s2s_preview_frame.grid()
+                    self.s2s_visualizer.update_waveform(file_path)
+                    self.s2s_status_label.configure(text="Audio file loaded")
+                    self.preview_play_button.configure(state="normal")
+                    self.preview_stop_button.configure(state="disabled")
+                
+                except Exception as e:
+                    self.s2s_status_label.configure(text=f"Error loading audio: {str(e)}")
+                    messagebox.showerror("Error", f"Failed to load audio file: {str(e)}")
+        
+        except Exception as e:
+            self.s2s_status_label.configure(text=f"Error showing file dialog: {str(e)}")
+            messagebox.showerror("Error", f"Failed to show file dialog: {str(e)}")
+
     def update_tab_widgets(self):
         current_tab = self.current_module.get()
         self.current_tab_widget.grid_remove()
@@ -517,9 +750,12 @@ class AudioGeneratorView(ctk.CTkFrame):
         
         if current_tab in ["Music", "SFX"]:
             self.llm_button.grid()
+            self.s2s_checkbox.grid_remove()  # Hide S2S checkbox
+            self.use_s2s.set(False)  # Reset S2S mode
         else:
             self.llm_button.grid_remove()
-
+            self.s2s_checkbox.grid()  # Show S2S checkbox
+            
         # Update the audio file selector
         self.audio_file_selector.update_module(current_tab.lower())
 

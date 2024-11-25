@@ -132,22 +132,70 @@ class AudioGeneratorController:
                 self.view.generate_button.configure(state="normal")
                 self.view.hide_progress_bar()
 
-    def process_speech_request(self, text_prompt=None, voice_id=None, synchronous=False):
-        if text_prompt is None:
-            text_prompt = self.view.user_input.get("1.0", "end-1c").strip()
-        if voice_id is None:
-            selected_voice_name = self.view.selected_voice.get()
-            user_voices = self.speech_service.get_user_voices()
-            voice_id = next((voice_id for name, voice_id in user_voices if name == selected_voice_name), None)
-        
-        if voice_id:
-            return self._process_request(self.speech_service.process_speech_request, 
-                                    [text_prompt, voice_id],
-                                    synchronous=synchronous)
-        else:
-            self.view.update_output("Error: Invalid voice selected.")
+    def process_speech_request(self):
+        """Process a speech generation request."""
+        if not self.view.selected_voice.get():
+            self.view.update_status("Error: No voice selected")
             return None
 
+        # Get voice_id from the selected voice name
+        selected_voice_name = self.view.selected_voice.get()
+        voice_id = None
+        for name, id in self.speech_service.get_user_voices():
+            if name == selected_voice_name:
+                voice_id = id
+                break
+
+        if not voice_id:
+            self.view.update_status("Error: Could not find selected voice ID")
+            return None
+
+        # Check if we're in speech-to-speech mode
+        if self.view.use_s2s.get():
+            if hasattr(self.view, 'current_s2s_audio') and self.view.current_s2s_audio:
+                return self._process_request(
+                    self.speech_service.process_s2s_request,
+                    [self.view.current_s2s_audio, voice_id],
+                    synchronous=False
+                )
+            else:
+                self.view.update_status("No audio file selected for speech-to-speech conversion")
+                return None
+        else:
+            # Regular text-to-speech processing
+            text_prompt = self.view.user_input.get("1.0", "end-1c").strip()
+            if not text_prompt:
+                self.view.update_status("Error: Please enter some text")
+                return None
+
+            return self._process_request(
+                self.speech_service.text_to_speech_file,
+                [text_prompt, voice_id],
+                synchronous=False
+            )
+
+    def play_s2s_preview(self):
+        """Play the S2S preview audio"""
+        if hasattr(self.view, 'current_s2s_audio'):
+            self.model.load_preview_audio(self.view.current_s2s_audio)
+            self.model.play_preview()
+            self.view.preview_play_button.configure(state="disabled")
+            self.view.preview_stop_button.configure(state="normal")
+
+    def stop_s2s_preview(self):
+        """Stop the S2S preview audio"""
+        self.model.stop_preview()
+        self.view.preview_play_button.configure(state="normal")
+        self.view.preview_stop_button.configure(state="disabled")
+
+    def handle_recorded_audio(self, file_path):
+        """Handle successful audio recording"""
+        self.view.current_s2s_audio = file_path
+        self.view.s2s_preview_frame.grid()  # Change from pack to grid
+        self.view.s2s_visualizer.update_waveform(file_path)
+        self.view.preview_play_button.configure(state="normal")
+        self.view.preview_stop_button.configure(state="disabled")
+        
     def setup_voice_preview_handlers(self):
         """Set up handlers for voice preview functionality."""
         # Connect the view's preview handlers to controller methods
