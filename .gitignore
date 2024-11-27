@@ -32,7 +32,9 @@ api_info.txt
 # python venv
 /ai_audio_creator_env
 
+# .DS_Store
 .DS_Store
 /suno_api/.DS_Store
+/src/.DS_Store
 
 .vscode

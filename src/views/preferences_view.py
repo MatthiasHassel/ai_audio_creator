@@ -2,7 +2,9 @@ import customtkinter as ctk
 import os
 import json
 from tkinter import messagebox
-from dotenv import load_dotenv, set_key, find_dotenv
+from dotenv import load_dotenv, set_key
+import yaml
+import logging
 
 class PreferencesWindow(ctk.CTkToplevel):
     def __init__(self, master, config):
@@ -10,18 +12,20 @@ class PreferencesWindow(ctk.CTkToplevel):
         self.config = config
         self.prompts_config = self.load_prompts_config()
 
-        # Window setup
-        self.title("Preferences")
-        self.geometry("700x400")
-        self.resizable(False, False)
-        
         # Initialize variables
         self.api_vars = {
             'elevenlabs': ctk.StringVar(),
             'openai': ctk.StringVar(),
+            'openrouter': ctk.StringVar(),
             'suno_cookie': ctk.StringVar(),
-            'suno_session': ctk.StringVar()
         }
+        
+        # Initialize model selection variable
+        self.selected_model = ctk.StringVar()
+        
+        self.title("Preferences")
+        self.geometry("700x400")
+        self.resizable(False, False)
         
         self.create_widgets()
         self.load_preferences()
@@ -46,6 +50,10 @@ class PreferencesWindow(ctk.CTkToplevel):
         # Prompts tab
         prompts_tab = self.notebook.add("Prompts")
         self.create_prompts_tab(prompts_tab)
+
+        # Models tab
+        models_tab = self.notebook.add("Models")
+        self.create_models_tab(models_tab)
         
         # Buttons
         button_frame = ctk.CTkFrame(main_frame)
@@ -57,6 +65,165 @@ class PreferencesWindow(ctk.CTkToplevel):
         cancel_button = ctk.CTkButton(button_frame, text="Cancel", command=self.destroy)
         cancel_button.pack(side="right", padx=5)
 
+    def create_models_tab(self, parent):
+        """Create the Models tab content."""
+        scrollable_frame = ctk.CTkScrollableFrame(parent)
+        scrollable_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        description = ctk.CTkLabel(
+            scrollable_frame,
+            text="Select the AI model to use for script analysis and prompt improvement:",
+            wraplength=600
+        )
+        description.pack(pady=(10, 20), padx=10)
+        
+        # Model selection frame
+        models_frame = ctk.CTkFrame(scrollable_frame, fg_color="transparent")
+        models_frame.pack(fill="x", pady=5, padx=5)
+        
+        # OpenAI option
+        openai_frame = ctk.CTkFrame(models_frame, fg_color="transparent")
+        openai_frame.pack(fill="x", pady=5)
+        
+        openai_radio = ctk.CTkRadioButton(
+            openai_frame,
+            text="OpenAI GPT-4o-mini",
+            variable=self.selected_model,
+            value="openai"
+        )
+        openai_radio.pack(pady=5, padx=20, anchor="w")
+        
+        openai_desc = ctk.CTkLabel(
+            openai_frame,
+            text="OpenAI's model offers high accuracy and reliability for text analysis and generation.",
+            wraplength=500,
+            text_color="gray60"
+        )
+        openai_desc.pack(pady=(0, 10), padx=40, anchor="w")
+        
+        # Llama option
+        llama_frame = ctk.CTkFrame(models_frame, fg_color="transparent")
+        llama_frame.pack(fill="x", pady=5)
+        
+        llama_radio = ctk.CTkRadioButton(
+            llama_frame,
+            text="Meta Llama 3.2 3B Instruct (via OpenRouter)",
+            variable=self.selected_model,
+            value="llama"
+        )
+        llama_radio.pack(pady=5, padx=20, anchor="w")
+        
+        llama_desc = ctk.CTkLabel(
+            llama_frame,
+            text="Meta's Llama model provides a good balance of performance and efficiency. Available through OpenRouter.",
+            wraplength=500,
+            text_color="gray60"
+        )
+        llama_desc.pack(pady=(0, 10), padx=40, anchor="w")
+
+    def create_api_tab(self, parent):
+        """Create the API Keys tab content."""
+        api_frame = ctk.CTkFrame(parent)
+        api_frame.pack(fill="x", pady=5, padx=5)
+        
+        # Add description
+        description = ctk.CTkLabel(
+            api_frame,
+            text="Required API Keys:\n• ElevenLabs API Key and Suno Cookie are always required\n• Either OpenAI API Key or OpenRouter API Key must be provided",
+            wraplength=600,
+            justify="left"
+        )
+        description.pack(pady=(10, 20), padx=10)
+
+        # Create API entries
+        self.create_api_entry(api_frame, "ElevenLabs API Key:", 'elevenlabs')
+        self.create_api_entry(api_frame, "Suno Cookie:", 'suno_cookie')
+        self.create_api_entry(api_frame, "OpenAI API Key:", 'openai')
+        self.create_api_entry(api_frame, "OpenRouter API Key:", 'openrouter')
+
+    def validate_api_keys(self):
+        """Validate that required API keys are provided"""
+        # Check mandatory keys
+        if not self.api_vars['elevenlabs'].get().strip():
+            messagebox.showerror("Error", "ElevenLabs API Key is required")
+            return False
+            
+        if not self.api_vars['suno_cookie'].get().strip():
+            messagebox.showerror("Error", "Suno Cookie is required")
+            return False
+            
+        # Check that at least one of OpenAI or OpenRouter API keys is provided
+        if not (self.api_vars['openai'].get().strip() or self.api_vars['openrouter'].get().strip()):
+            messagebox.showerror("Error", "Either OpenAI API Key or OpenRouter API Key must be provided")
+            return False
+            
+        return True
+
+    def create_api_entry(self, parent, label_text, key):
+        frame = ctk.CTkFrame(parent)
+        frame.pack(fill="x", pady=5)
+        frame.grid_columnconfigure(1, weight=1)
+        
+        label = ctk.CTkLabel(frame, text=label_text, width=120, anchor="w")
+        label.grid(row=0, column=0, padx=(10, 10), sticky="w")
+        
+        entry = ctk.CTkEntry(frame, textvariable=self.api_vars[key], show="*", width=300)
+        entry.grid(row=0, column=1, sticky="ew", padx=(0, 5))
+        
+        def toggle_visibility():
+            current = entry.cget("show")
+            if current == "*":
+                entry.configure(show="")
+                toggle_button.configure(fg_color="#1f538d")  # Highlighted when visible
+            else:
+                entry.configure(show="*")
+                toggle_button.configure(fg_color="gray40")  # Not highlighted when hidden
+        
+        toggle_button = ctk.CTkButton(frame, text="👁", width=30, command=toggle_visibility, fg_color="gray40")
+        toggle_button.grid(row=0, column=2, padx=5)
+
+    def update_api_entries_visibility(self, *args):
+        """Update visibility of API entries based on selected model"""
+        selected = self.selected_model.get()
+        
+        # Show/hide OpenAI API Key entry
+        if 'openai' in self.api_frames:
+            if selected == 'openai':
+                self.api_frames['openai'].pack(fill="x", pady=5)
+            else:
+                self.api_frames['openai'].pack_forget()
+        
+        # Show/hide OpenRouter API Key entry
+        if 'openrouter' in self.api_frames:
+            if selected == 'llama':
+                self.api_frames['openrouter'].pack(fill="x", pady=5)
+            else:
+                self.api_frames['openrouter'].pack_forget()
+
+    def get_env_files(self):
+        """Get and ensure existence of environment files"""
+        try:
+            # Get the directory paths
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            main_env_path = os.path.join(base_dir, '.env')
+            suno_env_path = os.path.join(base_dir, 'suno_api', '.env')
+            
+            # Create main .env file if it doesn't exist
+            if not os.path.exists(main_env_path):
+                with open(main_env_path, 'w') as f:
+                    f.write('# API Keys\n')
+            
+            # Create suno_api directory and .env file if they don't exist
+            os.makedirs(os.path.dirname(suno_env_path), exist_ok=True)
+            if not os.path.exists(suno_env_path):
+                with open(suno_env_path, 'w') as f:
+                    f.write('# Suno API Keys\n')
+            
+            return main_env_path, suno_env_path
+        except Exception as e:
+            logging.error(f"Error getting env files: {str(e)}", exc_info=True)
+            raise
+    
     def create_prompts_tab(self, parent):
         # Create variables
         self.sfx_prompt_var = ctk.StringVar(value=self.prompts_config.get('sfx_improvement', ''))
@@ -197,95 +364,6 @@ class PreferencesWindow(ctk.CTkToplevel):
         self.prompt_text_boxes['script'].delete("1.0", "end")
         self.prompt_text_boxes['script'].insert("1.0", default_prompts['script_analysis_pre'])
     
-    def create_api_tab(self, parent):
-        """Create the API Keys tab content."""
-        # Create API Key entries
-        self.create_api_entry(parent, "ElevenLabs API Key:", 'elevenlabs')
-        self.create_api_entry(parent, "OpenAI API Key:", 'openai')
-        self.create_api_entry(parent, "Suno Cookie:", 'suno_cookie')
-        self.create_api_entry(parent, "Suno Session ID:", 'suno_session')
-
-    def create_api_entry(self, parent, label_text, key):
-        frame = ctk.CTkFrame(parent)
-        frame.pack(fill="x", pady=5)
-        frame.grid_columnconfigure(1, weight=1)  # Make the entry field expand
-        
-        label = ctk.CTkLabel(frame, text=label_text, width=120, anchor="w")  # Set anchor="w" for left alignment
-        label.grid(row=0, column=0, padx=(10, 10), sticky="w")  # Use grid and sticky="w" for left alignment
-        
-        entry = ctk.CTkEntry(frame, textvariable=self.api_vars[key], show="*", width=300)
-        entry.grid(row=0, column=1, sticky="ew", padx=(0, 5))  # Make entry expand horizontally
-        
-        def toggle_visibility():
-            current = entry.cget("show")
-            entry.configure(show="" if current == "*" else "*")
-            
-        toggle_button = ctk.CTkButton(frame, text="👁", width=30, command=toggle_visibility)
-        toggle_button.grid(row=0, column=2, padx=5)
-
-    def get_env_files(self):
-        # Get the directory paths
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        main_env_path = os.path.join(base_dir, '.env')
-        suno_env_path = os.path.join(base_dir, 'suno_api', '.env')
-        
-        # Create main .env file if it doesn't exist
-        if not os.path.exists(main_env_path):
-            with open(main_env_path, 'w') as f:
-                f.write('# API Keys\n')
-        
-        # Create suno_api .env file if it doesn't exist
-        os.makedirs(os.path.dirname(suno_env_path), exist_ok=True)
-        if not os.path.exists(suno_env_path):
-            with open(suno_env_path, 'w') as f:
-                f.write('# Suno API Keys\n')
-        
-        return main_env_path, suno_env_path
-
-    def load_preferences(self):
-        try:
-            main_env_path, suno_env_path = self.get_env_files()
-            
-            # Load both .env files
-            load_dotenv(main_env_path)
-            load_dotenv(suno_env_path)
-            
-            # Load values from environment variables
-            self.api_vars['elevenlabs'].set(os.getenv('ELEVENLABS_API_KEY', ''))
-            self.api_vars['openai'].set(os.getenv('OPENAI_API_KEY', ''))
-            self.api_vars['suno_cookie'].set(os.getenv('SUNO_COOKIE', ''))
-            self.api_vars['suno_session'].set(os.getenv('SUNO_SESSION_ID', ''))
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load preferences: {str(e)}")
-
-    def save_preferences(self):
-        try:
-            # Save API keys
-            main_env_path, suno_env_path = self.get_env_files()
-            
-            # Update main .env file
-            set_key(main_env_path, 'ELEVENLABS_API_KEY', self.api_vars['elevenlabs'].get())
-            set_key(main_env_path, 'OPENAI_API_KEY', self.api_vars['openai'].get())
-            set_key(main_env_path, 'SUNO_COOKIE', self.api_vars['suno_cookie'].get())
-            set_key(main_env_path, 'SUNO_SESSION_ID', self.api_vars['suno_session'].get())
-            
-            # Update suno_api .env file
-            set_key(suno_env_path, 'SUNO_COOKIE', self.api_vars['suno_cookie'].get())
-            set_key(suno_env_path, 'SUNO_SESSION_ID', self.api_vars['suno_session'].get())
-            
-            # Save prompts
-            self.save_prompts_config()
-            
-            # Reload environment variables
-            load_dotenv(main_env_path)
-            load_dotenv(suno_env_path)
-            
-            messagebox.showinfo("Success", "Settings saved successfully!")
-            self.destroy()
-            
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save settings: {str(e)}")
-
     def load_prompts_config(self):
         try:
             # Get the src directory path
@@ -340,6 +418,103 @@ class PreferencesWindow(ctk.CTkToplevel):
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save prompts config: {str(e)}")
 
+    def load_preferences(self):
+        try:
+            main_env_path, suno_env_path = self.get_env_files()
+            
+            # Load both .env files
+            load_dotenv(main_env_path)
+            load_dotenv(suno_env_path)
+            
+            # Load API keys from environment variables and config
+            self.api_vars['elevenlabs'].set(self.config['api'].get('elevenlabs_api_key', ''))
+            self.api_vars['openai'].set(self.config['api'].get('openai_api_key', ''))
+            self.api_vars['openrouter'].set(self.config['api'].get('openrouter_api_key', ''))
+            self.api_vars['suno_cookie'].set(self.config['api'].get('suno_cookie', ''))
+            
+            # Load selected model from config
+            model = self.config.get('api', {}).get('selected_model', 'openai')
+            self.selected_model.set(model)
+            
+            # Log loaded values for debugging
+            logging.info(f"Loaded preferences - Model: {model}")
+            logging.info(f"Loaded API Keys:")
+            for key, var in self.api_vars.items():
+                # Mask the key value for security in logs
+                value = var.get()
+                masked_value = '*' * (len(value) if value else 0)
+                logging.info(f"  {key}: {masked_value}")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load preferences: {str(e)}")
+            logging.error(f"Error loading preferences: {str(e)}", exc_info=True)
+
+    def save_preferences(self):
+        try:
+            # Validate API keys first
+            if not self.validate_api_keys():
+                return
+                
+            # Save API keys
+            main_env_path, suno_env_path = self.get_env_files()
+            
+            # Update main .env file with stripped values
+            env_keys = {
+                'elevenlabs': 'ELEVENLABS_API_KEY',
+                'openai': 'OPENAI_API_KEY',
+                'openrouter': 'OPENROUTER_API_KEY',
+                'suno_cookie': 'SUNO_COOKIE'
+            }
+            
+            for key, var in self.api_vars.items():
+                cleaned_value = var.get().strip()
+                env_key = env_keys[key]
+                
+                # Set key in main .env
+                set_key(main_env_path, env_key, cleaned_value)
+                
+                # Also set suno_cookie in suno_api .env
+                if key == 'suno_cookie':
+                    set_key(suno_env_path, env_key, cleaned_value)
+            
+            # Save prompts
+            self.save_prompts_config()
+            
+            # Save selected model to config
+            config_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            config_file = os.path.join(config_dir, 'config', 'config.yaml')
+            
+            with open(config_file, 'r') as f:
+                config_data = yaml.safe_load(f)
+            
+            if 'api' not in config_data:
+                config_data['api'] = {}
+            
+            config_data['api']['selected_model'] = self.selected_model.get()
+            
+            with open(config_file, 'w') as f:
+                yaml.dump(config_data, f, default_flow_style=False)
+            
+            # Update the config in memory
+            self.config['api']['selected_model'] = self.selected_model.get()
+            
+            # Update the config with the new API keys
+            self.config['api']['elevenlabs_api_key'] = self.api_vars['elevenlabs'].get().strip()
+            self.config['api']['openai_api_key'] = self.api_vars['openai'].get().strip()
+            self.config['api']['openrouter_api_key'] = self.api_vars['openrouter'].get().strip()
+            self.config['api']['suno_cookie'] = self.api_vars['suno_cookie'].get().strip()
+            
+            # Reload environment variables to ensure they're up to date
+            load_dotenv(main_env_path)
+            load_dotenv(suno_env_path)
+            
+            logging.info("Preferences saved successfully")
+            messagebox.showinfo("Success", "Settings saved successfully!")
+            self.destroy()
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save settings: {str(e)}")
+            logging.error(f"Error saving preferences: {str(e)}", exc_info=True)
+        
     def on_closing(self):
         self.destroy()
-

@@ -3,6 +3,7 @@ import logging
 import threading
 import os
 import json
+import requests
 
 class LLMService:
     def __init__(self, config, status_update_callback, output_update_callback):
@@ -12,6 +13,7 @@ class LLMService:
         self.logger = logging.getLogger(__name__)
         self.status_update_callback = status_update_callback
         self.output_update_callback = output_update_callback
+        self.selected_model = self.config['api'].get('selected_model', 'openai')
 
     def update_status(self, message):
         if self.status_update_callback:
@@ -84,7 +86,7 @@ class LLMService:
     def process_llm_request(self, prompt, is_music):
         """Process the LLM request in a separate thread."""
         def llm_thread():
-            self.update_status("Processing with GPT-4...")
+            self.update_status("Processing with LLM...")
             if is_music:
                 result = self.get_llm_musicprompt(prompt)
             else:
@@ -100,34 +102,100 @@ class LLMService:
         thread = threading.Thread(target=llm_thread)
         thread.start()
 
-    def get_llm_sfx(self, prompt):
-        """Generate an SFX description using GPT-4."""
-        self.logger.info("Generating SFX description with GPT-4...")
+    def process_with_openrouter(self, messages):
+        """Process the request using OpenRouter API"""
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a sound design expert. Generate descriptive keywords for sound effects. Only output the keywords separated by commas, without any additional text."},
-                    {"role": "user", "content": f"{self.prompts_config.get('sfx_improvement', '')} {prompt}"}
-                ]
+            response = requests.post(
+                url="https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.config['api']['openrouter_api_key']}",
+                    "HTTP-Referer": "localhost",  # Update with your site URL in production
+                    "X-Title": "AI Audio Creator",
+                },
+                json={
+                    "model": "meta-llama/llama-3.2-3b-instruct:free",
+                    "messages": messages,
+                    "temperature": 0.7,
+                    "max_tokens": 500
+                }
             )
-            return response.choices[0].message.content.strip()
+            response.raise_for_status()
+            return response.json()['choices'][0]['message']['content']
+        except Exception as e:
+            self.logger.error(f"Error in OpenRouter API call: {str(e)}")
+            raise
+
+    def process_with_openai(self, messages, response_format=None):
+        """Process the request using OpenAI API"""
+        try:
+            kwargs = {
+                "model": "gpt-4o-mini",
+                "messages": messages
+            }
+            if response_format:
+                kwargs["response_format"] = response_format
+
+            response = self.client.chat.completions.create(**kwargs)
+            return response.choices[0].message.content
+        except Exception as e:
+            self.logger.error(f"Error in OpenAI API call: {str(e)}")
+            raise
+
+    def get_llm_response(self, system_message, user_message, response_format=None):
+        """Get response from the selected LLM"""
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": user_message}
+        ]
+        
+        try:
+            if self.selected_model == 'llama':
+                return self.process_with_openrouter(messages)
+            else:
+                return self.process_with_openai(messages, response_format)
+        except Exception as e:
+            self.logger.error(f"Error getting LLM response: {str(e)}")
+            raise
+
+    def get_llm_sfx(self, prompt):
+        """Generate an SFX description using the selected LLM."""
+        self.logger.info("Generating SFX description...")
+        try:
+            return self.get_llm_response(
+                "You are a sound design expert. Generate descriptive keywords for sound effects. Only output the keywords separated by commas, without any additional text.",
+                f"{self.prompts_config.get('sfx_improvement', '')} {prompt}"
+            )
         except Exception as e:
             self.logger.error(f"Error generating SFX description: {str(e)}")
             return None
 
     def get_llm_musicprompt(self, prompt):
-        """Generate a music prompt using GPT-4."""
-        self.logger.info("Generating music prompt with GPT-4...")
+        """Generate a music prompt using the selected LLM."""
+        self.logger.info("Generating music prompt...")
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a music description expert. Generate descriptive keywords for music pieces. Only output the keywords separated by commas, without any additional text."},
-                    {"role": "user", "content": f"{self.prompts_config.get('music_improvement', '')} {prompt}"}
-                ]
+            return self.get_llm_response(
+                "You are a music description expert. Generate descriptive keywords for music pieces. Only output the keywords separated by commas, without any additional text.",
+                f"{self.prompts_config.get('music_improvement', '')} {prompt}"
             )
-            return response.choices[0].message.content.strip()
         except Exception as e:
             self.logger.error(f"Error generating music prompt: {str(e)}")
+            return None
+
+    def analyze_script(self, script_text):
+        try:
+            system_prompt = "You are a script analyzer. Analyze the given script for an audio play and provide structured output."
+            formatting_instructions = """Without any additional text, output the analysis in the following JSON format:..."""
+            pre_prompt = self.prompts_config.get('script_analysis_pre', """...""")
+            full_prompt = f"{pre_prompt}\n\n{formatting_instructions}\n\n{script_text}"
+            
+            response = self.get_llm_response(
+                system_prompt,
+                full_prompt,
+                response_format={ "type": "json_object" } if self.selected_model == 'openai' else None
+            )
+            
+            analysis = json.loads(response)
+            return analysis
+        except Exception as e:
+            self.logger.error(f"Error analyzing script: {str(e)}")
             return None

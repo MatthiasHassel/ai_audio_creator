@@ -16,7 +16,8 @@ def load_config():
     # Update API keys from environment variables
     config['api']['elevenlabs_api_key'] = os.getenv('ELEVENLABS_API_KEY', '')
     config['api']['openai_api_key'] = os.getenv('OPENAI_API_KEY', '')
+    config['api']['openrouter_api_key'] = os.getenv('OPENROUTER_API_KEY', '')
     config['api']['suno_cookie'] = os.getenv('SUNO_COOKIE', '')
-    config['api']['suno_session_id'] = os.getenv('SUNO_SESSION_ID', '')
+
     
     return config

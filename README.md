@@ -59,9 +59,8 @@ pip install -r requirements.txt
      OPENAI_API_KEY=your_key_here
      ELEVENLABS_API_KEY=your_key_here
      SUNO_COOKIE=your_cookie_here
-     SUNO_SESSION_ID=your_session_id_here
      ```
-5. Add your Suno-Cookie and Session ID. Instructions for this: https://github.com/gcui-art/suno-api/blob/main/public/get-cookie-demo.gif
+5. Add your Suno-Cookie. Instructions for this: https://github.com/gcui-art/suno-api/blob/main/public/get-cookie-demo.gif
 
 6. Run the application:
 ```bash
