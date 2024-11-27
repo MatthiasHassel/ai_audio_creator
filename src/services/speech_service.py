@@ -141,14 +141,14 @@ class SpeechService:
                     if chunk:
                         f.write(chunk)
 
-            # Add ID3 tag with the prompt
-            self.add_id3_tag(save_file_path, text_prompt)
+            # Add ID3 tags with both prompt and voice_id
+            self.add_id3_tag(save_file_path, text_prompt, voice_id)
             return save_file_path
         except Exception as e:
             self.logger.error(f"Failed to generate speech: {str(e)}", exc_info=True)
             return None
     
-    def add_id3_tag(self, file_path, prompt):
+    def add_id3_tag(self, file_path, prompt, voice_id=None):
         try:
             # Load the file
             audio = MP3(file_path, ID3=ID3)
@@ -158,15 +158,19 @@ class SpeechService:
                 audio.add_tags()
 
             # Set the title
-            audio.tags.add(TIT2(encoding=3, text="Generated Speech"))  # or "Generated SFX" or "Generated Music"
+            audio.tags.add(TIT2(encoding=3, text="Generated Speech"))
 
             # Add the prompt as a comment
             audio.tags.add(COMM(encoding=3, lang='eng', desc='Prompt', text=prompt))
 
+            # Add the voice_id as a separate comment if provided
+            if voice_id:
+                audio.tags.add(COMM(encoding=3, lang='eng', desc='VoiceID', text=voice_id))
+
             # Save the changes
             audio.save()
 
-            self.logger.info(f"Successfully added ID3 tag to {file_path} with prompt: {prompt}")
+            self.logger.info(f"Successfully added ID3 tags to {file_path} with prompt: {prompt} and voice_id: {voice_id}")
         except Exception as e:
             self.logger.error(f"Failed to add ID3 tag: {str(e)}")
 
@@ -218,8 +222,9 @@ class SpeechService:
                         if chunk:
                             f.write(chunk)
 
-                # Add ID3 tag with original audio filename as prompt
-                self.add_id3_tag(output_path, f"Speech-to-Speech conversion from: {os.path.basename(audio_file_path)}")
+                # Add ID3 tags with original audio filename as prompt and voice_id
+                prompt = f"Speech-to-Speech conversion from: {os.path.basename(audio_file_path)}"
+                self.add_id3_tag(output_path, prompt, voice_id)
                 
                 self.update_status("Speech-to-speech conversion completed successfully")
                 return output_path
