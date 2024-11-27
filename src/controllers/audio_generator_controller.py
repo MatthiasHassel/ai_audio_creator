@@ -433,7 +433,6 @@ class AudioGeneratorController:
             self.view.update_status(f"Error deleting file: {str(e)}")
 
     def add_audio_to_reaper(self):
-        """Handle adding the selected audio file to Reaper"""
         selected_file = self.view.audio_file_selector.get_selected_file()
         if not selected_file:
             self.view.update_status("No audio file selected")
@@ -441,25 +440,32 @@ class AudioGeneratorController:
 
         try:
             from services.reaper_service import ReaperService
+            from tkinter import messagebox
             reaper_service = ReaperService()
             
-            if not reaper_service.is_reaper_running():
-                self.view.update_status("Please start Reaper first")
-                messagebox.showwarning("Reaper Not Running", 
-                    "Please start Reaper and ensure Python ReaScript is enabled in:\n"
-                    "Preferences -> Plug-ins -> ReaScript")
+            try:
+                if not reaper_service.is_reaper_running():
+                    messagebox.showwarning("Reaper Not Running", 
+                        "Please make sure:\n"
+                        "1. REAPER is running\n"
+                        "2. ReaScript is enabled in REAPER:\n"
+                        "   - Open REAPER\n"
+                        "   - Go to Preferences -> Plug-ins -> ReaScript\n"
+                        "   - Enable 'Allow Python to access REAPER via ReaScript'")
+                    return
+
+                track_name = os.path.splitext(os.path.basename(selected_file))[0]
+                success, message = reaper_service.add_audio_file(selected_file, track_name)
+                
+                if success:
+                    self.view.update_status("Audio added to Reaper successfully")
+                else:
+                    self.view.update_status(f"Failed to add audio to Reaper: {message}")
+                    messagebox.showerror("Error", f"Failed to add audio to Reaper:\n{message}")
+
+            except ConnectionError as e:
+                messagebox.showwarning("Reaper Connection Error", str(e))
                 return
-            
-            # Get file name for track name
-            track_name = os.path.splitext(os.path.basename(selected_file))[0]
-            
-            success, message = reaper_service.add_audio_file(selected_file, track_name)
-            
-            if success:
-                self.view.update_status("Audio added to Reaper successfully")
-            else:
-                self.view.update_status(f"Failed to add audio to Reaper: {message}")
-                messagebox.showerror("Error", f"Failed to add audio to Reaper:\n{message}")
 
         except Exception as e:
             error_msg = f"Error adding audio to Reaper: {str(e)}"

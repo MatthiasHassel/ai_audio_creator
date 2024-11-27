@@ -11,9 +11,27 @@ class ReaperService:
     def is_reaper_running(self):
         """Check if Reaper is running and accessible"""
         try:
-            reapy.connect()
-            self.logger.info("Successfully connected to Reaper")
-            return True
+            import warnings
+            from reapy.errors import DisabledDistAPIWarning
+            
+            # Catch DisabledDistAPIWarning
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                
+                try:
+                    reapy.connect()
+                    
+                    for warning in w:
+                        if issubclass(warning.category, DisabledDistAPIWarning):
+                            self.logger.error("Reaper not running or ReaScript not enabled")
+                            return False
+                            
+                    return True
+                    
+                except AttributeError:
+                    self.logger.error("ReaScript API not accessible")
+                    return False
+                    
         except Exception as e:
             self.logger.error(f"Failed to connect to Reaper: {str(e)}")
             return False
@@ -31,7 +49,12 @@ class ReaperService:
         """
         try:
             if not self.is_reaper_running():
-                return False, "Reaper is not running"
+                return False, ("Please make sure:\n"
+                            "1. REAPER is running\n"
+                            "2. ReaScript is enabled in REAPER:\n"
+                            "   - Open REAPER\n"
+                            "   - Go to Preferences -> Plug-ins -> ReaScript\n"
+                            "   - Enable 'Allow Python to access REAPER via ReaScript'")
 
             # Convert to absolute path
             abs_file_path = os.path.abspath(file_path)
