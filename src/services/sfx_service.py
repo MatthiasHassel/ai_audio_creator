@@ -45,32 +45,33 @@ class SFXService:
             with open(output_path, "wb") as f:
                 for chunk in result:
                     f.write(chunk)
-            self.add_id3_tag(output_path, text_prompt)
+            self.add_id3_tag(output_path, text_prompt, duration)
             return output_path
         except Exception as e:
             self.logger.error(f"Error generating sound effect: {str(e)}")
             self.update_status(f"Error generating sound effect: {str(e)}")
             return None
 
-    def add_id3_tag(self, file_path, prompt):
+    def add_id3_tag(self, file_path, prompt, duration=None):
         try:
-            # Load the file
             audio = MP3(file_path, ID3=ID3)
 
-            # Add ID3 tag if it doesn't exist
             if audio.tags is None:
                 audio.add_tags()
 
             # Set the title
-            audio.tags.add(TIT2(encoding=3, text="Generated Speech"))  # or "Generated SFX" or "Generated Music"
+            audio.tags.add(TIT2(encoding=3, text="Generated SFX"))
 
             # Add the prompt as a comment
             audio.tags.add(COMM(encoding=3, lang='eng', desc='Prompt', text=prompt))
 
-            # Save the changes
-            audio.save()
+            # Add duration as a comment if provided
+            if duration:
+                duration_text = f"{duration}s"
+                audio.tags.add(COMM(encoding=3, lang='eng', desc='Duration', text=duration_text))
 
-            self.logger.info(f"Successfully added ID3 tag to {file_path} with prompt: {prompt}")
+            audio.save()
+            self.logger.info(f"Successfully added ID3 tag to {file_path} with prompt: {prompt} and duration: {duration}")
         except Exception as e:
             self.logger.error(f"Failed to add ID3 tag: {str(e)}")
 

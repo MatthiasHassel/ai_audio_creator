@@ -152,7 +152,7 @@ class MusicService:
             url = data[0]['audio_url']
             if self.download_audio(url, output_filename):
                 self.convert_to_44100hz(output_filename)
-                self.add_id3_tag(output_filename, text_prompt)
+                self.add_id3_tag(output_filename, text_prompt, make_instrumental)
                 return output_filename
             else:
                 raise Exception("Failed to download audio file")
@@ -180,25 +180,25 @@ class MusicService:
             self.logger.error(f"Error converting audio to 44100Hz: {str(e)}")
             raise
 
-    def add_id3_tag(self, file_path, prompt):
+    def add_id3_tag(self, file_path, prompt, make_instrumental):
         try:
-            # Load the file
             audio = MP3(file_path, ID3=ID3)
 
-            # Add ID3 tag if it doesn't exist
             if audio.tags is None:
                 audio.add_tags()
 
             # Set the title
-            audio.tags.add(TIT2(encoding=3, text="Generated Speech"))  # or "Generated SFX" or "Generated Music"
+            audio.tags.add(TIT2(encoding=3, text="Generated Music"))
 
             # Add the prompt as a comment
             audio.tags.add(COMM(encoding=3, lang='eng', desc='Prompt', text=prompt))
 
-            # Save the changes
-            audio.save()
+            # Add instrumental flag as a comment
+            instrumental_text = "Instrumental" if make_instrumental else "With Vocals"
+            audio.tags.add(COMM(encoding=3, lang='eng', desc='Type', text=instrumental_text))
 
-            self.logger.info(f"Successfully added ID3 tag to {file_path} with prompt: {prompt}")
+            audio.save()
+            self.logger.info(f"Successfully added ID3 tag to {file_path} with prompt: {prompt} and type: {instrumental_text}")
         except Exception as e:
             self.logger.error(f"Failed to add ID3 tag: {str(e)}")
             

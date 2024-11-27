@@ -9,6 +9,8 @@ from tkinter import messagebox
 from utils.audio_clip import AudioClip
 from utils.audio_visualizer import AudioVisualizer
 from utils.keyboard_shortcuts import KeyboardShortcuts
+from mutagen.mp3 import MP3
+from mutagen.id3 import ID3
 
 
 class TimelineView(ctk.CTkToplevel):
@@ -1090,6 +1092,102 @@ class TimelineView(ctk.CTkToplevel):
         if self.selected_clip and self.controller:
             self.controller.delete_clip(self.selected_clip)
 
+    def regenerate_selected_clip(self, event=None):
+        """Regenerate the selected audio clip using its original prompt and settings."""
+        if not self.selected_clip:
+            return
+            
+        try:
+            # Read the audio file's metadata
+            audio = MP3(self.selected_clip.file_path, ID3=ID3)
+            if not audio.tags:
+                messagebox.showerror("Error", "No metadata found in audio file")
+                return
+
+            # Get the title to determine the type of audio
+            title = audio.tags.getall('TIT2')[0].text[0] if audio.tags.getall('TIT2') else None
+            
+            # Get audio generator view
+            audio_generator_view = self.controller.master_controller.audio_controller.view
+            
+            # Get the prompt from metadata
+            prompt = None
+            for comment in audio.tags.getall('COMM'):
+                if comment.desc == 'Prompt':
+                    prompt = comment.text[0] if isinstance(comment.text, list) else comment.text
+
+            if not prompt:
+                messagebox.showerror("Error", "Prompt not found in audio file")
+                return
+
+            if title == "Generated Speech":
+                # Existing speech regeneration logic
+                voice_id = None
+                for comment in audio.tags.getall('COMM'):
+                    if comment.desc == 'VoiceID':
+                        voice_id = comment.text[0] if isinstance(comment.text, list) else comment.text
+                
+                if not voice_id:
+                    messagebox.showerror("Error", "VoiceID not found in audio file")
+                    return
+                
+                audio_generator_view.current_module.set("Speech")
+                audio_generator_view.update_tab_widgets()
+                
+                audio_generator_view.user_input.delete("1.0", "end")
+                audio_generator_view.user_input.insert("1.0", prompt)
+                
+                user_voices = self.controller.master_controller.audio_controller.speech_service.get_user_voices()
+                voice_name = next((name for name, id in user_voices if id == voice_id), None)
+                
+                if voice_name:
+                    audio_generator_view.selected_voice.set(voice_name)
+                else:
+                    messagebox.showerror("Error", "Voice not found in library")
+                    return
+
+            elif title == "Generated Music":
+                # Music regeneration logic
+                is_instrumental = None
+                for comment in audio.tags.getall('COMM'):
+                    if comment.desc == 'Type':
+                        is_instrumental = comment.text[0] == "Instrumental" if isinstance(comment.text, list) else comment.text == "Instrumental"
+                
+                if is_instrumental is None:
+                    messagebox.showerror("Error", "Instrumental/Vocals setting not found in audio file metadata")
+                    return
+                        
+                audio_generator_view.current_module.set("Music")
+                audio_generator_view.update_tab_widgets()
+                audio_generator_view.user_input.delete("1.0", "end")
+                audio_generator_view.user_input.insert("1.0", prompt)
+                audio_generator_view.instrumental_var.set(is_instrumental)
+
+            elif title == "Generated SFX":
+                # SFX regeneration logic
+                duration = None
+                for comment in audio.tags.getall('COMM'):
+                    if comment.desc == 'Duration':
+                        duration = comment.text[0].rstrip('s') if isinstance(comment.text, list) else comment.text.rstrip('s')
+                
+                if duration is None:
+                    messagebox.showerror("Error", "Duration setting not found in audio file metadata")
+                    return
+                        
+                audio_generator_view.current_module.set("SFX")
+                audio_generator_view.update_tab_widgets()
+                audio_generator_view.user_input.delete("1.0", "end")
+                audio_generator_view.user_input.insert("1.0", prompt)
+                audio_generator_view.duration_var.set(duration)
+
+            # Show the Audio Generator view
+            if hasattr(self.controller, 'master_controller'):
+                self.controller.master_controller.view.show()
+                self.controller.master_controller.view.lift()
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to regenerate clip: {str(e)}")
+
     def find_clip_track_index(self, clip):
         for i, track in enumerate(self.tracks):
             if clip in track['clips']:
@@ -1105,7 +1203,7 @@ class TimelineView(ctk.CTkToplevel):
             self.select_clip(clicked_clip)
             context_menu = tk.Menu(self, tearoff=0)
             context_menu.add_command(label="Delete clip", command=self.delete_selected_clip)
-            context_menu.add_command(label="Regenerate", command=self.delete_selected_clip)
+            context_menu.add_command(label="Regenerate", command=self.regenerate_selected_clip)
             context_menu.tk_popup(event.x_root, event.y_root)
 
     def remove_clip(self, clip):
