@@ -30,8 +30,8 @@ AI Audio Creator is a Python-based desktop application that combines various AI 
 - API Keys for:
   - OpenAI (for script analysis and prompt improvement)
   - ElevenLabs (for voice generation)
-- Cookie and Session ID for:  (more information below)
-  - Suno (for music generation)
+- Cookie for:
+  - Suno (for music generation, more information below)
 
 ## Installation
 
@@ -57,6 +57,7 @@ pip install -r requirements.txt
    - Add your API keys:
      ```
      OPENAI_API_KEY=your_key_here
+     OPENROUTER_API_KEY=your_key_here
      ELEVENLABS_API_KEY=your_key_here
      SUNO_COOKIE=your_cookie_here
      ```
@@ -158,7 +159,7 @@ For support, please:
 
 ## Acknowledgments
 
-- OpenAI GPT-4 for script analysis and prompt improvement
+- OpenAI GPT-4 or any LLM via OpenRouter for script analysis and prompt improvement
 - ElevenLabs for voice generation
 - Suno for AI music generation
 - CustomTkinter for the UI framework
