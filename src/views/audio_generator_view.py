@@ -822,22 +822,6 @@ class AudioGeneratorView(ctk.CTkFrame):
             self.s2s_status_label.configure(text=f"Error showing file dialog: {str(e)}")
             messagebox.showerror("Error", f"Failed to show file dialog: {str(e)}")
 
-    def update_tab_widgets(self):
-        current_tab = self.current_module.get()
-        self.current_tab_widget.grid_remove()
-        self.current_tab_widget = self.tab_widgets[current_tab]
-        self.current_tab_widget.grid(row=2, column=0, sticky="ew", pady=(0, 10))
-        
-        if current_tab in ["Music", "SFX"]:
-            self.llm_button.grid()
-            self.s2s_checkbox.grid_remove()  # Hide S2S checkbox
-            self.use_s2s.set(False)  # Reset S2S mode
-        else:
-            self.llm_button.grid_remove()
-            self.s2s_checkbox.grid()  # Show S2S checkbox
-            
-        # Update the audio file selector
-        self.audio_file_selector.update_module(current_tab.lower())
 
     def update_button_states(self, is_playing):
         if is_playing:
@@ -850,10 +834,36 @@ class AudioGeneratorView(ctk.CTkFrame):
             self.restart_button.configure(state="normal")
 
     def update_output(self, message):
+        """Update the output text field with the given message."""
         self.output_text.configure(state="normal")
+        # Clear existing content before adding new message
+        self.output_text.delete("1.0", "end")
         self.output_text.insert("end", message + "\n")
         self.output_text.see("end")
         self.output_text.configure(state="disabled")
+
+    def update_tab_widgets(self):
+        """Update the widgets when switching tabs."""
+        current_tab = self.current_module.get()
+        self.current_tab_widget.grid_remove()
+        self.current_tab_widget = self.tab_widgets[current_tab]
+        self.current_tab_widget.grid(row=2, column=0, sticky="ew", pady=(0, 10))
+        
+        # Clear the output field when switching tabs
+        self.output_text.configure(state="normal")
+        self.output_text.delete("1.0", "end")
+        self.output_text.configure(state="disabled")
+        
+        if current_tab in ["Music", "SFX"]:
+            self.llm_button.grid()
+            self.s2s_checkbox.grid_remove()  # Hide S2S checkbox
+            self.use_s2s.set(False)  # Reset S2S mode
+        else:
+            self.llm_button.grid_remove()
+            self.s2s_checkbox.grid()  # Show S2S checkbox
+            
+        # Update the audio file selector
+        self.audio_file_selector.update_module(current_tab.lower())
 
     def update_status(self, message):
         self.status_var.set(message)
