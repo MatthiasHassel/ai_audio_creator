@@ -29,7 +29,20 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.controller = controller
 
     def create_widgets(self):
+        # Create fixed top bar
         self.create_top_bar()
+        
+        # Create scrollable frame for main content
+        self.scrollable_frame = ctk.CTkScrollableFrame(self)
+        self.scrollable_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+        self.scrollable_frame.grid_columnconfigure(0, weight=1)
+        
+        # Create main content container inside scrollable frame
+        self.main_content = ctk.CTkFrame(self.scrollable_frame)  # Removed transparent background
+        self.main_content.grid(row=0, column=0, sticky="nsew")
+        self.main_content.grid_columnconfigure(0, weight=1)
+        
+        # Set fixed heights for components
         self.create_main_content()
 
     def create_top_bar(self):
@@ -51,20 +64,31 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.timeline_button.grid(row=0, column=4, padx=5, sticky="e")
 
     def create_main_content(self):
-        main_content = ctk.CTkFrame(self)
-        main_content.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
-        main_content.grid_columnconfigure(0, weight=1)
-        main_content.grid_rowconfigure(4, weight=1)  # Make output field expandable
-
-        self.create_input_field(main_content)
-        self.create_action_buttons(main_content)
-        self.create_tab_specific_options(main_content)
-        self.create_output_display(main_content)
-        self.create_separator(main_content)
-        self.create_audio_file_selector(main_content)
-        self.create_audio_visualizer(main_content)
-        self.create_audio_controls(main_content)
-        self.create_progress_and_status_bar(main_content)
+        # Create input field
+        self.create_input_field(self.main_content)
+        
+        # Create action buttons
+        self.create_action_buttons(self.main_content)
+        
+        # Create tab specific options
+        self.create_tab_specific_options(self.main_content)
+        # Create output display
+        self.create_output_display(self.main_content)
+        
+        # Create separator
+        self.create_separator(self.main_content)
+        
+        # Create audio file selector
+        self.create_audio_file_selector(self.main_content)
+        
+        # Create audio visualizer with fixed height
+        self.create_audio_visualizer(self.main_content)
+        
+        # Create audio controls
+        self.create_audio_controls(self.main_content)
+        
+        # Create progress and status bar
+        self.create_progress_and_status_bar(self.main_content)
 
     def create_input_field(self, parent):
         input_frame = ctk.CTkFrame(parent)
@@ -136,15 +160,23 @@ class AudioGeneratorView(ctk.CTkFrame):
 
         # Preview frame
         self.s2s_preview_frame = ctk.CTkFrame(parent)
-        self.s2s_preview_frame.grid(row=1, column=0, columnspan=4, sticky="ew", padx=5, pady=5)
+        self.s2s_preview_frame.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=5, pady=5)
+        self.s2s_preview_frame.grid_columnconfigure(0, weight=1)
+        self.s2s_preview_frame.grid_rowconfigure(0, weight=1)
         
         # Create audio visualizer for the preview
-        self.s2s_visualizer = AudioVisualizer(self.s2s_preview_frame)
-        self.s2s_visualizer.pack(fill="both", expand=True, pady=5)
+        visualizer_frame = ctk.CTkFrame(self.s2s_preview_frame)
+        visualizer_frame.grid(row=0, column=0, sticky="nsew", pady=5)
+        visualizer_frame.grid_columnconfigure(0, weight=1)
+        visualizer_frame.grid_rowconfigure(0, weight=1)
+        
+        self.s2s_visualizer = AudioVisualizer(visualizer_frame)
+        self.s2s_visualizer.grid(row=0, column=0, sticky="nsew")
         
         # Add play controls for the recorded/imported audio
         self.preview_controls = ctk.CTkFrame(self.s2s_preview_frame)
-        self.preview_controls.pack(fill="x", pady=5)
+        self.preview_controls.grid(row=1, column=0, sticky="ew", pady=5)
+        self.preview_controls.grid_columnconfigure(2, weight=1)
         
         self.preview_play_button = ctk.CTkButton(
             self.preview_controls, 
@@ -152,7 +184,7 @@ class AudioGeneratorView(ctk.CTkFrame):
             width=60,
             command=self.play_preview_recording
         )
-        self.preview_play_button.pack(side="left", padx=5)
+        self.preview_play_button.grid(row=0, column=0, padx=5)
         
         self.preview_stop_button = ctk.CTkButton(
             self.preview_controls, 
@@ -160,7 +192,7 @@ class AudioGeneratorView(ctk.CTkFrame):
             width=60,
             command=self.stop_preview_recording
         )
-        self.preview_stop_button.pack(side="left", padx=5)
+        self.preview_stop_button.grid(row=0, column=1, padx=5)
         
         # Initially hide preview frame and disable buttons
         self.s2s_preview_frame.grid_remove()
@@ -211,10 +243,17 @@ class AudioGeneratorView(ctk.CTkFrame):
             self.user_input.grid_remove()
             self.s2s_controls.grid(row=0, column=0, sticky="ew")
             self.input_label.configure(text="Reference Audio:")
+            # Clear output text when switching to S2S mode
+            self.output_text.configure(state="normal")
+            self.output_text.delete("1.0", "end")
+            self.output_text.configure(state="disabled")
         else:
             self.s2s_controls.grid_remove()
             self.user_input.grid(row=0, column=0, sticky="nsew")
             self.input_label.configure(text="Enter your text:")
+            self.output_text.configure(state="normal")
+            self.output_text.delete("1.0", "end")
+            self.output_text.configure(state="disabled")
 
     def create_action_buttons(self, parent):
         action_frame = ctk.CTkFrame(parent)
@@ -264,7 +303,7 @@ class AudioGeneratorView(ctk.CTkFrame):
         visualizer_frame.grid_columnconfigure(0, weight=1)
         
         self.audio_visualizer = AudioVisualizer(visualizer_frame)
-        self.audio_visualizer.pack(fill=ctk.BOTH, expand=True)
+        self.audio_visualizer.grid(row=0, column=0, sticky="nsew")
         parent.grid_rowconfigure(6, weight=1)  # Make the visualizer expandable
 
     def create_audio_controls(self, parent):
@@ -809,10 +848,15 @@ class AudioGeneratorView(ctk.CTkFrame):
                     
                     self.current_s2s_audio = file_path
                     self.s2s_preview_frame.grid()
-                    self.s2s_visualizer.update_waveform(file_path)
-                    self.s2s_status_label.configure(text="Audio file loaded")
-                    self.preview_play_button.configure(state="normal")
-                    self.preview_stop_button.configure(state="disabled")
+                    
+                    # Update the visualizer in a thread-safe way
+                    def update_visualizer():
+                        self.s2s_visualizer.update_waveform(file_path)
+                        self.s2s_status_label.configure(text="Audio file loaded")
+                        self.preview_play_button.configure(state="normal")
+                        self.preview_stop_button.configure(state="disabled")
+                    
+                    self.after(0, update_visualizer)
                 
                 except Exception as e:
                     self.s2s_status_label.configure(text=f"Error loading audio: {str(e)}")
@@ -858,6 +902,8 @@ class AudioGeneratorView(ctk.CTkFrame):
             self.llm_button.grid()
             self.s2s_checkbox.grid_remove()  # Hide S2S checkbox
             self.use_s2s.set(False)  # Reset S2S mode
+            # Clear any S2S related output
+            self.s2s_preview_frame.grid_remove()
         else:
             self.llm_button.grid_remove()
             self.s2s_checkbox.grid()  # Show S2S checkbox
