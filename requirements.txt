@@ -1,8 +1,7 @@
 # Requirements for AI Audio Creator
 
 # GUI and Application Framework
-customtkinter==5.2.2
-#tkinterdnd2==0.3.0
+PySide6==6.6.1
 
 # Audio Processing
 pydub==0.25.1
@@ -36,10 +35,14 @@ python-dotenv==1.0.1
 # Other
 pillow==11.0.0
 
+# Packaging
+pyinstaller==6.3.0
+
 # Development Tools (optional, for development environment)
 # pytest==7.3.1
 # black==23.3.0
 # flake8==6.0.0
 
 # Note: Ensure you have the appropriate system-level dependencies installed,
-# such as PortAudio for PyAudio, and any required libraries for audio codecs. Tip: Use "brew install portaudio"
+# such as PortAudio for PyAudio, and any required libraries for audio codecs.
+# Tip: Use "brew install portaudio"
