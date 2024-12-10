@@ -5,6 +5,7 @@ import time
 import json
 import random 
 import hashlib
+import requests
 from tkinter import filedialog, messagebox
 from services.pdf_analysis_service import PDFAnalysisService
 from utils.audio_clip import AudioClip
@@ -392,9 +393,6 @@ class ScriptEditorController:
         return analysis.get('voice_characteristics', {}).get(speaker, {})
 
     def get_suitable_voice(self, speaker, voice_char):
-        # Get available voices from ElevenLabs API
-        available_voices = self.audio_controller.speech_service.get_available_voices()
-
         gender = voice_char.get('Gender', '').lower()
         age = voice_char.get('Age', '').lower()
         accent = voice_char.get('Accent', '').lower()
@@ -402,27 +400,80 @@ class ScriptEditorController:
 
         logging.info(f"Searching voice for {speaker}: gender={gender}, age={age}, accent={accent}, description={description}")
 
-        # Filter voices based on characteristics
-        matching_voices = [
-            voice for voice in available_voices
-            if gender == voice['gender'].lower()
-            and age in voice['age'].lower()
-            and (accent == 'none' or accent in voice['accent'].lower())
-        ]
+        # First, try to find a matching voice in the user's library
+        user_voices = self.audio_controller.speech_service.get_user_voices()
+        
+        # Get detailed information about user voices
+        user_voice_details = {}
+        for name, voice_id in user_voices:
+            url = f"https://api.elevenlabs.io/v1/voices/{voice_id}"
+            headers = {"xi-api-key": self.audio_controller.speech_service.api_key}
+            try:
+                response = requests.get(url, headers=headers)
+                response.raise_for_status()
+                voice_data = response.json()
+                
+                # Check if voice is fine-tuned for multilingual model
+                fine_tuning = voice_data.get('fine_tuning', {})
+                state = fine_tuning.get('state', {})
+                if state.get('eleven_multilingual_v2') != 'fine_tuned':
+                    continue
+                
+                user_voice_details[voice_id] = voice_data
+            except Exception as e:
+                logging.error(f"Error fetching voice details for {name}: {str(e)}")
+                continue
 
-        logging.info(f"Found {len(matching_voices)} matching voices for {speaker}")
+        # Search for matching voice in user library
+        for name, voice_id in user_voices:
+            voice_data = user_voice_details.get(voice_id, {})
+            if (voice_data.get('gender', '').lower() == gender and
+                age in voice_data.get('age', '').lower() and
+                (accent == 'none' or accent in voice_data.get('accent', '').lower()) and
+                description in voice_data.get('description', '').lower()):
+                logging.info(f"Found matching voice in user library: {name}")
+                return name, voice_id
+
+        # If no match in user library, search public library
+        available_voices = self.audio_controller.speech_service.get_available_voices()
+        
+        # Filter voices based on characteristics
+        matching_voices = []
+        for voice in available_voices:
+            # Check if voice is fine-tuned for multilingual model
+            fine_tuning = voice.get('fine_tuning', {})
+            state = fine_tuning.get('state', {})
+            if state.get('eleven_multilingual_v2') != 'fine_tuned':
+                continue
+                
+            if (gender == voice['gender'].lower() and
+                age in voice['age'].lower() and
+                (accent == 'none' or accent in voice['accent'].lower())):
+                matching_voices.append(voice)
+
+        logging.info(f"Found {len(matching_voices)} matching voices in public library for {speaker}")
 
         # Try to find a voice with matching description
         for voice in matching_voices:
             if description in voice['descriptive'].lower():
-                logging.info(f"Selected voice for {speaker}: {voice['name']} (matches description)")
-                return voice['name'], voice['voice_id']
+                voice_name = voice['name']
+                voice_id = voice['voice_id']
+                logging.info(f"Selected voice from public library: {voice_name} (matches description)")
+                
+                # Add the voice to the user's library
+                if self.audio_controller.speech_service.ensure_voice_in_library(voice_id, voice_name):
+                    return voice_name, voice_id
 
-        # If no matching description, choose a random voice with correct attributes
+        # If no matching description but we have voices with matching characteristics
         if matching_voices:
             chosen_voice = random.choice(matching_voices)
-            logging.info(f"Selected random voice for {speaker}: {chosen_voice['name']} (from {len(matching_voices)} options)")
-            return chosen_voice['name'], chosen_voice['voice_id']
+            voice_name = chosen_voice['name']
+            voice_id = chosen_voice['voice_id']
+            logging.info(f"Selected random voice from public library: {voice_name}")
+            
+            # Add the voice to the user's library
+            if self.audio_controller.speech_service.ensure_voice_in_library(voice_id, voice_name):
+                return voice_name, voice_id
 
         # If no fitting voice at all, use default voices
         default_voices = {

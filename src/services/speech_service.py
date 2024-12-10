@@ -24,7 +24,14 @@ class SpeechService:
         self.preview_audio_files = []  # Store temporary preview files
         self.current_voice_description = None  # Store the description used to generate previews
 
-    
+        # Default voice settings
+        self.default_voice_settings = {
+            'stability': 0.5,
+            'similarity_boost': 0.75,
+            'style': 0.0,
+            'use_speaker_boost': True
+        }
+
     def update_output_directory(self, new_output_dir):
         self.output_dir = new_output_dir
         os.makedirs(self.output_dir, exist_ok=True)
@@ -67,6 +74,7 @@ class SpeechService:
             return False
     
     def get_available_voices(self):
+        #returns all public available voices in the ElevenLabs Public Library
         url = "https://api.elevenlabs.io/v1/shared-voices"
         querystring = {"category": "professional", "use_cases": "narrative_story", "language": "en"}
         headers = {"xi-api-key": self.api_key}
@@ -81,6 +89,7 @@ class SpeechService:
             return []
     
     def get_user_voices(self):
+        #returns voices in ElevenLabs User Library
         url = "https://api.elevenlabs.io/v1/voices"
         headers = {"xi-api-key": self.api_key}
 
@@ -102,9 +111,12 @@ class SpeechService:
         ]
         return max(existing_numbers, default=0) + 1
 
-    def text_to_speech_file(self, text_prompt: str, voice_id: str):
+    def text_to_speech_file(self, text_prompt: str, voice_id: str, voice_settings: dict = None):
         self.logger.info("Initializing speech generation...")
         try:
+            # Use provided voice settings or defaults
+            settings = voice_settings if voice_settings is not None else self.default_voice_settings
+            
             self.logger.info("Sending request to ElevenLabs API...")
             response = self.client.text_to_speech.convert(
                 voice_id=voice_id,
@@ -113,10 +125,10 @@ class SpeechService:
                 text=text_prompt,
                 model_id="eleven_multilingual_v2",
                 voice_settings=VoiceSettings(
-                    stability=0.0,
-                    similarity_boost=1.0,
-                    style=0.0,
-                    use_speaker_boost=True,
+                    stability=settings['stability'],
+                    similarity_boost=settings['similarity_boost'],
+                    style=settings['style'],
+                    use_speaker_boost=settings['use_speaker_boost']
                 ),
             )
 
@@ -177,7 +189,7 @@ class SpeechService:
     def process_speech_request(self, text_prompt: str, voice_id: str):
         return self.text_to_speech_file(text_prompt, voice_id)
     
-    def process_s2s_request(self, audio_file_path: str, voice_id: str):
+    def process_s2s_request(self, audio_file_path: str, voice_id: str, voice_settings: dict = None):
         """Process a speech-to-speech generation request."""
         self.logger.info("Initializing speech-to-speech generation...")
 
@@ -185,6 +197,9 @@ class SpeechService:
             # Verify voice_id is provided
             if not voice_id:
                 raise ValueError("No voice ID provided for speech-to-speech conversion")
+
+            # Use provided voice settings or defaults
+            settings = voice_settings if voice_settings is not None else self.default_voice_settings
 
             # Construct output filename
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -197,13 +212,13 @@ class SpeechService:
             self.logger.info("Sending request to ElevenLabs API...")
             self.update_status("Processing speech-to-speech conversion...")
 
-            # Create voice settings and convert to JSON string
-            voice_settings = json.dumps({
-                "stability": 0.5,
-                "similarity_boost": 0.75,
-                "style": 0.0,
-                "use_speaker_boost": True
-            })
+            # Create voice settings
+            voice_settings = {
+                "stability": settings['stability'],
+                "similarity_boost": settings['similarity_boost'],
+                "style": settings['style'],
+                "use_speaker_boost": settings['use_speaker_boost']
+            }
 
             # Open the audio file
             with open(audio_file_path, 'rb') as audio_file:
@@ -213,7 +228,7 @@ class SpeechService:
                     audio=audio_file,
                     model_id="eleven_english_sts_v2",
                     output_format="mp3_44100_128",
-                    voice_settings=voice_settings  # Now passing as JSON string
+                    voice_settings=json.dumps(voice_settings)
                 )
 
                 # Save the response to a file

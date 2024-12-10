@@ -22,6 +22,13 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
         self.controller = None  # Will be set later
+        # Initialize voice settings with default values
+        self.voice_settings = {
+            'stability': ctk.DoubleVar(value=0.5),
+            'similarity_boost': ctk.DoubleVar(value=0.75),
+            'style': ctk.DoubleVar(value=0.0),
+            'use_speaker_boost': ctk.BooleanVar(value=True)
+        }
         self.create_widgets()
 
     def set_controller(self, controller):
@@ -367,12 +374,122 @@ class AudioGeneratorView(ctk.CTkFrame):
         label.grid(row=0, column=0, padx=(0, 5), pady=5, sticky="w")
         self.voice_dropdown.grid(row=0, column=1, pady=5, sticky="w")
 
+        # Advanced Voice Settings
+        self.show_advanced_settings = ctk.BooleanVar(value=False)
+        self.advanced_settings_checkbox = ctk.CTkCheckBox(
+            frame, 
+            text="Advanced Voice Settings",
+            variable=self.show_advanced_settings,
+            command=self.toggle_advanced_settings
+        )
+        self.advanced_settings_checkbox.grid(row=1, column=0, columnspan=2, pady=5, sticky="w")
+
+        # Create advanced settings frame
+        self.advanced_settings_frame = ctk.CTkFrame(frame)
+        self.advanced_settings_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=5)
+        self.advanced_settings_frame.grid_columnconfigure(1, weight=1)
+        self.advanced_settings_frame.grid_remove()  # Initially hidden
+
+        # Create tooltips for settings
+        tooltips = {
+            'stability': "Adjusts the emotional range and consistency of the voice.\nLower settings result in more variation and emotion,\nwhile higher settings produce a more stable, monotone voice.",
+            'similarity': "Controls how closely the AI matches the original voice.\nHigh settings may replicate artifacts from low-quality audio.",
+            'style': "Enhances the speaker's style, but can affect stability.",
+            'speaker_boost': "Increases the likeness to the original speaker,\nuseful for weaker voices."
+        }
+
+        # Stability slider with percentage label
+        stability_frame = ctk.CTkFrame(self.advanced_settings_frame, fg_color="transparent")
+        stability_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=5, pady=2)
+        stability_frame.grid_columnconfigure(1, weight=1)
+        
+        stability_label = ctk.CTkLabel(stability_frame, text="Stability:")
+        stability_label.grid(row=0, column=0, sticky="w")
+        self.create_tooltip(stability_label, tooltips['stability'])
+        
+        stability_slider = ctk.CTkSlider(
+            stability_frame,
+            from_=0,
+            to=1,
+            number_of_steps=100,
+            variable=self.voice_settings['stability'],
+            command=lambda value: self.update_percentage_label('stability', value)
+        )
+        stability_slider.grid(row=0, column=1, padx=5, sticky="ew")
+        
+        self.stability_percentage = ctk.CTkLabel(stability_frame, text="50%")
+        self.stability_percentage.grid(row=0, column=2, padx=(0, 5))
+
+        # Similarity Boost slider with percentage label
+        similarity_frame = ctk.CTkFrame(self.advanced_settings_frame, fg_color="transparent")
+        similarity_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=5, pady=2)
+        similarity_frame.grid_columnconfigure(1, weight=1)
+        
+        similarity_label = ctk.CTkLabel(similarity_frame, text="Similarity:")
+        similarity_label.grid(row=0, column=0, sticky="w")
+        self.create_tooltip(similarity_label, tooltips['similarity'])
+        
+        similarity_slider = ctk.CTkSlider(
+            similarity_frame,
+            from_=0,
+            to=1,
+            number_of_steps=100,
+            variable=self.voice_settings['similarity_boost'],
+            command=lambda value: self.update_percentage_label('similarity', value)
+        )
+        similarity_slider.grid(row=0, column=1, padx=5, sticky="ew")
+        
+        self.similarity_percentage = ctk.CTkLabel(similarity_frame, text="75%")
+        self.similarity_percentage.grid(row=0, column=2, padx=(0, 5))
+
+        # Style Exaggeration slider with percentage label
+        style_frame = ctk.CTkFrame(self.advanced_settings_frame, fg_color="transparent")
+        style_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=5, pady=2)
+        style_frame.grid_columnconfigure(1, weight=1)
+        
+        style_label = ctk.CTkLabel(style_frame, text="Style:")
+        style_label.grid(row=0, column=0, sticky="w")
+        self.create_tooltip(style_label, tooltips['style'])
+        
+        style_slider = ctk.CTkSlider(
+            style_frame,
+            from_=0,
+            to=1,
+            number_of_steps=100,
+            variable=self.voice_settings['style'],
+            command=lambda value: self.update_percentage_label('style', value)
+        )
+        style_slider.grid(row=0, column=1, padx=5, sticky="ew")
+        
+        self.style_percentage = ctk.CTkLabel(style_frame, text="0%")
+        self.style_percentage.grid(row=0, column=2, padx=(0, 5))
+
+        # Speaker Boost checkbox with tooltip
+        speaker_boost_frame = ctk.CTkFrame(self.advanced_settings_frame, fg_color="transparent")
+        speaker_boost_frame.grid(row=3, column=0, columnspan=2, sticky="w", padx=5, pady=2)
+        
+        speaker_boost_checkbox = ctk.CTkCheckBox(
+            speaker_boost_frame,
+            text="Speaker Boost",
+            variable=self.voice_settings['use_speaker_boost']
+        )
+        speaker_boost_checkbox.grid(row=0, column=0, sticky="w")
+        self.create_tooltip(speaker_boost_checkbox, tooltips['speaker_boost'])
+
+        # Reset button
+        reset_button = ctk.CTkButton(
+            self.advanced_settings_frame,
+            text="Reset to Defaults",
+            command=self.reset_voice_settings
+        )
+        reset_button.grid(row=4, column=0, columnspan=2, padx=5, pady=5)
+
         # Checkbox for unique voice generation
         self.use_unique_voice = ctk.BooleanVar(value=False)
         self.unique_voice_checkbox = ctk.CTkCheckBox(frame, text="Generate Unique Voice", 
                                                 variable=self.use_unique_voice, 
                                                 command=self.toggle_unique_voice_options)
-        self.unique_voice_checkbox.grid(row=1, column=0, columnspan=2, pady=5, sticky="w")
+        self.unique_voice_checkbox.grid(row=3, column=0, columnspan=2, pady=5, sticky="w")
 
         # Create container frame for unique voice options
         self.unique_voice_frame = ctk.CTkFrame(frame)
@@ -467,6 +584,70 @@ class AudioGeneratorView(ctk.CTkFrame):
         
         return frame
 
+    def create_tooltip(self, widget, text):
+        """Create a tooltip for a given widget."""
+        def show_tooltip(event):
+            tooltip = ctk.CTkToplevel()
+            tooltip.wm_overrideredirect(True)
+            tooltip.wm_geometry(f"+{event.x_root+10}+{event.y_root+10}")
+            
+            label = ctk.CTkLabel(
+                tooltip,
+                text=text,
+                justify="left",
+                wraplength=300
+            )
+            label.pack(padx=5, pady=5)
+            
+            def hide_tooltip():
+                tooltip.destroy()
+            
+            tooltip.bind("<Leave>", lambda e: hide_tooltip())
+            widget.bind("<Leave>", lambda e: hide_tooltip())
+            
+            # Store tooltip reference to prevent garbage collection
+            widget.tooltip = tooltip
+
+        widget.bind("<Enter>", show_tooltip)
+
+    def update_percentage_label(self, setting, value):
+        """Update the percentage label for a slider."""
+        percentage = int(float(value) * 100)
+        if setting == 'stability':
+            self.stability_percentage.configure(text=f"{percentage}%")
+        elif setting == 'similarity':
+            self.similarity_percentage.configure(text=f"{percentage}%")
+        elif setting == 'style':
+            self.style_percentage.configure(text=f"{percentage}%")
+
+    def reset_voice_settings(self):
+        """Reset voice settings to default values and update percentage labels."""
+        self.voice_settings['stability'].set(0.5)
+        self.voice_settings['similarity_boost'].set(0.75)
+        self.voice_settings['style'].set(0.0)
+        self.voice_settings['use_speaker_boost'].set(True)
+        
+        # Update percentage labels
+        self.stability_percentage.configure(text="50%")
+        self.similarity_percentage.configure(text="75%")
+        self.style_percentage.configure(text="0%")
+       
+    def toggle_advanced_settings(self):
+        """Toggle visibility of advanced voice settings."""
+        if self.show_advanced_settings.get():
+            self.advanced_settings_frame.grid()
+        else:
+            self.advanced_settings_frame.grid_remove()
+
+    def get_voice_settings(self):
+        """Get current voice settings as a dictionary."""
+        return {
+            'stability': self.voice_settings['stability'].get(),
+            'similarity_boost': self.voice_settings['similarity_boost'].get(),
+            'style': self.voice_settings['style'].get(),
+            'use_speaker_boost': self.voice_settings['use_speaker_boost'].get()
+        }
+    
     def on_example_text_focus_in(self, event):
         """Handle focus in event for example text."""
         if self.example_text.get("1.0", "end-1c") == self.example_text._placeholder_text:
