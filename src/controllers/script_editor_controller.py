@@ -286,11 +286,8 @@ class ScriptEditorController:
             self.view.update_status(f"Failed to add voice '{chosen_voice_name}' to library. Using default voice.")
             chosen_voice_name, chosen_voice_id = self.get_default_voice(voice_char['Gender'])
 
-        audio_file = self.audio_controller.process_speech_request(
-            text_prompt=sentence,
-            voice_id=chosen_voice_id,
-            synchronous=True
-        )
+        # Use the speech_service directly instead of process_speech_request
+        audio_file = self.audio_controller.speech_service.text_to_speech_file(sentence, chosen_voice_id)
         
         if audio_file:
             self.add_clip_to_timeline(audio_file, speaker, index)
@@ -349,8 +346,13 @@ class ScriptEditorController:
         for track in self.timeline_controller.timeline_model.get_tracks():
             all_clips.extend(track['clips'])
         
-        # Filter clips with lower indices
-        previous_clips = [clip for clip in all_clips if getattr(clip, 'index', float('inf')) < index]
+        # Filter clips with lower indices, handling None values
+        previous_clips = []
+        for clip in all_clips:
+            clip_index = getattr(clip, 'index', None)
+            # Only include clips that have a valid index lower than the current index
+            if clip_index is not None and clip_index < index:
+                previous_clips.append(clip)
         
         if previous_clips:
             last_clip = max(previous_clips, key=lambda c: c.x + c.duration)
@@ -365,8 +367,13 @@ class ScriptEditorController:
         
         track_clips = tracks[track_index]['clips']
         
-        # Filter clips with lower indices, including those without an index (existing clips)
-        previous_clips = [clip for clip in track_clips if getattr(clip, 'index', float('inf')) < index]
+        # Filter clips with lower indices, handling None values
+        previous_clips = []
+        for clip in track_clips:
+            clip_index = getattr(clip, 'index', None)
+            # Only include clips that have a valid index lower than the current index
+            if clip_index is not None and clip_index < index:
+                previous_clips.append(clip)
         
         if previous_clips:
             last_clip = max(previous_clips, key=lambda c: c.x + c.duration)
