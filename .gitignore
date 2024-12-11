@@ -38,3 +38,8 @@ api_info.txt
 /src/.DS_Store
 
 .vscode
+
+/venv
+/dist
+/build
+AI Audio Creator.dmg

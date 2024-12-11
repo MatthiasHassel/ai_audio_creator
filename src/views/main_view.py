@@ -147,6 +147,7 @@ class MainView(tk.Toplevel):
         help_menu = tk.Menu(self.menu, tearoff=0)
         self.menu.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="User Manual", command=self.open_user_manual)
+        help_menu.add_command(label="Open Logs", command=self.open_logs)
 
         settings_menu = tk.Menu(self.menu, tearoff=0)
         self.menu.add_cascade(label="Settings", menu=settings_menu)
@@ -225,6 +226,13 @@ class MainView(tk.Toplevel):
 
     def set_open_user_manual_callback(self, callback):
         self.open_user_manual_callback = callback
+
+    def open_logs(self):
+        if hasattr(self, 'open_logs_callback'):
+            self.open_logs_callback()
+
+    def set_open_logs_callback(self, callback):
+        self.open_logs_callback = callback
 
     def sync_to_reaper(self):
         if self.sync_to_reaper_callback:

@@ -4,6 +4,7 @@ from controllers.timeline_controller import TimelineController
 from tkinter import filedialog, simpledialog, messagebox
 import tkinter as tk
 import os
+import sys
 import logging
 import webbrowser
 from datetime import datetime
@@ -59,6 +60,7 @@ class MainController:
         self.view.set_export_audio_callback(self.export_audio)
         self.view.set_sync_to_reaper_callback(self.sync_to_reaper)
         self.view.set_open_user_manual_callback(self.open_user_manual)
+        self.view.set_open_logs_callback(self.open_logs)
 
         
         # Set up the connection between Timeline and Audio Creator
@@ -325,11 +327,27 @@ class MainController:
                 messagebox.showerror("Error", f"Failed to delete project: {str(e)}")
 
     def open_user_manual(self):
-        manual_path = os.path.join(os.path.dirname(__file__), '..', '..', 'docs', 'AI_Audio_Creator_User_Manual.md')
+        from main import get_user_manual_path
+        manual_path = get_user_manual_path()
         if os.path.exists(manual_path):
             webbrowser.open('file://' + os.path.realpath(manual_path))
         else:
             self.view.show_error("Error", "User manual not found.")
+
+    def open_logs(self):
+        if getattr(sys, 'frozen', False):
+            # Running in a bundle
+            log_dir = os.path.expanduser('~/Library/Logs/AI Audio Creator')
+        else:
+            # Development logging
+            log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs')
+        
+        log_file = os.path.join(log_dir, 'ai_audio_creator.log')
+        
+        if os.path.exists(log_file):
+            webbrowser.open('file://' + os.path.realpath(log_file))
+        else:
+            self.view.show_error("Error", "Log file not found.")
         
     def sync_to_reaper(self):
         if not self.project_model.current_project:
