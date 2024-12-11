@@ -1,224 +1,282 @@
-from PySide6.QtWidgets import (QWizard, QWizardPage, QLineEdit, 
-                              QVBoxLayout, QLabel, QMessageBox, QCheckBox)
-from PySide6.QtCore import Qt
+import customtkinter as ctk
 import yaml
 import os
 from pathlib import Path
 from dotenv import set_key
 
-class ConfigWizard(QWizard):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("AI Audio Creator Setup")
-        self.setWizardStyle(QWizard.ModernStyle)
+class ConfigWizard(ctk.CTkToplevel):
+    def __init__(self):
+        super().__init__()
         
-        # Add pages
-        self.addPage(WelcomePage())
-        self.addPage(RequiredAPIConfigPage())
-        self.addPage(OptionalAPIConfigPage())
-        self.addPage(CompletionPage())
+        self.title("AI Audio Creator Setup")
+        self.geometry("600x500")
         
-        # Set window size
-        self.resize(600, 500)
+        # Initialize variables
+        self.current_page = 0
+        self.result = False
         
-        # Connect finished signal
-        self.finished.connect(self.on_finish)
+        # Create navigation buttons first
+        self.button_frame = ctk.CTkFrame(self)
+        self.button_frame.pack(side="bottom", fill="x", padx=20, pady=20)
         
-    def on_finish(self):
-        if self.result() == QWizard.Accepted:
-            try:
-                # Create config directory
-                config_dir = Path.home() / ".ai_audio_creator"
-                config_dir.mkdir(exist_ok=True)
-                
-                # Create base directory (but let ProjectModel handle the structure)
-                projects_dir = Path.home() / "AI Audio Creator"
-                projects_dir.mkdir(parents=True, exist_ok=True)
-                
-                # Create or update .env file in config directory
-                env_path = config_dir / ".env"
-                
-                # Get the values
-                elevenlabs_key = self.field("elevenlabs_key")
-                openrouter_key = self.field("openrouter_key")
-                openai_key = self.field("openai_key") if not self.field("skip_optional") else ""
-                suno_cookie = self.field("suno_cookie") if not self.field("skip_optional") else ""
-                
-                # Write to .env file
-                set_key(str(env_path), "ELEVENLABS_API_KEY", elevenlabs_key)
-                set_key(str(env_path), "OPENROUTER_API_KEY", openrouter_key)
-                set_key(str(env_path), "OPENAI_API_KEY", openai_key)
-                set_key(str(env_path), "SUNO_COOKIE", suno_cookie)
-                
-                # Create initial config.yaml
-                config = {
-                    'api': {
-                        'elevenlabs_api_key': elevenlabs_key,
-                        'openai_api_key': openai_key,
-                        'openrouter_api_key': openrouter_key,
-                        'suno_cookie': suno_cookie,
-                        'selected_model': 'openai'
-                    },
-                    'projects': {
-                        'base_dir': str(projects_dir)
-                    },
-                    'logging': {
-                        'level': 'INFO',
-                        'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-                    },
-                    'audio_generator_gui': {
-                        'window_size': '1200x800'
-                    }
+        self.back_button = ctk.CTkButton(self.button_frame, text="Back", command=self.back_clicked)
+        self.back_button.pack(side="left", padx=5)
+        
+        self.next_button = ctk.CTkButton(self.button_frame, text="Next", command=self.next_clicked)
+        self.next_button.pack(side="right", padx=5)
+        
+        # Create pages
+        self.pages = [
+            WelcomePage(self),
+            RequiredAPIConfigPage(self),
+            OptionalAPIConfigPage(self),
+            CompletionPage(self)
+        ]
+        
+        # Show first page
+        self.show_page(0)
+        
+        # Center window
+        self.center_window()
+        
+        # Make modal
+        self.grab_set()
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+        
+    def center_window(self):
+        self.update_idletasks()
+        width = self.winfo_width()
+        height = self.winfo_height()
+        x = (self.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.winfo_screenheight() // 2) - (height // 2)
+        self.geometry(f'{width}x{height}+{x}+{y}')
+    
+    def show_page(self, index):
+        # Hide all pages
+        for page in self.pages:
+            page.pack_forget()
+        
+        # Show requested page
+        self.pages[index].pack(fill="both", expand=True, padx=20, pady=20)
+        self.current_page = index
+        
+        # Update button states
+        self.back_button.configure(state="normal" if index > 0 else "disabled")
+        self.next_button.configure(text="Finish" if index == len(self.pages)-1 else "Next")
+    
+    def back_clicked(self):
+        if self.current_page > 0:
+            self.show_page(self.current_page - 1)
+    
+    def next_clicked(self):
+        current_page = self.pages[self.current_page]
+        
+        if not current_page.validate():
+            return
+        
+        if self.current_page < len(self.pages) - 1:
+            self.show_page(self.current_page + 1)
+        else:
+            self.finish()
+    
+    def finish(self):
+        try:
+            # Create config directory
+            config_dir = Path.home() / ".ai_audio_creator"
+            config_dir.mkdir(exist_ok=True)
+            
+            # Create base directory
+            projects_dir = Path.home() / "AI Audio Creator"
+            projects_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Get values from pages
+            required_page = self.pages[1]
+            optional_page = self.pages[2]
+            
+            elevenlabs_key = required_page.elevenlabs_var.get()
+            openrouter_key = required_page.openrouter_var.get()
+            skip_optional = optional_page.skip_var.get()
+            openai_key = "" if skip_optional else optional_page.openai_var.get()
+            suno_cookie = "" if skip_optional else optional_page.suno_var.get()
+            
+            # Create or update .env file
+            env_path = config_dir / ".env"
+            set_key(str(env_path), "ELEVENLABS_API_KEY", elevenlabs_key)
+            set_key(str(env_path), "OPENROUTER_API_KEY", openrouter_key)
+            set_key(str(env_path), "OPENAI_API_KEY", openai_key)
+            set_key(str(env_path), "SUNO_COOKIE", suno_cookie)
+            
+            # Create config.yaml
+            config = {
+                'api': {
+                    'elevenlabs_api_key': elevenlabs_key,
+                    'openai_api_key': openai_key,
+                    'openrouter_api_key': openrouter_key,
+                    'suno_cookie': suno_cookie,
+                    'selected_model': 'openai'
+                },
+                'projects': {
+                    'base_dir': str(projects_dir)
+                },
+                'logging': {
+                    'level': 'INFO',
+                    'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+                },
+                'audio_generator_gui': {
+                    'window_size': '1200x800'
                 }
-                
-                with open(config_dir / "config.yaml", 'w') as f:
-                    yaml.dump(config, f)
-                    
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to save configuration: {str(e)}")
+            }
+            
+            with open(config_dir / "config.yaml", 'w') as f:
+                yaml.dump(config, f)
+            
+            self.result = True
+            self.destroy()
+            
+        except Exception as e:
+            ctk.CTkMessagebox(title="Error", message=f"Failed to save configuration: {str(e)}")
+    
+    def on_close(self):
+        self.result = False
+        self.destroy()
 
-class WelcomePage(QWizardPage):
-    def __init__(self):
-        super().__init__()
-        self.setTitle("Welcome to AI Audio Creator")
+class WizardPage(ctk.CTkFrame):
+    def __init__(self, master):
+        super().__init__(master)
+        self.configure(fg_color="transparent")
+    
+    def validate(self):
+        return True
+
+class WelcomePage(WizardPage):
+    def __init__(self, master):
+        super().__init__(master)
         
-        layout = QVBoxLayout()
-        label = QLabel(
-            "Welcome to AI Audio Creator!\n\n"
-            "This wizard will help you set up the necessary API keys "
-            "for the application to work properly.\n\n"
-            "Required API Keys:\n"
-            "- ElevenLabs (for text-to-speech)\n"
-            "- OpenRouter (for AI text generation)\n\n"
-            "Optional API Keys:\n"
-            "- OpenAI (alternative for text generation)\n"
-            "- Suno Cookie (for music generation)\n\n"
-            "You can skip the optional API keys setup, but some features "
-            "won't be available until you configure them in the preferences menu.\n\n"
-            "Click Next to begin the setup process."
+        title = ctk.CTkLabel(self, text="Welcome to AI Audio Creator", font=("", 20, "bold"))
+        title.pack(pady=(0, 20))
+        
+        text = ctk.CTkLabel(
+            self,
+            text="This wizard will help you set up the necessary API keys "
+                 "for the application to work properly.\n\n"
+                 "Required API Keys:\n"
+                 "- ElevenLabs (for text-to-speech)\n"
+                 "- OpenRouter (for AI text generation)\n\n"
+                 "Optional API Keys:\n"
+                 "- OpenAI (alternative for text generation)\n"
+                 "- Suno Cookie (for music generation)\n\n"
+                 "You can skip the optional API keys setup, but some features "
+                 "won't be available until you configure them in the preferences menu.\n\n"
+                 "Click Next to begin the setup process.",
+            wraplength=500,
+            justify="left"
         )
-        label.setWordWrap(True)
-        layout.addWidget(label)
-        self.setLayout(layout)
+        text.pack(fill="both", expand=True)
 
-class RequiredAPIConfigPage(QWizardPage):
-    def __init__(self):
-        super().__init__()
-        self.setTitle("Required API Configuration")
-        self.setSubTitle("Please enter your required API keys")
+class RequiredAPIConfigPage(WizardPage):
+    def __init__(self, master):
+        super().__init__(master)
         
-        layout = QVBoxLayout()
+        title = ctk.CTkLabel(self, text="Required API Configuration", font=("", 20, "bold"))
+        title.pack(pady=(0, 20))
         
-        # ElevenLabs API Key
-        elevenlabs_label = QLabel("ElevenLabs API Key:")
-        self.elevenlabs_input = QLineEdit()
-        self.elevenlabs_input.setEchoMode(QLineEdit.Password)
-        self.registerField("elevenlabs_key*", self.elevenlabs_input)
+        info = ctk.CTkLabel(
+            self,
+            text="These API keys are required for the application to function properly.\n"
+                 "You can get them from:\n"
+                 "- ElevenLabs: https://elevenlabs.io\n"
+                 "- OpenRouter: https://openrouter.ai",
+            wraplength=500,
+            justify="left"
+        )
+        info.pack(pady=(0, 20))
         
-        # OpenRouter API Key
-        openrouter_label = QLabel("OpenRouter API Key:")
-        self.openrouter_input = QLineEdit()
-        self.openrouter_input.setEchoMode(QLineEdit.Password)
-        self.registerField("openrouter_key*", self.openrouter_input)
+        # ElevenLabs
+        elevenlabs_label = ctk.CTkLabel(self, text="ElevenLabs API Key:")
+        elevenlabs_label.pack(anchor="w")
+        self.elevenlabs_var = ctk.StringVar()
+        self.elevenlabs_entry = ctk.CTkEntry(self, show="*", width=400, textvariable=self.elevenlabs_var)
+        self.elevenlabs_entry.pack(pady=(0, 20))
         
-        # Add widgets to layout
-        layout.addWidget(QLabel(
-            "These API keys are required for the application to function properly.\n"
-            "You can get them from:\n"
-            "- ElevenLabs: https://elevenlabs.io\n"
-            "- OpenRouter: https://openrouter.ai"
-        ))
-        layout.addSpacing(10)
-        layout.addWidget(elevenlabs_label)
-        layout.addWidget(self.elevenlabs_input)
-        layout.addSpacing(10)
-        layout.addWidget(openrouter_label)
-        layout.addWidget(self.openrouter_input)
-        layout.addStretch()
-        
-        self.setLayout(layout)
+        # OpenRouter
+        openrouter_label = ctk.CTkLabel(self, text="OpenRouter API Key:")
+        openrouter_label.pack(anchor="w")
+        self.openrouter_var = ctk.StringVar()
+        self.openrouter_entry = ctk.CTkEntry(self, show="*", width=400, textvariable=self.openrouter_var)
+        self.openrouter_entry.pack()
+    
+    def validate(self):
+        if not self.elevenlabs_var.get().strip():
+            ctk.CTkMessagebox(title="Error", message="ElevenLabs API Key is required")
+            return False
+        if not self.openrouter_var.get().strip():
+            ctk.CTkMessagebox(title="Error", message="OpenRouter API Key is required")
+            return False
+        return True
 
-class OptionalAPIConfigPage(QWizardPage):
-    def __init__(self):
-        super().__init__()
-        self.setTitle("Optional API Configuration")
-        self.setSubTitle("Configure additional API keys or skip")
+class OptionalAPIConfigPage(WizardPage):
+    def __init__(self, master):
+        super().__init__(master)
         
-        layout = QVBoxLayout()
+        title = ctk.CTkLabel(self, text="Optional API Configuration", font=("", 20, "bold"))
+        title.pack(pady=(0, 20))
+        
+        info = ctk.CTkLabel(
+            self,
+            text="These API keys are optional but enable additional features:\n"
+                 "- OpenAI API Key: Alternative for text generation\n"
+                 "- Suno Cookie: Required for music generation\n\n"
+                 "You can skip this step and configure these later in the preferences menu.",
+            wraplength=500,
+            justify="left"
+        )
+        info.pack(pady=(0, 20))
         
         # Skip checkbox
-        self.skip_checkbox = QCheckBox("Skip optional API configuration")
-        self.registerField("skip_optional", self.skip_checkbox)
-        self.skip_checkbox.stateChanged.connect(self.toggle_inputs)
+        self.skip_var = ctk.BooleanVar()
+        skip_check = ctk.CTkCheckBox(self, text="Skip optional API configuration", 
+                                   variable=self.skip_var, command=self.toggle_inputs)
+        skip_check.pack(pady=(0, 20))
         
-        # OpenAI API Key
-        openai_label = QLabel("OpenAI API Key:")
-        self.openai_input = QLineEdit()
-        self.openai_input.setEchoMode(QLineEdit.Password)
-        self.registerField("openai_key", self.openai_input)
+        # OpenAI
+        openai_label = ctk.CTkLabel(self, text="OpenAI API Key:")
+        openai_label.pack(anchor="w")
+        self.openai_var = ctk.StringVar()
+        self.openai_entry = ctk.CTkEntry(self, show="*", width=400, textvariable=self.openai_var)
+        self.openai_entry.pack(pady=(0, 20))
         
-        # Suno Cookie
-        suno_label = QLabel("Suno Cookie:")
-        self.suno_input = QLineEdit()
-        self.suno_input.setEchoMode(QLineEdit.Password)
-        self.registerField("suno_cookie", self.suno_input)
-        
-        # Add widgets to layout
-        layout.addWidget(QLabel(
-            "These API keys are optional but enable additional features:\n"
-            "- OpenAI API Key: Alternative for text generation\n"
-            "- Suno Cookie: Required for music generation\n\n"
-            "You can skip this step and configure these later in the preferences menu."
-        ))
-        layout.addSpacing(10)
-        layout.addWidget(self.skip_checkbox)
-        layout.addSpacing(10)
-        layout.addWidget(openai_label)
-        layout.addWidget(self.openai_input)
-        layout.addSpacing(10)
-        layout.addWidget(suno_label)
-        layout.addWidget(self.suno_input)
-        layout.addStretch()
-        
-        self.setLayout(layout)
-        
-    def toggle_inputs(self, state):
-        enabled = not bool(state)
-        self.openai_input.setEnabled(enabled)
-        self.suno_input.setEnabled(enabled)
+        # Suno
+        suno_label = ctk.CTkLabel(self, text="Suno Cookie:")
+        suno_label.pack(anchor="w")
+        self.suno_var = ctk.StringVar()
+        self.suno_entry = ctk.CTkEntry(self, show="*", width=400, textvariable=self.suno_var)
+        self.suno_entry.pack()
+    
+    def toggle_inputs(self):
+        state = "disabled" if self.skip_var.get() else "normal"
+        self.openai_entry.configure(state=state)
+        self.suno_entry.configure(state=state)
 
-class CompletionPage(QWizardPage):
-    def __init__(self):
-        super().__init__()
-        self.setTitle("Setup Complete")
+class CompletionPage(WizardPage):
+    def __init__(self, master):
+        super().__init__(master)
         
-        layout = QVBoxLayout()
-        self.status_label = QLabel(
-            "Configuration is complete!\n\n"
-            "The application will now start with your configuration.\n\n"
-            "You can modify these settings later through the application's "
-            "preferences menu."
+        title = ctk.CTkLabel(self, text="Setup Complete", font=("", 20, "bold"))
+        title.pack(pady=(0, 20))
+        
+        text = ctk.CTkLabel(
+            self,
+            text="Configuration is complete!\n\n"
+                 "The application will now start with your configuration.\n\n"
+                 "You can modify these settings later through the application's "
+                 "preferences menu.",
+            wraplength=500,
+            justify="left"
         )
-        self.status_label.setWordWrap(True)
-        layout.addWidget(self.status_label)
-        
-        # Warning label for skipped configuration
-        self.warning_label = QLabel(
-            "\nWARNING: You have skipped the optional API configuration. "
-            "Some features will not be available until you configure these "
-            "API keys in the preferences menu."
-        )
-        self.warning_label.setWordWrap(True)
-        self.warning_label.setStyleSheet("color: #FFA500")  # Orange color
-        self.warning_label.hide()
-        layout.addWidget(self.warning_label)
-        
-        layout.addStretch()
-        self.setLayout(layout)
-        
-    def initializePage(self):
-        # Show warning if optional configuration was skipped
-        if self.field("skip_optional"):
-            self.warning_label.show()
-        else:
-            self.warning_label.hide()
+        text.pack(fill="both", expand=True)
+
+def run_first_time_setup():
+    """Run the first-time setup wizard."""
+    wizard = ConfigWizard()
+    wizard.wait_window()
+    return wizard.result

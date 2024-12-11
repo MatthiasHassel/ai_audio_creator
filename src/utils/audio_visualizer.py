@@ -6,6 +6,43 @@ import struct
 from pydub import AudioSegment
 import threading
 import logging
+import os
+import sys
+
+def get_ffmpeg_path():
+    """Get the path to the bundled ffmpeg/ffprobe binaries."""
+    if getattr(sys, 'frozen', False):
+        # Running in a bundle
+        if sys.platform == 'darwin':  # macOS
+            # Get the path to the app bundle Resources directory
+            base_dir = os.path.join(os.path.dirname(os.path.dirname(sys.executable)), 'Resources')
+        else:
+            base_dir = os.path.dirname(sys.executable)
+            
+        ffmpeg_path = os.path.join(base_dir, 'ffmpeg')
+        ffprobe_path = os.path.join(base_dir, 'ffprobe')
+        
+        # Make the binaries executable if they exist
+        for binary in [ffmpeg_path, ffprobe_path]:
+            if os.path.exists(binary):
+                os.chmod(binary, 0o755)
+        
+        return {
+            'ffmpeg.binaries': ffmpeg_path,
+            'ffprobe.binaries': ffprobe_path
+        }
+    else:
+        # Running in development
+        return {
+            'ffmpeg.binaries': 'ffmpeg',
+            'ffprobe.binaries': 'ffprobe'
+        }
+
+# Configure pydub to use the correct ffmpeg paths
+ffmpeg_config = get_ffmpeg_path()
+AudioSegment.converter = ffmpeg_config['ffmpeg.binaries']
+AudioSegment.ffmpeg = ffmpeg_config['ffmpeg.binaries']
+AudioSegment.ffprobe = ffmpeg_config['ffprobe.binaries']
 
 class AudioVisualizer(tk.Frame):
     def __init__(self, master, **kwargs):

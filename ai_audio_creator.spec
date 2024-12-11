@@ -5,6 +5,7 @@ import customtkinter
 import os
 import site
 import tkinter
+import shutil
 
 block_cipher = None
 
@@ -22,6 +23,13 @@ for site_package in site_packages:
     if os.path.exists(tkinterdnd2_path):
         tkinterdnd2_paths.append((tkinterdnd2_path, 'tkinterdnd2'))
 
+# Find ffmpeg and ffprobe paths
+ffmpeg_path = shutil.which('ffmpeg')
+ffprobe_path = shutil.which('ffprobe')
+
+if not ffmpeg_path or not ffprobe_path:
+    raise Exception("ffmpeg and ffprobe must be installed. Run 'brew install ffmpeg' to install them.")
+
 # Gather all necessary data files
 datas = [
     ('assets', 'assets'),
@@ -31,6 +39,9 @@ datas = [
     (os.path.join(ctk_path, 'assets'), 'customtkinter/assets'),
     # Add all Python modules from src directory
     ('src', 'src'),
+    # Add ffmpeg binaries to Resources directory
+    (ffmpeg_path, '.'),
+    (ffprobe_path, '.'),
 ]
 
 # Add tkinterdnd2 data files if found

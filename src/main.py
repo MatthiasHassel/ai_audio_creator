@@ -2,7 +2,6 @@ import sys
 import os
 import customtkinter as ctk
 from pathlib import Path
-from PySide6.QtWidgets import QApplication
 
 # Add the src directory to Python path if we're running from source
 if getattr(sys, 'frozen', False):
@@ -36,14 +35,13 @@ def import_with_error_handling(module_name):
 try:
     import customtkinter as ctk
     from pathlib import Path
-    from PySide6.QtWidgets import QApplication
     
     # Import local modules
     MainModel = import_with_error_handling('models.main_model').MainModel
     ProjectModel = import_with_error_handling('models.project_model').ProjectModel
     MainView = import_with_error_handling('views.main_view').MainView
     MainController = import_with_error_handling('controllers.main_controller').MainController
-    ConfigWizard = import_with_error_handling('views.first_run_wizard').ConfigWizard
+    first_run_wizard = import_with_error_handling('views.first_run_wizard')
     config_manager = import_with_error_handling('utils.config_manager')
     
     import logging
@@ -93,15 +91,6 @@ def check_first_run():
     config_path = os.path.join(config_dir, 'config.yaml')
     return not os.path.exists(config_path)
 
-def run_first_time_setup():
-    """Run the first-time setup wizard."""
-    app = QApplication.instance() or QApplication(sys.argv)
-    wizard = ConfigWizard()
-    result = wizard.exec()
-    if not QApplication.instance():
-        app.quit()
-    return result == ConfigWizard.Accepted
-
 def get_user_manual_path():
     """Get the path to the user manual based on the environment."""
     if getattr(sys, 'frozen', False):
@@ -115,9 +104,13 @@ def get_user_manual_path():
 
 def main():
     try:
+        # Create root window
+        root = ctk.CTk()
+        root.withdraw()  # Hide the root window
+        
         # Check for first run
         if check_first_run():
-            if not run_first_time_setup():
+            if not first_run_wizard.run_first_time_setup():
                 print("First-time setup cancelled")
                 sys.exit(0)
         
@@ -131,9 +124,6 @@ def main():
         setup_logging(config)
         
         # Create main components
-        root = ctk.CTk()
-        root.withdraw()  # Hide the root window
-        
         main_model = MainModel()
         project_model = ProjectModel(config['projects']['base_dir'])
         view = MainView(root, config, project_model)

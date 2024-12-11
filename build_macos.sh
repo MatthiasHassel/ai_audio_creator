@@ -27,7 +27,7 @@ fi
 
 # Install system dependencies
 echo "📦 Installing system dependencies..."
-brew install portaudio create-dmg
+brew install portaudio create-dmg ffmpeg
 
 # Clean up any existing virtual environment
 echo "🧹 Cleaning up old environment..."
@@ -73,6 +73,13 @@ if ! python3 -c "import tkinterdnd2" &> /dev/null; then
         echo "❌ Failed to install tkinterdnd2. Build cannot continue."
         exit 1
     fi
+fi
+
+# Verify ffmpeg
+echo "  • Checking ffmpeg..."
+if ! command -v ffmpeg &> /dev/null; then
+    echo "❌ ffmpeg not found. Please ensure ffmpeg is installed."
+    exit 1
 fi
 
 # Verify the tkinterdnd2 library location
