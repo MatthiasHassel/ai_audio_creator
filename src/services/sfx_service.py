@@ -13,6 +13,7 @@ class SFXService:
         self.status_update_callback = status_update_callback
         self.logger = logging.getLogger(self.__class__.__name__)
         self.available = False
+        self.output_dir = None  # Will be set by update_output_directory
         
         # Initialize ElevenLabs client if API key is available
         api_key = self.config['api'].get('elevenlabs_api_key')
@@ -30,17 +31,6 @@ class SFXService:
         
         # Get SFX generation settings with defaults
         sfx_config = self.config.get('sfx_gen', {})
-        if getattr(sys, 'frozen', False):
-            # When bundled, use user's home directory
-            self.output_dir = os.path.join(Path.home(), 'AI Audio Creator Projects', 'SFX')
-        else:
-            # In development, use config directory
-            self.output_dir = sfx_config.get('output_dir', 
-                os.path.join(Path.home(), 'AI Audio Creator Projects', 'SFX'))
-        
-        # Ensure output directory exists
-        os.makedirs(self.output_dir, exist_ok=True)
-        
         self.min_duration = sfx_config.get('min_duration', 0.5)
         self.max_duration = sfx_config.get('max_duration', 22.0)
 
@@ -61,6 +51,9 @@ class SFXService:
             self.logger.error(error_msg)
             self.update_status(error_msg)
             return None
+
+        if not self.output_dir:
+            raise ValueError("Output directory not set. Call update_output_directory first.")
 
         self.logger.info("Initializing sound effect generation...")
 

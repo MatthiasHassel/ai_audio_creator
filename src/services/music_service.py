@@ -15,19 +15,7 @@ class MusicService:
     def __init__(self, config, status_update_callback):
         self.config = config
         self.base_url = self.config['music_gen'].get('base_url', 'http://localhost:3000')
-        
-        # Get output directory from config or use default
-        if getattr(sys, 'frozen', False):
-            # When bundled, use user's home directory
-            self.output_dir = os.path.join(Path.home(), 'AI Audio Creator Projects', 'Music')
-        else:
-            # In development, use config directory
-            self.output_dir = self.config['music_gen'].get('output_dir', 
-                os.path.join(Path.home(), 'AI Audio Creator Projects', 'Music'))
-        
-        # Ensure output directory exists
-        os.makedirs(self.output_dir, exist_ok=True)
-        
+        self.output_dir = None  # Will be set by update_output_directory
         self.logger = logging.getLogger(self.__class__.__name__)
         self.status_update_callback = status_update_callback
 
@@ -135,6 +123,9 @@ class MusicService:
 
     def create_song(self, text_prompt, make_instrumental):
         """Create a song based on the text prompt."""
+        if not self.output_dir:
+            raise ValueError("Output directory not set. Call update_output_directory first.")
+            
         self.logger.info("Starting music generation process...")
         self.update_status("Starting music generation process...")
         api_process = self.start_api()

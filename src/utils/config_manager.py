@@ -22,7 +22,7 @@ def get_config_dir():
 def create_default_config():
     """Create default configuration file."""
     # Get base directory for relative paths
-    projects_dir = os.path.join(Path.home(), 'AI Audio Creator Projects')
+    projects_dir = os.path.join(Path.home(), 'AI Audio Creator')
     
     default_config = {
         'api': {
@@ -43,17 +43,13 @@ def create_default_config():
             'window_size': '1200x800'
         },
         'music_gen': {
-            'output_dir': os.path.join(projects_dir, 'Music'),
             'base_url': 'http://localhost:3000'
         },
         'sfx_gen': {
-            'output_dir': os.path.join(projects_dir, 'SFX'),
             'min_duration': 0.5,
             'max_duration': 22.0
         },
-        'speech_gen': {
-            'output_dir': os.path.join(projects_dir, 'Speech')
-        }
+        'speech_gen': {}
     }
     return default_config
 
@@ -106,11 +102,8 @@ def load_config():
         if config['api'].get('selected_model') not in ['llama', 'openai']:
             config['api']['selected_model'] = 'llama'  # Default to llama if invalid
         
-        # Create necessary directories
+        # Create base projects directory
         os.makedirs(config['projects']['base_dir'], exist_ok=True)
-        os.makedirs(config['music_gen']['output_dir'], exist_ok=True)
-        os.makedirs(config['sfx_gen']['output_dir'], exist_ok=True)
-        os.makedirs(config['speech_gen']['output_dir'], exist_ok=True)
         
         return config
         

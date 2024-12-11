@@ -16,7 +16,7 @@ class SpeechService:
         self.config = config
         self.api_key = self.config['api']['elevenlabs_api_key']
         self.client = ElevenLabs(api_key=self.api_key)
-        self.output_dir = self.config['speech_gen']['output_dir']
+        self.output_dir = None  # Will be set by update_output_directory
         self.logger = logging.getLogger(self.__class__.__name__)
         self.status_update_callback = status_update_callback
         self.preview_voices = []  # Store all preview voices
@@ -103,6 +103,9 @@ class SpeechService:
             return []
         
     def get_next_file_number(self, voice_name):
+        if not self.output_dir:
+            raise ValueError("Output directory not set. Call update_output_directory first.")
+            
         pattern = re.compile(fr"^{re.escape(voice_name)}_(\d+)\.mp3$")
         existing_numbers = [
             int(match.group(1))
@@ -112,6 +115,9 @@ class SpeechService:
         return max(existing_numbers, default=0) + 1
 
     def text_to_speech_file(self, text_prompt: str, voice_id: str, voice_settings: dict = None):
+        if not self.output_dir:
+            raise ValueError("Output directory not set. Call update_output_directory first.")
+            
         self.logger.info("Initializing speech generation...")
         try:
             # Use provided voice settings or defaults
@@ -191,6 +197,9 @@ class SpeechService:
     
     def process_s2s_request(self, audio_file_path: str, voice_id: str, voice_settings: dict = None):
         """Process a speech-to-speech generation request."""
+        if not self.output_dir:
+            raise ValueError("Output directory not set. Call update_output_directory first.")
+            
         self.logger.info("Initializing speech-to-speech generation...")
 
         try:
@@ -252,6 +261,9 @@ class SpeechService:
     
     def generate_voice_preview(self, voice_description: str, text: str):
         """Generate previews of unique voices."""
+        if not self.output_dir:
+            raise ValueError("Output directory not set. Call update_output_directory first.")
+            
         self.logger.info(f"Generating voice previews with description: {voice_description}")
         self.current_voice_description = voice_description  # Store for later use
 

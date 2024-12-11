@@ -28,12 +28,21 @@ class ProjectModel:
         if os.path.exists(project_dir):
             raise ValueError(f"Project '{project_name}' already exists")
         
+        # Create main project directory
         os.makedirs(project_dir)
-        os.makedirs(os.path.join(project_dir, "output", "music"))
-        os.makedirs(os.path.join(project_dir, "output", "sfx"))
-        os.makedirs(os.path.join(project_dir, "output", "speech"))
-        os.makedirs(os.path.join(project_dir, "scripts"))
+        
+        # Create audio files directory for imported audio
         os.makedirs(os.path.join(project_dir, "audio_files"))
+        
+        # Create output directory with subdirectories
+        output_dir = os.path.join(project_dir, "output")
+        os.makedirs(output_dir)
+        os.makedirs(os.path.join(output_dir, "music"))
+        os.makedirs(os.path.join(output_dir, "sfx"))
+        os.makedirs(os.path.join(output_dir, "speech"))
+        
+        # Create scripts directory
+        os.makedirs(os.path.join(project_dir, "scripts"))
 
         self.current_project = project_name
         self.metadata = {
