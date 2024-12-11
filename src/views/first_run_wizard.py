@@ -31,10 +31,9 @@ class ConfigWizard(QWizard):
                 config_dir = Path.home() / ".ai_audio_creator"
                 config_dir.mkdir(exist_ok=True)
                 
-                # Create Projects directory structure
-                projects_dir = Path.home() / "AI Audio Creator Projects"
-                for subdir in ["Music", "SFX", "Speech"]:
-                    (projects_dir / subdir).mkdir(parents=True, exist_ok=True)
+                # Create base directory (but let ProjectModel handle the structure)
+                projects_dir = Path.home() / "AI Audio Creator"
+                projects_dir.mkdir(parents=True, exist_ok=True)
                 
                 # Create or update .env file in config directory
                 env_path = config_dir / ".env"

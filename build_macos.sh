@@ -99,6 +99,12 @@ if ! "dist/AI Audio Creator.app/Contents/MacOS/AI Audio Creator" --version &> /d
     echo "⚠️  Warning: Built application may have issues. Proceeding with DMG creation anyway..."
 fi
 
+# Create temporary directory for DMG contents
+echo "📦 Preparing DMG contents..."
+DMG_DIR=$(mktemp -d)
+cp -r "dist/AI Audio Creator.app" "$DMG_DIR/"
+
+# Create a DMG installer with custom icon
 echo "📦 Creating DMG installer..."
 create-dmg \
   --volname "AI Audio Creator" \
@@ -109,8 +115,11 @@ create-dmg \
   --hide-extension "AI Audio Creator.app" \
   --app-drop-link 600 185 \
   "AI Audio Creator.dmg" \
-  "dist/AI Audio Creator.app" \
+  "$DMG_DIR" \
   || { echo "❌ Failed to create DMG"; exit 1; }
+
+# Clean up temporary directory
+rm -rf "$DMG_DIR"
 
 # Deactivate virtual environment
 deactivate

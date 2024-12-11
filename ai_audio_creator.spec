@@ -152,7 +152,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='AI Audio Creator.app',
-    icon=None,  # We'll create an icon later if needed
+    icon='assets/app_icon.icns',
     bundle_identifier='com.matthiashassel.aiaudiocreator',
     version='0.1.0',
     info_plist={
