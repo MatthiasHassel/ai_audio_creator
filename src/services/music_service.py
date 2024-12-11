@@ -7,12 +7,27 @@ import logging
 from mutagen.id3 import ID3, TIT2, COMM
 from mutagen.mp3 import MP3
 from pydub import AudioSegment
+from pathlib import Path
+import sys
+from utils.config_manager import get_base_dir, get_config_dir
 
 class MusicService:
     def __init__(self, config, status_update_callback):
         self.config = config
-        self.base_url = self.config['api']['base_url']
-        self.output_dir = self.config['music_gen']['output_dir']
+        self.base_url = self.config['music_gen'].get('base_url', 'http://localhost:3000')
+        
+        # Get output directory from config or use default
+        if getattr(sys, 'frozen', False):
+            # When bundled, use user's home directory
+            self.output_dir = os.path.join(Path.home(), 'AI Audio Creator Projects', 'Music')
+        else:
+            # In development, use config directory
+            self.output_dir = self.config['music_gen'].get('output_dir', 
+                os.path.join(Path.home(), 'AI Audio Creator Projects', 'Music'))
+        
+        # Ensure output directory exists
+        os.makedirs(self.output_dir, exist_ok=True)
+        
         self.logger = logging.getLogger(self.__class__.__name__)
         self.status_update_callback = status_update_callback
 
@@ -28,16 +43,36 @@ class MusicService:
         """Start the API server."""
         self.logger.info("Starting API server...")
         self.update_status("Starting API server...")
-        api_process = subprocess.Popen(['npm', 'run', 'dev'], cwd=self.config['music_gen']['api_directory'])
         
-        if self.wait_for_api_start():
-            self.logger.info("API started successfully.")
-            self.update_status("API started successfully.")
-            return api_process
-        else:
-            self.logger.error("Failed to start API server.")
-            self.update_status("Failed to start API server.")
-            api_process.terminate()
+        try:
+            # Get API directory
+            if getattr(sys, 'frozen', False):
+                # When bundled, use Resources directory
+                base_dir = get_base_dir()
+                api_dir = os.path.join(base_dir, 'Resources', 'suno_api')
+            else:
+                # In development, use project directory
+                base_dir = get_base_dir()
+                api_dir = os.path.join(base_dir, 'suno_api')
+            
+            if not os.path.exists(api_dir):
+                raise Exception(f"Could not find suno_api directory at {api_dir}")
+            
+            api_process = subprocess.Popen(['npm', 'run', 'dev'], cwd=api_dir)
+            
+            if self.wait_for_api_start():
+                self.logger.info("API started successfully.")
+                self.update_status("API started successfully.")
+                return api_process
+            else:
+                self.logger.error("Failed to start API server.")
+                self.update_status("Failed to start API server.")
+                api_process.terminate()
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error starting API: {str(e)}")
+            self.update_status(f"Error starting API: {str(e)}")
             return None
 
     def wait_for_api_start(self, timeout=30, interval=0.5):
@@ -198,7 +233,7 @@ class MusicService:
             audio.tags.add(COMM(encoding=3, lang='eng', desc='Type', text=instrumental_text))
 
             audio.save()
-            self.logger.info(f"Successfully added ID3 tag to {file_path} with prompt: {prompt} and type: {instrumental_text}")
+            self.logger.info(f"Successfully added ID3 tag to {file_path}")
         except Exception as e:
             self.logger.error(f"Failed to add ID3 tag: {str(e)}")
             

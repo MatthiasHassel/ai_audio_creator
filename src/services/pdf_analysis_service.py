@@ -4,28 +4,49 @@ import PyPDF2
 import json
 from openai import OpenAI
 import os
+import sys
+from pathlib import Path
+import requests
+from utils.config_manager import get_base_dir, get_config_dir
 
 class PDFAnalysisService:
     def __init__(self, config):
         self.config = config
-        self.client = OpenAI(api_key=self.config['api']['openai_api_key'])
-        self.prompts_config = self.load_prompts_config()
         self.logger = logging.getLogger(__name__)
+        self.selected_model = self.config['api'].get('selected_model', 'llama')  # Default to llama (OpenRouter)
+        self.client = None
+        self.available = False
+        
+        # Initialize OpenAI client only if OpenAI is selected and API key is available
+        if self.selected_model == 'openai':
+            api_key = self.config['api'].get('openai_api_key')
+            if api_key:
+                try:
+                    self.client = OpenAI(api_key=api_key)
+                    self.available = True
+                    self.logger.info("OpenAI client initialized successfully")
+                except Exception as e:
+                    self.logger.error(f"Failed to initialize OpenAI client: {str(e)}")
+        else:
+            # Check if OpenRouter API key is available
+            if self.config['api'].get('openrouter_api_key'):
+                self.available = True
+                self.logger.info("OpenRouter configuration verified")
+            else:
+                self.logger.warning("OpenRouter API key not found")
+        
+        self.prompts_config = self.load_prompts_config()
 
     def load_prompts_config(self):
         try:
-            src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            base_dir = os.path.dirname(src_dir)
-            prompts_file = os.path.join(base_dir, 'config', 'prompts.json')
+            config_dir = get_config_dir()
+            prompts_file = os.path.join(config_dir, 'prompts.json')
             
             if os.path.exists(prompts_file):
-                try:
-                    with open(prompts_file, 'r') as f:
-                        return json.load(f)
-                except json.JSONDecodeError:
-                    # If the file is empty or invalid, proceed to create default config
-                    pass
+                with open(prompts_file, 'r') as f:
+                    return json.load(f)
             
+            # Return default prompts if file doesn't exist
             return self._get_default_prompts()
             
         except Exception as e:
@@ -48,6 +69,7 @@ class PDFAnalysisService:
         }
         
     def extract_text_from_pdf(self, pdf_path):
+        """Extract text from a PDF file."""
         with open(pdf_path, 'rb') as file:
             reader = PyPDF2.PdfReader(file)
             text = ""
@@ -55,12 +77,63 @@ class PDFAnalysisService:
                 text += page.extract_text()
         return text
 
-    def analyze_script(self, script_text):
+    def process_with_openrouter(self, system_prompt, user_prompt):
+        """Process the request using OpenRouter API"""
         try:
-            # Hard-coded system prompt
+            response = requests.post(
+                url="https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.config['api']['openrouter_api_key']}",
+                    "HTTP-Referer": "localhost",
+                    "X-Title": "AI Audio Creator",
+                },
+                json={
+                    "model": "meta-llama/llama-3.2-3b-instruct:free",
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 2000
+                }
+            )
+            response.raise_for_status()
+            return response.json()['choices'][0]['message']['content']
+        except Exception as e:
+            self.logger.error(f"Error in OpenRouter API call: {str(e)}")
+            raise
+
+    def process_with_openai(self, system_prompt, user_prompt):
+        """Process the request using OpenAI API"""
+        if not self.client:
+            raise ValueError("OpenAI client not initialized")
+            
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                response_format={ "type": "json_object" },
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            self.logger.error(f"Error in OpenAI API call: {str(e)}")
+            raise
+
+    def analyze_script(self, script_text):
+        """Analyze script text using the selected LLM."""
+        if not self.available:
+            error_msg = "No LLM service available. Please configure OpenAI or OpenRouter API key in preferences."
+            self.logger.error(error_msg)
+            return None
+
+        try:
+            # System prompt
             system_prompt = "You are a script analyzer. Analyze the given script for an audio play and provide structured output."
 
-            # Hard-coded formatting instructions
+            # Formatting instructions
             formatting_instructions = """Without any additional text, output the analysis in the following JSON format:
 
 {
@@ -105,33 +178,20 @@ class PDFAnalysisService:
 Here is the script to be analyzed:"""
 
             # Get the pre-prompt from config
-            pre_prompt = self.prompts_config.get('script_analysis_pre', 
-                """I have a script for an audio play that I would like to analyze and categorize. Please analyze each line in the script and categorize it as follows:
-
-1. Determine if the line is a spoken sentence by a character, a description of a sound effect (SFX), or a description of music. If the estimated length of a music piece is below 22s categorize it as SFX
-2. If it is a spoken sentence by a character, identify the character's name.
-3. If it is an SFX, estimate the duration of the sound (between 0.5 and 22 seconds).
-4. If it is music, specify whether it is instrumental or with vocals. Use "instrumental": "yes" for instrumental music and "instrumental": "no" for music with vocals.
-5. Maintain the order of the lines as they appear in the script, and assign an index to each line.
-6. Include two additional parts in the JSON:
-    - Needed Speaker Tracks: List all the characternames in the script. 
-    - Voice Characteristics: Analyze the emotional content of the sentence and describe the voice characteristics of each speaker.""")
+            pre_prompt = self.prompts_config.get('script_analysis_pre', self._get_default_prompts()['script_analysis_pre'])
 
             # Combine the components
             full_prompt = f"{pre_prompt}\n\n{formatting_instructions}\n\n{script_text}"
 
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                response_format={ "type": "json_object" },
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": full_prompt}
-                ]
-            )
+            # Process with selected model
+            if self.selected_model == 'openai':
+                response_text = self.process_with_openai(system_prompt, full_prompt)
+            else:
+                response_text = self.process_with_openrouter(system_prompt, full_prompt)
             
-            analysis = json.loads(response.choices[0].message.content)
+            analysis = json.loads(response_text)
             return analysis
+            
         except Exception as e:
-            print(f"Error analyzing script: {str(e)}")
+            self.logger.error(f"Error analyzing script: {str(e)}")
             return None
-        

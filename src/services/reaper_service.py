@@ -3,8 +3,15 @@ import logging
 import os
 import math
 from datetime import datetime
+from pathlib import Path
 
 class ReaperService:
+    """
+    Service for interacting with REAPER DAW.
+    Note: This service requires absolute file paths for audio files because REAPER's API
+    needs absolute paths to properly locate and load audio files.
+    """
+    
     def __init__(self):
         self.logger = logging.getLogger(self.__class__.__name__)
         
@@ -38,10 +45,10 @@ class ReaperService:
 
     def add_audio_file(self, file_path, track_name=None):
         """
-        Add an audio file to the current Reaper project
+        Add an audio file to the current Reaper project.
         
         Args:
-            file_path (str): Path to the audio file
+            file_path (str): Path to the audio file. Will be converted to absolute path.
             track_name (str, optional): Name for the new track
             
         Returns:
@@ -56,8 +63,8 @@ class ReaperService:
                             "   - Go to Preferences -> Plug-ins -> ReaScript\n"
                             "   - Enable 'Allow Python to access REAPER via ReaScript'")
 
-            # Convert to absolute path
-            abs_file_path = os.path.abspath(file_path)
+            # Convert to absolute path and normalize
+            abs_file_path = str(Path(file_path).resolve())
             
             self.logger.info(f"Attempting to add file: {abs_file_path}")
             
@@ -97,13 +104,13 @@ class ReaperService:
             self.logger.error(error_msg)
             return False, error_msg
     
-    
     def sync_timeline_to_reaper(self, tracks_data):
         """
-        Synchronize the timeline with the currently opened Reaper project
+        Synchronize the timeline with the currently opened Reaper project.
         
         Args:
-            tracks_data (list): List of track data containing clips and their properties
+            tracks_data (list): List of track data containing clips and their properties.
+                              Each clip's file_path will be converted to absolute path.
             
         Returns:
             tuple: (success: bool, message: str)
@@ -150,13 +157,13 @@ class ReaperService:
                     
                     # Add clips to track
                     for clip in track_data['clips']:
-                        if os.path.exists(clip.file_path):
-                            self.logger.debug(f"Adding clip: {clip.file_path} at position {clip.x}")
+                        # Convert to absolute path and normalize
+                        abs_file_path = str(Path(clip.file_path).resolve())
+                        
+                        if os.path.exists(abs_file_path):
+                            self.logger.debug(f"Adding clip: {abs_file_path} at position {clip.x}")
                             
                             try:
-                                # Convert to absolute path
-                                abs_file_path = os.path.abspath(clip.file_path)
-                                
                                 # Insert media to the track - mode 0 means add to current track
                                 reapy.reascript_api.InsertMedia(abs_file_path, 0)
                                 
@@ -168,9 +175,9 @@ class ReaperService:
                                 
                                 self.logger.debug(f"Successfully added clip at position {clip.x}")
                             except Exception as e:
-                                self.logger.error(f"Error adding clip {clip.file_path}: {str(e)}")
+                                self.logger.error(f"Error adding clip {abs_file_path}: {str(e)}")
                         else:
-                            self.logger.warning(f"Audio file not found: {clip.file_path}")
+                            self.logger.warning(f"Audio file not found: {abs_file_path}")
                 
                 # End undo block
                 project.end_undo_block("Sync Timeline to Reaper")

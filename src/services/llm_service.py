@@ -4,16 +4,38 @@ import threading
 import os
 import json
 import requests
+import sys
+from pathlib import Path
 
 class LLMService:
     def __init__(self, config, status_update_callback, output_update_callback):
         self.config = config
-        self.client = OpenAI(api_key=self.config['api']['openai_api_key'])
-        self.prompts_config = self.load_prompts_config()
-        self.logger = logging.getLogger(__name__)
         self.status_update_callback = status_update_callback
         self.output_update_callback = output_update_callback
-        self.selected_model = self.config['api'].get('selected_model', 'openai')
+        self.logger = logging.getLogger(__name__)
+        self.selected_model = self.config['api'].get('selected_model', 'llama')  # Default to llama (OpenRouter)
+        self.client = None
+        self.available = False
+        
+        # Initialize OpenAI client only if OpenAI is selected and API key is available
+        if self.selected_model == 'openai':
+            api_key = self.config['api'].get('openai_api_key')
+            if api_key:
+                try:
+                    self.client = OpenAI(api_key=api_key)
+                    self.available = True
+                    self.logger.info("OpenAI client initialized successfully")
+                except Exception as e:
+                    self.logger.error(f"Failed to initialize OpenAI client: {str(e)}")
+        else:
+            # Check if OpenRouter API key is available
+            if self.config['api'].get('openrouter_api_key'):
+                self.available = True
+                self.logger.info("OpenRouter configuration verified")
+            else:
+                self.logger.warning("OpenRouter API key not found")
+        
+        self.prompts_config = self.load_prompts_config()
 
     def update_status(self, message):
         if self.status_update_callback:
@@ -25,34 +47,26 @@ class LLMService:
     
     def load_prompts_config(self):
         try:
-            src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            base_dir = os.path.dirname(src_dir)
-            prompts_file = os.path.join(base_dir, 'config', 'prompts.json')
+            if getattr(sys, 'frozen', False):
+                # Running in a bundle
+                config_dir = os.path.join(Path.home(), '.ai_audio_creator')
+                prompts_file = os.path.join(config_dir, 'prompts.json')
+            else:
+                # Development environment
+                src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                base_dir = os.path.dirname(src_dir)
+                prompts_file = os.path.join(base_dir, 'config', 'prompts.json')
             
             if os.path.exists(prompts_file):
                 try:
                     with open(prompts_file, 'r') as f:
                         return json.load(f)
                 except json.JSONDecodeError:
-                    # If the file is empty or invalid, proceed to create default config
                     pass
             
             # Default prompts
-            default_prompts = {
-                'sfx_improvement': "Generate a good prompt for a generative AI Model which creates Sound Effects based on this sound effect description:",
-                'music_improvement': "Generate a good prompt for a generative AI Model which creates Music based on this music piece description:",
-                'script_analysis_pre': """I have a script for an audio play that I would like to analyze and categorize. Please analyze each line in the script and categorize it as follows:
-
-1. Determine if the line is a spoken sentence by a character, a description of a sound effect (SFX), or a description of music. If the estimated length of a music piece is below 22s categorize it as SFX
-2. If it is a spoken sentence by a character, identify the character's name.
-3. If it is an SFX, estimate the duration of the sound (between 0.5 and 22 seconds).
-4. If it is music, specify whether it is instrumental or with vocals. Use "instrumental": "yes" for instrumental music and "instrumental": "no" for music with vocals.
-5. Maintain the order of the lines as they appear in the script, and assign an index to each line.
-6. Include two additional parts in the JSON:
-    - Needed Speaker Tracks: List all the characternames in the script. 
-    - Voice Characteristics: Analyze the emotional content of the sentence and describe the voice characteristics of each speaker."""
-            }
-
+            default_prompts = self._get_default_prompts()
+            
             # Ensure config directory exists
             os.makedirs(os.path.dirname(prompts_file), exist_ok=True)
             
@@ -85,6 +99,13 @@ class LLMService:
 
     def process_llm_request(self, prompt, is_music):
         """Process the LLM request in a separate thread."""
+        if not self.available:
+            error_msg = "No LLM service available. Please configure OpenAI or OpenRouter API key in preferences."
+            self.logger.error(error_msg)
+            self.update_status(error_msg)
+            self.update_output(error_msg)
+            return
+
         def llm_thread():
             self.update_status("Processing with LLM...")
             if is_music:
@@ -109,7 +130,7 @@ class LLMService:
                 url="https://openrouter.ai/api/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {self.config['api']['openrouter_api_key']}",
-                    "HTTP-Referer": "localhost",  # Update with your site URL in production
+                    "HTTP-Referer": "localhost",
                     "X-Title": "AI Audio Creator",
                 },
                 json={
@@ -127,32 +148,37 @@ class LLMService:
 
     def process_with_openai(self, messages, response_format=None):
         """Process the request using OpenAI API"""
+        if not self.client:
+            raise ValueError("OpenAI client not initialized")
+            
         try:
-            kwargs = {
-                "model": "gpt-4o-mini",
-                "messages": messages
-            }
-            if response_format:
-                kwargs["response_format"] = response_format
-
-            response = self.client.chat.completions.create(**kwargs)
-            return response.choices[0].message.content
+            completion = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                response_format=response_format if response_format else None,
+                temperature=0.7,
+                max_tokens=500
+            )
+            return completion.choices[0].message.content
         except Exception as e:
             self.logger.error(f"Error in OpenAI API call: {str(e)}")
             raise
 
     def get_llm_response(self, system_message, user_message, response_format=None):
         """Get response from the selected LLM"""
+        if not self.available:
+            raise ValueError("No LLM service available")
+
         messages = [
             {"role": "system", "content": system_message},
             {"role": "user", "content": user_message}
         ]
         
         try:
-            if self.selected_model == 'llama':
-                return self.process_with_openrouter(messages)
-            else:
+            if self.selected_model == 'openai':
                 return self.process_with_openai(messages, response_format)
+            else:
+                return self.process_with_openrouter(messages)
         except Exception as e:
             self.logger.error(f"Error getting LLM response: {str(e)}")
             raise
@@ -182,6 +208,10 @@ class LLMService:
             return None
 
     def analyze_script(self, script_text):
+        if not self.available:
+            self.logger.error("No LLM service available")
+            return None
+
         try:
             system_prompt = "You are a script analyzer. Analyze the given script for an audio play and provide structured output."
             formatting_instructions = """Without any additional text, output the analysis in the following JSON format:..."""

@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt
 import yaml
 import os
 from pathlib import Path
+from dotenv import set_key
 
 class ConfigWizard(QWizard):
     def __init__(self, parent=None):
@@ -25,28 +26,57 @@ class ConfigWizard(QWizard):
         
     def on_finish(self):
         if self.result() == QWizard.Accepted:
-            # Get the values
-            elevenlabs_key = self.field("elevenlabs_key")
-            openrouter_key = self.field("openrouter_key")
-            openai_key = self.field("openai_key") if not self.field("skip_optional") else ""
-            suno_cookie = self.field("suno_cookie") if not self.field("skip_optional") else ""
-            
-            # Create config directory if it doesn't exist
-            config_dir = Path.home() / ".ai_audio_creator"
-            config_dir.mkdir(exist_ok=True)
-            
-            # Write config file
-            config = {
-                "api_keys": {
-                    "elevenlabs": elevenlabs_key,
-                    "openrouter": openrouter_key,
-                    "openai": openai_key,
-                    "suno_cookie": suno_cookie
+            try:
+                # Create config directory
+                config_dir = Path.home() / ".ai_audio_creator"
+                config_dir.mkdir(exist_ok=True)
+                
+                # Create Projects directory structure
+                projects_dir = Path.home() / "AI Audio Creator Projects"
+                for subdir in ["Music", "SFX", "Speech"]:
+                    (projects_dir / subdir).mkdir(parents=True, exist_ok=True)
+                
+                # Create or update .env file in config directory
+                env_path = config_dir / ".env"
+                
+                # Get the values
+                elevenlabs_key = self.field("elevenlabs_key")
+                openrouter_key = self.field("openrouter_key")
+                openai_key = self.field("openai_key") if not self.field("skip_optional") else ""
+                suno_cookie = self.field("suno_cookie") if not self.field("skip_optional") else ""
+                
+                # Write to .env file
+                set_key(str(env_path), "ELEVENLABS_API_KEY", elevenlabs_key)
+                set_key(str(env_path), "OPENROUTER_API_KEY", openrouter_key)
+                set_key(str(env_path), "OPENAI_API_KEY", openai_key)
+                set_key(str(env_path), "SUNO_COOKIE", suno_cookie)
+                
+                # Create initial config.yaml
+                config = {
+                    'api': {
+                        'elevenlabs_api_key': elevenlabs_key,
+                        'openai_api_key': openai_key,
+                        'openrouter_api_key': openrouter_key,
+                        'suno_cookie': suno_cookie,
+                        'selected_model': 'openai'
+                    },
+                    'projects': {
+                        'base_dir': str(projects_dir)
+                    },
+                    'logging': {
+                        'level': 'INFO',
+                        'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+                    },
+                    'audio_generator_gui': {
+                        'window_size': '1200x800'
+                    }
                 }
-            }
-            
-            with open(config_dir / "config.yaml", "w") as f:
-                yaml.dump(config, f)
+                
+                with open(config_dir / "config.yaml", 'w') as f:
+                    yaml.dump(config, f)
+                    
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to save configuration: {str(e)}")
 
 class WelcomePage(QWizardPage):
     def __init__(self):

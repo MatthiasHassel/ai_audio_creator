@@ -1,20 +1,45 @@
 # -*- mode: python ; coding: utf-8 -*-
 import sys
 from pathlib import Path
+import customtkinter
+import os
+import site
+import tkinter
 
 block_cipher = None
+
+# Get customtkinter package path
+ctk_path = os.path.dirname(customtkinter.__file__)
+
+# Get the absolute path to the src directory
+src_path = os.path.abspath('src')
+
+# Find tkinterdnd2 package path
+site_packages = site.getsitepackages()
+tkinterdnd2_paths = []
+for site_package in site_packages:
+    tkinterdnd2_path = os.path.join(site_package, 'tkinterdnd2')
+    if os.path.exists(tkinterdnd2_path):
+        tkinterdnd2_paths.append((tkinterdnd2_path, 'tkinterdnd2'))
 
 # Gather all necessary data files
 datas = [
     ('assets', 'assets'),
     ('config', 'config'),
     ('docs', 'docs'),
+    # Add customtkinter theme files
+    (os.path.join(ctk_path, 'assets'), 'customtkinter/assets'),
+    # Add all Python modules from src directory
+    ('src', 'src'),
 ]
+
+# Add tkinterdnd2 data files if found
+datas.extend(tkinterdnd2_paths)
 
 # Define the analysis configuration
 a = Analysis(
     ['src/main.py'],
-    pathex=[],
+    pathex=[src_path],  # Add src directory to Python path
     binaries=[],
     datas=datas,
     hiddenimports=[
@@ -34,6 +59,46 @@ a = Analysis(
         'python-dotenv',
         'librosa',
         'customtkinter',
+        'tkinter',
+        'PIL',
+        'darkdetect',  # Required by customtkinter
+        'tkinterdnd2',  # Add tkinterdnd2
+        # Add all local modules
+        'models',
+        'models.main_model',
+        'models.project_model',
+        'models.audio_generator_model',
+        'models.script_editor_model',
+        'models.timeline_model',
+        'views',
+        'views.main_view',
+        'views.audio_generator_view',
+        'views.script_editor_view',
+        'views.timeline_view',
+        'views.preferences_view',
+        'views.first_run_wizard',
+        'controllers',
+        'controllers.main_controller',
+        'controllers.audio_generator_controller',
+        'controllers.script_editor_controller',
+        'controllers.timeline_controller',
+        'utils',
+        'utils.config_manager',
+        'utils.file_utils',
+        'utils.audio_buffer_manager',
+        'utils.audio_clip',
+        'utils.audio_file_selector',
+        'utils.audio_visualizer',
+        'utils.keyboard_shortcuts',
+        'utils.script_analyzer',
+        'services',
+        'services.base_service',
+        'services.llm_service',
+        'services.music_service',
+        'services.pdf_analysis_service',
+        'services.reaper_service',
+        'services.sfx_service',
+        'services.speech_service',
     ],
     hookspath=[],
     hooksconfig={},
@@ -100,7 +165,9 @@ app = BUNDLE(
         'CFBundleGetInfoString': 'Create AI-powered audio content',
         'NSHumanReadableCopyright': '© 2024 Matthias Hassel',
         'LSEnvironment': {
-            'PATH': '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
+            'PATH': '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+            'PYTHONPATH': '@executable_path/../Resources/lib/python3.8/site-packages:@executable_path/../Resources',
+            'TKINTERDND2_LIBRARY': '@executable_path/../Resources/tkinterdnd2',
         },
     }
 )

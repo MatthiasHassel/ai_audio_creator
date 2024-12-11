@@ -29,32 +29,74 @@ fi
 echo "📦 Installing system dependencies..."
 brew install portaudio create-dmg
 
+# Clean up any existing virtual environment
+echo "🧹 Cleaning up old environment..."
+rm -rf venv
+rm -rf build dist
+rm -f "AI Audio Creator.dmg"
+
 # Create and activate virtual environment
 echo "🔧 Creating virtual environment..."
 python3 -m venv venv
 source venv/bin/activate
 
-# Upgrade pip
-echo "⬆️  Upgrading pip..."
-pip install --upgrade pip
+# Upgrade pip and install wheel
+echo "⬆️  Upgrading pip and installing wheel..."
+pip install --upgrade pip wheel
 
 # Install Python dependencies
 echo "📚 Installing Python dependencies..."
 pip install -r requirements.txt
 
-# Clean previous builds
-echo "🧹 Cleaning previous builds..."
-rm -rf build dist
-rm -f "AI Audio Creator.dmg"
+# Verify critical dependencies
+echo "🔍 Verifying critical dependencies..."
+
+# Verify customtkinter
+echo "  • Checking customtkinter..."
+if ! python3 -c "import customtkinter" &> /dev/null; then
+    echo "❌ customtkinter not properly installed. Attempting to reinstall..."
+    pip uninstall -y customtkinter
+    pip install customtkinter
+    if ! python3 -c "import customtkinter" &> /dev/null; then
+        echo "❌ Failed to install customtkinter. Build cannot continue."
+        exit 1
+    fi
+fi
+
+# Verify tkinterdnd2
+echo "  • Checking tkinterdnd2..."
+if ! python3 -c "import tkinterdnd2" &> /dev/null; then
+    echo "❌ tkinterdnd2 not properly installed. Attempting to reinstall..."
+    pip uninstall -y tkinterdnd2
+    pip install tkinterdnd2
+    if ! python3 -c "import tkinterdnd2" &> /dev/null; then
+        echo "❌ Failed to install tkinterdnd2. Build cannot continue."
+        exit 1
+    fi
+fi
+
+# Verify the tkinterdnd2 library location
+TKINTERDND2_PATH=$(python3 -c "import tkinterdnd2; print(tkinterdnd2.__file__)")
+if [ -z "$TKINTERDND2_PATH" ]; then
+    echo "❌ Could not find tkinterdnd2 installation path"
+    exit 1
+fi
+echo "  ✓ tkinterdnd2 found at: $TKINTERDND2_PATH"
 
 # Build the application
 echo "🏗️  Building application..."
 python -m PyInstaller ai_audio_creator.spec
 
-# Check if the app was built successfully
+# Verify the build
 if [ ! -d "dist/AI Audio Creator.app" ]; then
     echo "❌ Failed to build the application"
     exit 1
+fi
+
+# Test the built application
+echo "🧪 Testing built application..."
+if ! "dist/AI Audio Creator.app/Contents/MacOS/AI Audio Creator" --version &> /dev/null; then
+    echo "⚠️  Warning: Built application may have issues. Proceeding with DMG creation anyway..."
 fi
 
 echo "📦 Creating DMG installer..."
@@ -78,9 +120,15 @@ echo "📝 Build artifacts:"
 echo "   • Application: dist/AI Audio Creator.app"
 echo "   • Installer: AI Audio Creator.dmg"
 echo ""
-echo "🎉 To install the application:"
-echo "1. Open 'AI Audio Creator.dmg'"
-echo "2. Drag 'AI Audio Creator.app' to your Applications folder"
-echo "3. Launch the app from Applications"
+echo "🎯 Next steps:"
+echo "1. Test the application by running:"
+echo "   open 'dist/AI Audio Creator.app'"
 echo ""
-echo "Note: On first launch, you'll need to enter your API keys in the configuration wizard."
+echo "2. If the application works correctly, distribute the DMG:"
+echo "   • Open 'AI Audio Creator.dmg'"
+echo "   • Drag 'AI Audio Creator.app' to your Applications folder"
+echo ""
+echo "If you encounter any issues:"
+echo "• Check the application logs in ~/Library/Logs/AI Audio Creator/"
+echo "• Run the app from terminal to see error output:"
+echo "  /Applications/AI\\ Audio\\ Creator.app/Contents/MacOS/AI\\ Audio\\ Creator"
