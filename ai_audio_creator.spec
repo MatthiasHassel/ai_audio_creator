@@ -15,7 +15,7 @@ ctk_path = os.path.dirname(customtkinter.__file__)
 # Get the absolute path to the src directory
 src_path = os.path.abspath('src')
 
-# Find tkinterdnd2 package paths
+# Find tkinterdnd2 package path
 site_packages = site.getsitepackages()
 tkinterdnd2_paths = []
 for site_package in site_packages:
@@ -30,19 +30,6 @@ ffprobe_path = shutil.which('ffprobe')
 if not ffmpeg_path or not ffprobe_path:
     raise Exception("ffmpeg and ffprobe must be installed. Run 'brew install ffmpeg' to install them.")
 
-# Create a temporary directory for ffmpeg binaries
-os.makedirs('temp_binaries', exist_ok=True)
-ffmpeg_temp = os.path.join('temp_binaries', 'ffmpeg')
-ffprobe_temp = os.path.join('temp_binaries', 'ffprobe')
-
-# Copy ffmpeg and ffprobe to temp directory
-shutil.copy2(ffmpeg_path, ffmpeg_temp)
-shutil.copy2(ffprobe_path, ffprobe_temp)
-
-# Make them executable
-os.chmod(ffmpeg_temp, 0o755)
-os.chmod(ffprobe_temp, 0o755)
-
 # Gather all necessary data files
 datas = [
     ('assets', 'assets'),
@@ -52,8 +39,9 @@ datas = [
     (os.path.join(ctk_path, 'assets'), 'customtkinter/assets'),
     # Add all Python modules from src directory
     ('src', 'src'),
-    # Add ffmpeg binaries to temp_binaries directory in Resources
-    ('temp_binaries', 'temp_binaries'),
+    # Add ffmpeg binaries to Resources directory
+    (ffmpeg_path, '.'),
+    (ffprobe_path, '.'),
 ]
 
 # Add tkinterdnd2 data files if found
@@ -188,8 +176,8 @@ app = BUNDLE(
         'CFBundleGetInfoString': 'Create AI-powered audio content',
         'NSHumanReadableCopyright': '© 2024 Matthias Hassel',
         'LSEnvironment': {
-            'PATH': '@executable_path/../Resources:@executable_path/../Resources/temp_binaries:@executable_path/../MacOS:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
-            'PYTHONPATH': '@executable_path/../Resources:@executable_path/../Resources/src',
+            'PATH': '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+            'PYTHONPATH': '@executable_path/../Resources/lib/python3.8/site-packages:@executable_path/../Resources',
             'TKINTERDND2_LIBRARY': '@executable_path/../Resources/tkinterdnd2',
         },
     }

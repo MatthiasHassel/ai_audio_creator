@@ -90,24 +90,9 @@ if [ -z "$TKINTERDND2_PATH" ]; then
 fi
 echo "  ✓ tkinterdnd2 found at: $TKINTERDND2_PATH"
 
-# Create temp_binaries directory and copy ffmpeg/ffprobe
-echo "📦 Preparing ffmpeg binaries..."
-mkdir -p temp_binaries
-FFMPEG_PATH=$(which ffmpeg)
-FFPROBE_PATH=$(which ffprobe)
-cp "$FFMPEG_PATH" temp_binaries/
-cp "$FFPROBE_PATH" temp_binaries/
-chmod +x temp_binaries/ffmpeg temp_binaries/ffprobe
-
 # Build the application
 echo "🏗️  Building application..."
 python -m PyInstaller ai_audio_creator.spec
-
-# Copy temp_binaries to Resources directory
-echo "📦 Copying ffmpeg binaries to app bundle..."
-mkdir -p "dist/AI Audio Creator.app/Contents/Resources/temp_binaries"
-cp temp_binaries/* "dist/AI Audio Creator.app/Contents/Resources/temp_binaries/"
-chmod +x "dist/AI Audio Creator.app/Contents/Resources/temp_binaries/"*
 
 # Verify the build
 if [ ! -d "dist/AI Audio Creator.app" ]; then
@@ -140,8 +125,8 @@ create-dmg \
   "$DMG_DIR" \
   || { echo "❌ Failed to create DMG"; exit 1; }
 
-# Clean up temporary directory and temp_binaries
-rm -rf "$DMG_DIR" temp_binaries
+# Clean up temporary directory
+rm -rf "$DMG_DIR"
 
 # Deactivate virtual environment
 deactivate
