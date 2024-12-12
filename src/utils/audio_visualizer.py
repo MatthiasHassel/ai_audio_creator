@@ -14,8 +14,8 @@ def get_ffmpeg_path():
     if getattr(sys, 'frozen', False):
         # Running in a bundle
         if sys.platform == 'darwin':  # macOS
-            # Get the path to the app bundle Resources directory
-            base_dir = os.path.join(os.path.dirname(os.path.dirname(sys.executable)), 'Resources')
+            # Get the path to the app bundle Frameworks directory
+            base_dir = os.path.join(os.path.dirname(os.path.dirname(sys.executable)), 'Frameworks')
         else:
             base_dir = os.path.dirname(sys.executable)
             
