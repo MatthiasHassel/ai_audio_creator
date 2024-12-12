@@ -29,11 +29,27 @@ fi
 echo "📦 Installing system dependencies..."
 brew install portaudio create-dmg ffmpeg
 
-# Clean up any existing virtual environment
+# Clean up any existing virtual environment and build artifacts
 echo "🧹 Cleaning up old environment..."
-rm -rf venv
-rm -rf build dist
-rm -f "AI Audio Creator.dmg"
+if [ -d "dist" ]; then
+    sudo rm -rf dist
+fi
+if [ -d "build" ]; then
+    sudo rm -rf build
+fi
+if [ -d "venv" ]; then
+    sudo rm -rf venv
+fi
+if [ -f "AI Audio Creator.dmg" ]; then
+    sudo rm -f "AI Audio Creator.dmg"
+fi
+
+# Clean PyInstaller cache
+echo "🧹 Cleaning PyInstaller cache..."
+CACHE_DIR="$HOME/Library/Application Support/pyinstaller"
+if [ -d "$CACHE_DIR" ]; then
+    sudo rm -rf "$CACHE_DIR"
+fi
 
 # Create and activate virtual environment
 echo "🔧 Creating virtual environment..."
@@ -109,7 +125,8 @@ fi
 # Create temporary directory for DMG contents
 echo "📦 Preparing DMG contents..."
 DMG_DIR=$(mktemp -d)
-cp -r "dist/AI Audio Creator.app" "$DMG_DIR/"
+sudo cp -r "dist/AI Audio Creator.app" "$DMG_DIR/"
+sudo chown -R $(whoami) "$DMG_DIR"
 
 # Create a DMG installer with custom icon
 echo "📦 Creating DMG installer..."
@@ -126,7 +143,7 @@ create-dmg \
   || { echo "❌ Failed to create DMG"; exit 1; }
 
 # Clean up temporary directory
-rm -rf "$DMG_DIR"
+sudo rm -rf "$DMG_DIR"
 
 # Deactivate virtual environment
 deactivate

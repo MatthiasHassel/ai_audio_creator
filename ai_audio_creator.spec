@@ -15,7 +15,7 @@ ctk_path = os.path.dirname(customtkinter.__file__)
 # Get the absolute path to the src directory
 src_path = os.path.abspath('src')
 
-# Find tkinterdnd2 package path
+# Find tkinterdnd2 package paths
 site_packages = site.getsitepackages()
 tkinterdnd2_paths = []
 for site_package in site_packages:
@@ -37,21 +37,22 @@ datas = [
     ('docs', 'docs'),
     # Add customtkinter theme files
     (os.path.join(ctk_path, 'assets'), 'customtkinter/assets'),
-    # Add all Python modules from src directory
-    ('src', 'src'),
-    # Add ffmpeg binaries to Resources directory
-    (ffmpeg_path, '.'),
-    (ffprobe_path, '.'),
 ]
 
 # Add tkinterdnd2 data files if found
 datas.extend(tkinterdnd2_paths)
 
+# Add ffmpeg binaries as binary files with specific filenames
+binaries = [
+    (ffmpeg_path, os.path.join('temp_binaries', 'ffmpeg')),
+    (ffprobe_path, os.path.join('temp_binaries', 'ffprobe')),
+]
+
 # Define the analysis configuration
 a = Analysis(
     ['src/main.py'],
     pathex=[src_path],  # Add src directory to Python path
-    binaries=[],
+    binaries=binaries,  # Use binaries list for ffmpeg
     datas=datas,
     hiddenimports=[
         'PySide6.QtCore',
@@ -102,6 +103,7 @@ a = Analysis(
         'utils.audio_visualizer',
         'utils.keyboard_shortcuts',
         'utils.script_analyzer',
+        'utils.ffmpeg_utils',  # Add ffmpeg_utils explicitly
         'services',
         'services.base_service',
         'services.llm_service',
@@ -176,8 +178,8 @@ app = BUNDLE(
         'CFBundleGetInfoString': 'Create AI-powered audio content',
         'NSHumanReadableCopyright': '© 2024 Matthias Hassel',
         'LSEnvironment': {
-            'PATH': '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
-            'PYTHONPATH': '@executable_path/../Resources/lib/python3.8/site-packages:@executable_path/../Resources',
+            'PATH': '@executable_path/../Resources:@executable_path/../Resources/temp_binaries:@executable_path/../MacOS:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+            'PYTHONPATH': '@executable_path/../Resources:@executable_path/../Resources/src',
             'TKINTERDND2_LIBRARY': '@executable_path/../Resources/tkinterdnd2',
         },
     }
