@@ -3,6 +3,7 @@ import yaml
 import os
 from pathlib import Path
 from dotenv import set_key
+from tkinter import filedialog
 
 class ConfigWizard(ctk.CTkToplevel):
     def __init__(self):
@@ -28,8 +29,9 @@ class ConfigWizard(ctk.CTkToplevel):
         # Create pages
         self.pages = [
             WelcomePage(self),
-            RequiredAPIConfigPage(self),
-            OptionalAPIConfigPage(self),
+            APIConfigPage(self),
+            LLMProviderPage(self),
+            StorageLocationPage(self),
             CompletionPage(self)
         ]
         
@@ -85,19 +87,15 @@ class ConfigWizard(ctk.CTkToplevel):
             config_dir = Path.home() / ".ai_audio_creator"
             config_dir.mkdir(exist_ok=True)
             
-            # Create base directory
-            projects_dir = Path.home() / "AI Audio Creator"
-            projects_dir.mkdir(parents=True, exist_ok=True)
-            
             # Get values from pages
-            required_page = self.pages[1]
-            optional_page = self.pages[2]
+            api_page = self.pages[1]
+            llm_page = self.pages[2]
+            storage_page = self.pages[3]
             
-            elevenlabs_key = required_page.elevenlabs_var.get()
-            openrouter_key = required_page.openrouter_var.get()
-            skip_optional = optional_page.skip_var.get()
-            openai_key = "" if skip_optional else optional_page.openai_var.get()
-            suno_cookie = "" if skip_optional else optional_page.suno_var.get()
+            elevenlabs_key = api_page.elevenlabs_var.get().strip()
+            openrouter_key = api_page.openrouter_var.get().strip()
+            openai_key = api_page.openai_var.get().strip()
+            suno_cookie = api_page.suno_var.get().strip()
             
             # Create or update .env file
             env_path = config_dir / ".env"
@@ -113,10 +111,10 @@ class ConfigWizard(ctk.CTkToplevel):
                     'openai_api_key': openai_key,
                     'openrouter_api_key': openrouter_key,
                     'suno_cookie': suno_cookie,
-                    'selected_model': 'openai'
+                    'selected_model': llm_page.selected_provider.get()
                 },
                 'projects': {
-                    'base_dir': str(projects_dir)
+                    'base_dir': storage_page.storage_path.get()
                 },
                 'logging': {
                     'level': 'INFO',
@@ -157,105 +155,172 @@ class WelcomePage(WizardPage):
         
         text = ctk.CTkLabel(
             self,
-            text="This wizard will help you set up the necessary API keys "
-                 "for the application to work properly.\n\n"
-                 "Required API Keys:\n"
-                 "- ElevenLabs (for text-to-speech)\n"
-                 "- OpenRouter (for AI text generation)\n\n"
-                 "Optional API Keys:\n"
-                 "- OpenAI (alternative for text generation)\n"
-                 "- Suno Cookie (for music generation)\n\n"
-                 "You can skip the optional API keys setup, but some features "
-                 "won't be available until you configure them in the preferences menu.\n\n"
+            text="This wizard will help you set up the AI Audio Creator.\n\n"
+                 "You'll be asked to configure:\n"
+                 "- API Keys (all optional, but required for specific features)\n"
+                 "- Default LLM Provider\n"
+                 "- Project Storage Location\n\n"
+                 "You can modify all settings later in the preferences menu.\n\n"
                  "Click Next to begin the setup process.",
             wraplength=500,
             justify="left"
         )
         text.pack(fill="both", expand=True)
 
-class RequiredAPIConfigPage(WizardPage):
+class APIConfigPage(WizardPage):
     def __init__(self, master):
         super().__init__(master)
         
-        title = ctk.CTkLabel(self, text="Required API Configuration", font=("", 20, "bold"))
+        title = ctk.CTkLabel(self, text="API Configuration", font=("", 20, "bold"))
         title.pack(pady=(0, 20))
         
+        # Create scrollable frame for the content
+        self.scrollable_frame = ctk.CTkScrollableFrame(self, width=500, height=300)
+        self.scrollable_frame.pack(fill="both", expand=True)
+        
+        warning = ctk.CTkLabel(
+            self.scrollable_frame,
+            text="⚠️ Warning: While all API keys are optional, they are necessary for the app to work properly:\n"
+                 "• ElevenLabs - Required for text-to-speech and text-to-sfx\n"
+                 "• OpenRouter/OpenAI - Required for AI text generation\n"
+                 "• Suno Cookie - Required for music generation",
+            wraplength=460,
+            justify="left",
+            text_color="orange"
+        )
+        warning.pack(pady=(0, 20))
+        
         info = ctk.CTkLabel(
-            self,
-            text="These API keys are required for the application to function properly.\n"
-                 "You can get them from:\n"
-                 "- ElevenLabs: https://elevenlabs.io\n"
-                 "- OpenRouter: https://openrouter.ai",
-            wraplength=500,
+            self.scrollable_frame,
+            text="You can get the API keys from:\n"
+                 "• ElevenLabs: https://elevenlabs.io\n"
+                 "• OpenRouter: https://openrouter.ai\n"
+                 "• OpenAI: https://platform.openai.com\n"
+                 "• Suno: https://suno.ai",
+            wraplength=460,
             justify="left"
         )
         info.pack(pady=(0, 20))
         
         # ElevenLabs
-        elevenlabs_label = ctk.CTkLabel(self, text="ElevenLabs API Key:")
+        elevenlabs_label = ctk.CTkLabel(self.scrollable_frame, text="ElevenLabs API Key:")
         elevenlabs_label.pack(anchor="w")
         self.elevenlabs_var = ctk.StringVar()
-        self.elevenlabs_entry = ctk.CTkEntry(self, show="*", width=400, textvariable=self.elevenlabs_var)
-        self.elevenlabs_entry.pack(pady=(0, 20))
+        self.elevenlabs_entry = ctk.CTkEntry(self.scrollable_frame, show="*", width=400, textvariable=self.elevenlabs_var)
+        self.elevenlabs_entry.pack(pady=(0, 10))
         
         # OpenRouter
-        openrouter_label = ctk.CTkLabel(self, text="OpenRouter API Key:")
+        openrouter_label = ctk.CTkLabel(self.scrollable_frame, text="OpenRouter API Key:")
         openrouter_label.pack(anchor="w")
         self.openrouter_var = ctk.StringVar()
-        self.openrouter_entry = ctk.CTkEntry(self, show="*", width=400, textvariable=self.openrouter_var)
-        self.openrouter_entry.pack()
-    
-    def validate(self):
-        if not self.elevenlabs_var.get().strip():
-            ctk.CTkMessagebox(title="Error", message="ElevenLabs API Key is required")
-            return False
-        if not self.openrouter_var.get().strip():
-            ctk.CTkMessagebox(title="Error", message="OpenRouter API Key is required")
-            return False
-        return True
+        self.openrouter_entry = ctk.CTkEntry(self.scrollable_frame, show="*", width=400, textvariable=self.openrouter_var)
+        self.openrouter_entry.pack(pady=(0, 10))
+        
+        # OpenAI
+        openai_label = ctk.CTkLabel(self.scrollable_frame, text="OpenAI API Key:")
+        openai_label.pack(anchor="w")
+        self.openai_var = ctk.StringVar()
+        self.openai_entry = ctk.CTkEntry(self.scrollable_frame, show="*", width=400, textvariable=self.openai_var)
+        self.openai_entry.pack(pady=(0, 10))
+        
+        # Suno
+        suno_label = ctk.CTkLabel(self.scrollable_frame, text="Suno Cookie:")
+        suno_label.pack(anchor="w")
+        self.suno_var = ctk.StringVar()
+        self.suno_entry = ctk.CTkEntry(self.scrollable_frame, show="*", width=400, textvariable=self.suno_var)
+        self.suno_entry.pack(pady=(0, 10))
 
-class OptionalAPIConfigPage(WizardPage):
+class LLMProviderPage(WizardPage):
     def __init__(self, master):
         super().__init__(master)
         
-        title = ctk.CTkLabel(self, text="Optional API Configuration", font=("", 20, "bold"))
+        title = ctk.CTkLabel(self, text="Default LLM Provider", font=("", 20, "bold"))
         title.pack(pady=(0, 20))
         
         info = ctk.CTkLabel(
             self,
-            text="These API keys are optional but enable additional features:\n"
-                 "- OpenAI API Key: Alternative for text generation\n"
-                 "- Suno Cookie: Required for music generation\n\n"
-                 "You can skip this step and configure these later in the preferences menu.",
+            text="Choose your default Large Language Model (LLM) provider.\n"
+                 "This will be used for AI text generation.\n\n"
+                 "Note: You need to have configured the corresponding API key.",
             wraplength=500,
             justify="left"
         )
         info.pack(pady=(0, 20))
         
-        # Skip checkbox
-        self.skip_var = ctk.BooleanVar()
-        skip_check = ctk.CTkCheckBox(self, text="Skip optional API configuration", 
-                                   variable=self.skip_var, command=self.toggle_inputs)
-        skip_check.pack(pady=(0, 20))
+        self.selected_provider = ctk.StringVar(value="openai")
         
-        # OpenAI
-        openai_label = ctk.CTkLabel(self, text="OpenAI API Key:")
-        openai_label.pack(anchor="w")
-        self.openai_var = ctk.StringVar()
-        self.openai_entry = ctk.CTkEntry(self, show="*", width=400, textvariable=self.openai_var)
-        self.openai_entry.pack(pady=(0, 20))
+        openai_radio = ctk.CTkRadioButton(
+            self, 
+            text="OpenAI (ChatGPT 4o mini)",
+            variable=self.selected_provider,
+            value="openai"
+        )
+        openai_radio.pack(pady=(0, 10), anchor="w")
         
-        # Suno
-        suno_label = ctk.CTkLabel(self, text="Suno Cookie:")
-        suno_label.pack(anchor="w")
-        self.suno_var = ctk.StringVar()
-        self.suno_entry = ctk.CTkEntry(self, show="*", width=400, textvariable=self.suno_var)
-        self.suno_entry.pack()
+        openrouter_radio = ctk.CTkRadioButton(
+            self,
+            text="OpenRouter (Llama 3, recommended and no costs)",
+            variable=self.selected_provider,
+            value="openrouter"
+        )
+        openrouter_radio.pack(anchor="w")
+
+class StorageLocationPage(WizardPage):
+    def __init__(self, master):
+        super().__init__(master)
+        
+        title = ctk.CTkLabel(self, text="Project Storage Location", font=("", 20, "bold"))
+        title.pack(pady=(0, 20))
+        
+        info = ctk.CTkLabel(
+            self,
+            text="Choose where your AI Audio Creator projects will be stored.\n"
+                 "This is where all your project files, audio files, and other assets will be saved.",
+            wraplength=500,
+            justify="left"
+        )
+        info.pack(pady=(0, 20))
+        
+        # Default path
+        default_path = str(Path.home() / "AI Audio Creator")
+        self.storage_path = ctk.StringVar(value=default_path)
+        
+        path_frame = ctk.CTkFrame(self)
+        path_frame.pack(fill="x", pady=(0, 20))
+        
+        self.path_entry = ctk.CTkEntry(
+            path_frame,
+            textvariable=self.storage_path,
+            width=350
+        )
+        self.path_entry.pack(side="left", padx=(0, 10))
+        
+        browse_button = ctk.CTkButton(
+            path_frame,
+            text="Browse",
+            command=self.browse_location
+        )
+        browse_button.pack(side="left")
     
-    def toggle_inputs(self):
-        state = "disabled" if self.skip_var.get() else "normal"
-        self.openai_entry.configure(state=state)
-        self.suno_entry.configure(state=state)
+    def browse_location(self):
+        path = filedialog.askdirectory(
+            initialdir=self.storage_path.get(),
+            title="Select Project Storage Location"
+        )
+        if path:
+            self.storage_path.set(path)
+    
+    def validate(self):
+        path = Path(self.storage_path.get())
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            return True
+        except Exception as e:
+            ctk.CTkMessagebox(
+                title="Error",
+                message=f"Failed to create storage directory: {str(e)}\nPlease choose a different location."
+            )
+            return False
 
 class CompletionPage(WizardPage):
     def __init__(self, master):
@@ -268,7 +333,7 @@ class CompletionPage(WizardPage):
             self,
             text="Configuration is complete!\n\n"
                  "The application will now start with your configuration.\n\n"
-                 "You can modify these settings later through the application's "
+                 "You can modify all settings later through the application's "
                  "preferences menu.",
             wraplength=500,
             justify="left"
