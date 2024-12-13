@@ -8,6 +8,8 @@ pydub==0.25.1
 pyaudio==0.2.13
 python-reapy==0.10.0
 numpy==1.24.3  # Downgraded from 2.0.1 for better compatibility
+sounddevice==0.4.6  # Added for audio recording/playback
+librosa==0.10.1  # Added for audio loading
 
 # AI
 openai==1.37.1

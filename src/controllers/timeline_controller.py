@@ -5,8 +5,8 @@ from tkinterdnd2 import DND_FILES
 import logging 
 from tkinter import messagebox, filedialog
 from pydub import AudioSegment
-import soundfile as sf
 import numpy as np
+import io
 from utils.file_utils import read_audio_prompt
 
 class TimelineController:
@@ -512,9 +512,32 @@ class TimelineController:
             if max_amplitude > 0:
                 final_mix = final_mix / max_amplitude
 
-            # Export as MP3
-            with sf.SoundFile(file_path, 'w', samplerate=sample_rate, channels=channels, format='mp3') as f:
-                f.write(final_mix)
+            # Convert to 16-bit PCM
+            audio_16bit = (final_mix * 32767).astype(np.int16)
+            
+            # Create WAV in memory using numpy
+            wav_buffer = io.BytesIO()
+            
+            # Write WAV header
+            wav_buffer.write(b'RIFF')
+            wav_buffer.write((36 + len(audio_16bit.tobytes())).to_bytes(4, 'little'))  # File size
+            wav_buffer.write(b'WAVE')
+            wav_buffer.write(b'fmt ')
+            wav_buffer.write((16).to_bytes(4, 'little'))  # Subchunk1Size
+            wav_buffer.write((1).to_bytes(2, 'little'))   # AudioFormat (PCM)
+            wav_buffer.write((channels).to_bytes(2, 'little'))  # NumChannels
+            wav_buffer.write((sample_rate).to_bytes(4, 'little'))  # SampleRate
+            wav_buffer.write((sample_rate * channels * 2).to_bytes(4, 'little'))  # ByteRate
+            wav_buffer.write((channels * 2).to_bytes(2, 'little'))  # BlockAlign
+            wav_buffer.write((16).to_bytes(2, 'little'))  # BitsPerSample
+            wav_buffer.write(b'data')
+            wav_buffer.write(len(audio_16bit.tobytes()).to_bytes(4, 'little'))  # Subchunk2Size
+            wav_buffer.write(audio_16bit.tobytes())
+            
+            # Convert to MP3 using pydub
+            wav_buffer.seek(0)
+            audio_segment = AudioSegment.from_wav(wav_buffer)
+            audio_segment.export(file_path, format='mp3')
 
             self.view.update_status(f"Audio exported successfully to {file_path}")
         except Exception as e:

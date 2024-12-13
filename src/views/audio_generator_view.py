@@ -6,12 +6,14 @@ from tkinter import messagebox
 from utils.audio_visualizer import AudioVisualizer
 from utils.audio_file_selector import AudioFileSelector
 import sounddevice as sd
-import soundfile as sf
 import numpy as np
 from tkinter import filedialog
 import os
 import threading
 import tempfile
+import librosa
+import io
+from pydub import AudioSegment
 
 
 class AudioGeneratorView(ctk.CTkFrame):
@@ -645,8 +647,11 @@ class AudioGeneratorView(ctk.CTkFrame):
 
     def stop_s2s_playhead_update(self):
         """Stop updating the s2s preview playhead"""
-        if hasattr(self, 's2s_update_id'):
-            self.after_cancel(self.s2s_update_id)
+        if hasattr(self, 's2s_update_id') and self.s2s_update_id is not None:
+            try:
+                self.after_cancel(self.s2s_update_id)
+            except ValueError:
+                pass  # Ignore if the id is no longer valid
             self.s2s_update_id = None
 
     def update_s2s_playhead(self):
@@ -658,7 +663,7 @@ class AudioGeneratorView(ctk.CTkFrame):
         else:
             self.stop_s2s_playhead_update()
             self.update_s2s_button_states(False)
-            
+
     def import_s2s_audio(self):
         """Import audio file for speech-to-speech conversion"""
         try:
@@ -677,11 +682,12 @@ class AudioGeneratorView(ctk.CTkFrame):
                 try:
                     # If it's an MP3 file, convert it to WAV
                     if file_path.lower().endswith('.mp3'):
-                        import soundfile as sf
-                        import librosa
-                        
-                        # Load the audio file
+                        # Load the audio file using librosa
                         y, sr = librosa.load(file_path, sr=44100)
+                        
+                        # Convert to stereo if mono
+                        if len(y.shape) == 1:
+                            y = np.column_stack((y, y))
                         
                         # Create a temporary WAV file
                         temp_wav = os.path.join(
@@ -689,8 +695,32 @@ class AudioGeneratorView(ctk.CTkFrame):
                             f"temp_{os.path.splitext(os.path.basename(file_path))[0]}.wav"
                         )
                         
-                        # Save as WAV
-                        sf.write(temp_wav, y, sr, format='WAV')
+                        # Convert to 16-bit PCM
+                        audio_16bit = (y * 32767).astype(np.int16)
+                        
+                        # Create WAV in memory
+                        wav_buffer = io.BytesIO()
+                        
+                        # Write WAV header
+                        wav_buffer.write(b'RIFF')
+                        wav_buffer.write((36 + len(audio_16bit.tobytes())).to_bytes(4, 'little'))
+                        wav_buffer.write(b'WAVE')
+                        wav_buffer.write(b'fmt ')
+                        wav_buffer.write((16).to_bytes(4, 'little'))
+                        wav_buffer.write((1).to_bytes(2, 'little'))
+                        wav_buffer.write((2).to_bytes(2, 'little'))  # 2 channels
+                        wav_buffer.write((sr).to_bytes(4, 'little'))
+                        wav_buffer.write((sr * 2 * 2).to_bytes(4, 'little'))
+                        wav_buffer.write((4).to_bytes(2, 'little'))
+                        wav_buffer.write((16).to_bytes(2, 'little'))
+                        wav_buffer.write(b'data')
+                        wav_buffer.write(len(audio_16bit.tobytes()).to_bytes(4, 'little'))
+                        wav_buffer.write(audio_16bit.tobytes())
+                        
+                        # Save WAV file
+                        wav_buffer.seek(0)
+                        with open(temp_wav, 'wb') as f:
+                            f.write(wav_buffer.getvalue())
                         
                         # Update the file path to use the WAV file
                         file_path = temp_wav
@@ -786,7 +816,32 @@ class AudioGeneratorView(ctk.CTkFrame):
                     # Convert mono to stereo by duplicating the channel
                     audio_data = np.column_stack((audio_data, audio_data))
                 
-                sf.write(self.temp_audio_file.name, audio_data, 44100)
+                # Convert to 16-bit PCM
+                audio_16bit = (audio_data * 32767).astype(np.int16)
+                
+                # Create WAV in memory
+                wav_buffer = io.BytesIO()
+                
+                # Write WAV header
+                wav_buffer.write(b'RIFF')
+                wav_buffer.write((36 + len(audio_16bit.tobytes())).to_bytes(4, 'little'))
+                wav_buffer.write(b'WAVE')
+                wav_buffer.write(b'fmt ')
+                wav_buffer.write((16).to_bytes(4, 'little'))
+                wav_buffer.write((1).to_bytes(2, 'little'))
+                wav_buffer.write((2).to_bytes(2, 'little'))  # 2 channels
+                wav_buffer.write((44100).to_bytes(4, 'little'))  # Sample rate
+                wav_buffer.write((44100 * 2 * 2).to_bytes(4, 'little'))
+                wav_buffer.write((4).to_bytes(2, 'little'))
+                wav_buffer.write((16).to_bytes(2, 'little'))
+                wav_buffer.write(b'data')
+                wav_buffer.write(len(audio_16bit.tobytes()).to_bytes(4, 'little'))
+                wav_buffer.write(audio_16bit.tobytes())
+                
+                # Save WAV file
+                wav_buffer.seek(0)
+                with open(self.temp_audio_file.name, 'wb') as f:
+                    f.write(wav_buffer.getvalue())
                 
                 # Update the controller
                 if self.controller:
