@@ -5,10 +5,11 @@ from models.script_editor_model import ScriptEditorModel
 from models.timeline_model import TimelineModel
 
 class MainModel:
-    def __init__(self):
-        self.audio_model = AudioGeneratorModel()
+    def __init__(self, config=None):
+        self.config = config or {}
+        self.audio_model = AudioGeneratorModel(config)
         self.script_editor_model = ScriptEditorModel()
-        self.timeline_model = TimelineModel()
+        self.timeline_model = TimelineModel(config)
 
     def get_audio_model(self):
         return self.audio_model
@@ -59,7 +60,8 @@ class MainModel:
         self.timeline_model.mark_as_saved()
 
     def play_timeline(self):
-        return self.timeline_model.play_timeline()
+        active_tracks = self.timeline_model.get_active_tracks()
+        return self.timeline_model.play_timeline(active_tracks)
 
     def stop_timeline(self):
         return self.timeline_model.stop_timeline()

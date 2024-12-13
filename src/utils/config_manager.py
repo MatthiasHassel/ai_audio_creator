@@ -49,7 +49,13 @@ def create_default_config():
             'min_duration': 0.5,
             'max_duration': 22.0
         },
-        'speech_gen': {}
+        'speech_gen': {},
+        'audio': {
+            'output_device_index': None,  # Will be set to system default
+            'input_device_index': None,   # Will be set to system default
+            'output_device_name': '',     # For display/persistence
+            'input_device_name': ''       # For display/persistence
+        }
     }
     return default_config
 

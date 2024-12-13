@@ -8,12 +8,12 @@ from pydub import AudioSegment
 from tkinter import messagebox
 
 class ProjectModel:
-    def __init__(self, base_projects_dir):
+    def __init__(self, base_projects_dir, config=None):
         self.base_projects_dir = base_projects_dir
         self.current_project = None
         self.metadata = {}
         self.default_project_name = "Default Project"
-        self.timeline_model = TimelineModel()  
+        self.timeline_model = TimelineModel(config)  # Pass config to TimelineModel
         self.saved_audio_files = set()
         self.new_audio_files = set()
         self.timeline_clips = set()

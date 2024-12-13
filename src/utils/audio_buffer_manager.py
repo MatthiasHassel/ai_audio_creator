@@ -17,6 +17,17 @@ class AudioBufferManager:
         self.max_errors = 3
         self.last_error_time = 0
         self.error_reset_interval = 5.0  # Reset error count after 5 seconds
+        
+        # Initialize PyAudio with configured devices
+        self.pa = pyaudio.PyAudio()
+        self.stream = None
+        
+        # Get device indices from config
+        config = self.timeline_model.config if hasattr(self.timeline_model, 'config') else {}
+        self.output_device_index = config.get('audio', {}).get('output_device_index', None)
+        self.input_device_index = config.get('audio', {}).get('input_device_index', None)
+        
+        logging.info(f"Initialized AudioBufferManager with output device index: {self.output_device_index}")
 
     def reset(self):
         """Reset buffer state without blocking"""
@@ -161,3 +172,52 @@ class AudioBufferManager:
                 
         except Exception as e:
             logging.error(f"Error updating playhead: {str(e)}")
+            
+    def start_playback(self):
+        """Start audio playback using the configured output device"""
+        try:
+            if self.stream is not None and self.stream.is_active():
+                self.stream.stop_stream()
+                self.stream.close()
+            
+            # Create new audio stream with configured output device
+            self.stream = self.pa.open(
+                format=pyaudio.paFloat32,
+                channels=2,
+                rate=self.timeline_model.sample_rate,
+                output=True,
+                output_device_index=self.output_device_index,
+                stream_callback=self.get_audio_data,
+                frames_per_buffer=self.buffer_size
+            )
+            
+            self.is_playing = True
+            self.stream.start_stream()
+            logging.info(f"Started playback with output device index: {self.output_device_index}")
+            
+        except Exception as e:
+            logging.error(f"Error starting playback: {str(e)}")
+            self.is_playing = False
+            
+    def stop_playback(self):
+        """Stop audio playback"""
+        try:
+            self.is_playing = False
+            if self.stream is not None:
+                self.stream.stop_stream()
+                self.stream.close()
+                self.stream = None
+            
+        except Exception as e:
+            logging.error(f"Error stopping playback: {str(e)}")
+            
+    def __del__(self):
+        """Clean up PyAudio resources"""
+        try:
+            if self.stream is not None:
+                self.stream.stop_stream()
+                self.stream.close()
+            if self.pa is not None:
+                self.pa.terminate()
+        except Exception as e:
+            logging.error(f"Error cleaning up AudioBufferManager: {str(e)}")

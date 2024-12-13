@@ -8,7 +8,7 @@ from utils.audio_clip import AudioClip
 from utils.audio_buffer_manager import AudioBufferManager
 
 class TimelineModel:
-    def __init__(self):
+    def __init__(self, config=None):
         self.tracks = []
         self.is_playing = False
         self.playhead_position = 0
@@ -25,6 +25,7 @@ class TimelineModel:
         self.channels = 2
         self.max_playhead_position = 1800
         self.quantization_interval = 1 / 44100
+        self.config = config or {}
 
         self.undo_stack = []
         self.redo_stack = []
@@ -33,39 +34,21 @@ class TimelineModel:
         # Initialize PyAudio
         try:
             self.audio = pyaudio.PyAudio()
-            # Find best output device
-            self.device_index = self._find_best_output_device()
+            # Use configured output device if available
+            self.device_index = self.config.get('audio', {}).get('output_device_index')
+            if self.device_index is None:
+                # Fall back to default device if no configuration
+                default_device = self.audio.get_default_output_device_info()
+                self.device_index = default_device['index']
+            
             logging.info(f"Using audio device index: {self.device_index}")
             
-            # Initialize buffer manager
+            # Initialize buffer manager with config
             self.buffer_manager = AudioBufferManager(self, buffer_size=2048)
             
         except Exception as e:
             logging.error(f"Error initializing audio: {str(e)}")
             raise
-
-    def _find_best_output_device(self):
-        """Find the best available output device"""
-        try:
-            default_device = self.audio.get_default_output_device_info()
-            logging.info(f"Default output device: {default_device['name']}")
-            return default_device['index']
-        except Exception as e:
-            logging.warning(f"Could not get default device: {e}")
-            
-            # Try to find a suitable device
-            for i in range(self.audio.get_device_count()):
-                try:
-                    device_info = self.audio.get_device_info_by_index(i)
-                    if device_info['maxOutputChannels'] >= 2:
-                        logging.info(f"Using alternative device: {device_info['name']}")
-                        return i
-                except:
-                    continue
-            
-            # If no suitable device found, use system default (index 0)
-            logging.warning("No suitable audio device found, using system default")
-            return 0
 
     def add_state_change_callback(self, callback):
         self.state_change_callbacks.append(callback)
@@ -141,7 +124,7 @@ class TimelineModel:
                 )
                 
                 self.audio_stream.start_stream()
-                logging.info("Audio stream started successfully")
+                logging.info(f"Audio stream started successfully with device index: {self.device_index}")
                 
             except Exception as e:
                 logging.error(f"Failed to open audio stream: {e}")

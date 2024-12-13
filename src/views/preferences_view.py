@@ -7,6 +7,7 @@ import yaml
 import logging
 from pathlib import Path
 from utils.config_manager import get_config_dir, get_base_dir
+from utils.audio_devices import get_audio_devices, find_device_by_name
 
 class PreferencesWindow(ctk.CTkToplevel):
     def __init__(self, master, config):
@@ -32,6 +33,13 @@ class PreferencesWindow(ctk.CTkToplevel):
         self.sfx_prompt_var = ctk.StringVar(value=self.prompts_config.get('sfx_improvement', ''))
         self.music_prompt_var = ctk.StringVar(value=self.prompts_config.get('music_improvement', ''))
         self.script_analysis_pre_var = ctk.StringVar(value=self.prompts_config.get('script_analysis_pre', ''))
+        
+        # Initialize audio device variables
+        self.selected_output_device = ctk.StringVar()
+        self.selected_input_device = ctk.StringVar()
+        
+        # Get available audio devices
+        self.input_devices, self.output_devices = get_audio_devices()
         
         self.title("Preferences")
         self.geometry("700x500")  # Made taller to accommodate new tab
@@ -69,6 +77,10 @@ class PreferencesWindow(ctk.CTkToplevel):
         storage_tab = self.notebook.add("Storage")
         self.create_storage_tab(storage_tab)
         
+        # Audio tab
+        audio_tab = self.notebook.add("Audio")
+        self.create_audio_tab(audio_tab)
+        
         # Buttons
         button_frame = ctk.CTkFrame(main_frame)
         button_frame.pack(fill="x", pady=(20, 0))
@@ -78,6 +90,52 @@ class PreferencesWindow(ctk.CTkToplevel):
         
         cancel_button = ctk.CTkButton(button_frame, text="Cancel", command=self.destroy)
         cancel_button.pack(side="right", padx=5)
+
+    def create_audio_tab(self, parent):
+        """Create the Audio tab content."""
+        frame = ctk.CTkFrame(parent)
+        frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Description
+        description = ctk.CTkLabel(
+            frame,
+            text="Select audio input and output devices:",
+            wraplength=600
+        )
+        description.pack(pady=(10, 20), padx=10)
+        
+        # Output device selection
+        output_label = ctk.CTkLabel(frame, text="Output Device:")
+        output_label.pack(pady=(5, 0), padx=10, anchor="w")
+        
+        output_menu = ctk.CTkOptionMenu(
+            frame,
+            variable=self.selected_output_device,
+            values=[device['name'] for device in self.output_devices] or ["No devices found"],
+            width=400
+        )
+        output_menu.pack(pady=(5, 15), padx=10)
+        
+        # Input device selection
+        input_label = ctk.CTkLabel(frame, text="Input Device:")
+        input_label.pack(pady=(5, 0), padx=10, anchor="w")
+        
+        input_menu = ctk.CTkOptionMenu(
+            frame,
+            variable=self.selected_input_device,
+            values=[device['name'] for device in self.input_devices] or ["No devices found"],
+            width=400
+        )
+        input_menu.pack(pady=(5, 15), padx=10)
+        
+        # Note about changes
+        note = ctk.CTkLabel(
+            frame,
+            text="Note: Changes to audio devices will take effect after restarting the application.",
+            wraplength=600,
+            text_color="gray60"
+        )
+        note.pack(pady=10, padx=10)
 
     def create_api_tab(self, parent):
         """Create the API Keys tab content."""
@@ -432,9 +490,26 @@ class PreferencesWindow(ctk.CTkToplevel):
             self.projects_dir.set(self.config['projects'].get('base_dir', 
                 os.path.join(str(Path.home()), 'AI Audio Creator Projects')))
             
+            # Load audio device selections
+            if self.output_devices:
+                current_output = self.config.get('audio', {}).get('output_device_name', '')
+                if current_output and current_output in [d['name'] for d in self.output_devices]:
+                    self.selected_output_device.set(current_output)
+                else:
+                    self.selected_output_device.set(self.output_devices[0]['name'])
+            
+            if self.input_devices:
+                current_input = self.config.get('audio', {}).get('input_device_name', '')
+                if current_input and current_input in [d['name'] for d in self.input_devices]:
+                    self.selected_input_device.set(current_input)
+                else:
+                    self.selected_input_device.set(self.input_devices[0]['name'])
+            
             # Log loaded values for debugging
             logging.info(f"Loaded preferences - Model: {model}")
             logging.info(f"Projects directory: {self.projects_dir.get()}")
+            logging.info(f"Selected output device: {self.selected_output_device.get()}")
+            logging.info(f"Selected input device: {self.selected_input_device.get()}")
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load preferences: {str(e)}")
@@ -488,6 +563,17 @@ class PreferencesWindow(ctk.CTkToplevel):
             self.config['api']['suno_cookie'] = self.api_vars['suno_cookie'].get().strip()
             self.config['projects']['base_dir'] = self.projects_dir.get()
             
+            # Update audio device settings
+            output_device = find_device_by_name(self.output_devices, self.selected_output_device.get())
+            input_device = find_device_by_name(self.input_devices, self.selected_input_device.get())
+            
+            self.config['audio'] = {
+                'output_device_index': output_device['index'] if output_device else None,
+                'input_device_index': input_device['index'] if input_device else None,
+                'output_device_name': self.selected_output_device.get(),
+                'input_device_name': self.selected_input_device.get()
+            }
+            
             # Save updated config
             with open(config_file, 'w') as f:
                 yaml.dump(self.config, f, default_flow_style=False)
@@ -499,7 +585,7 @@ class PreferencesWindow(ctk.CTkToplevel):
             os.makedirs(os.path.join(self.projects_dir.get(), 'Speech'), exist_ok=True)
             
             logging.info("Preferences saved successfully")
-            messagebox.showinfo("Success", "Settings saved successfully!")
+            messagebox.showinfo("Success", "Settings saved successfully! Please restart the application for audio device changes to take effect.")
             self.destroy()
             
         except Exception as e:

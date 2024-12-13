@@ -203,9 +203,9 @@ def main():
         # Update logging configuration from loaded config
         update_logging_from_config(config)
         
-        # Create main components
-        main_model = MainModel()
-        project_model = ProjectModel(config['projects']['base_dir'])
+        # Create main components with config
+        main_model = MainModel(config)
+        project_model = ProjectModel(config['projects']['base_dir'], config)  # Fixed: Pass base_dir and config
         view = MainView(root, config, project_model)
         controller = MainController(main_model, view, config, project_model)
 
