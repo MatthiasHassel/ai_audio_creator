@@ -9,7 +9,6 @@ from pydub import AudioSegment
 from utils.audio_clip import AudioClip
 from utils.audio_buffer_manager import AudioBufferManager
 
-
 class TimelineModel:
     def __init__(self):
         self.tracks = []
@@ -34,7 +33,23 @@ class TimelineModel:
         self.redo_stack = []
         self.is_modified = False
 
-        self.buffer_manager = AudioBufferManager(self, buffer_size=2048)
+        # Initialize sounddevice settings
+        try:
+            # Get default device info
+            device_info = sd.query_devices(kind='output')
+            logging.info(f"Using audio device: {device_info['name']}")
+            
+            # Set default device settings
+            sd.default.samplerate = self.sample_rate
+            sd.default.channels = self.channels
+            sd.default.dtype = np.float32
+            
+            # Initialize buffer manager
+            self.buffer_manager = AudioBufferManager(self, buffer_size=2048)
+            
+        except Exception as e:
+            logging.error(f"Error initializing audio device: {str(e)}")
+            raise
 
     def add_state_change_callback(self, callback):
         self.state_change_callbacks.append(callback)
@@ -82,15 +97,53 @@ class TimelineModel:
                     raise sd.CallbackStop
 
             logging.info("Creating audio stream...")
-            self.audio_stream = sd.OutputStream(
-                samplerate=self.sample_rate,
-                channels=2,
-                callback=audio_callback,
-                blocksize=2048,
-                finished_callback=self.on_stream_finished
-            )
+            
+            # Get list of available output devices
+            devices = sd.query_devices()
+            default_device = sd.default.device[1]  # Get default output device
+            
+            # Log available devices for debugging
+            logging.info("Available audio devices:")
+            for i, dev in enumerate(devices):
+                logging.info(f"Device {i}: {dev['name']} (Max channels: {dev['max_output_channels']})")
+            
+            try:
+                # Try to use default device first
+                self.audio_stream = sd.OutputStream(
+                    device=default_device,
+                    samplerate=self.sample_rate,
+                    channels=2,
+                    callback=audio_callback,
+                    blocksize=2048,
+                    finished_callback=self.on_stream_finished
+                )
+            except sd.PortAudioError as e:
+                logging.error(f"Failed to open default device: {e}")
+                
+                # Try other available devices
+                for i, dev in enumerate(devices):
+                    if dev['max_output_channels'] >= 2:  # Need at least 2 channels for stereo
+                        try:
+                            logging.info(f"Trying device {i}: {dev['name']}")
+                            self.audio_stream = sd.OutputStream(
+                                device=i,
+                                samplerate=self.sample_rate,
+                                channels=2,
+                                callback=audio_callback,
+                                blocksize=2048,
+                                finished_callback=self.on_stream_finished
+                            )
+                            logging.info(f"Successfully opened device {dev['name']}")
+                            break
+                        except sd.PortAudioError:
+                            continue
+                
+                if self.audio_stream is None:
+                    raise Exception("No suitable audio output device found")
+            
             self.audio_stream.start()
             logging.info("Audio stream started successfully")
+            
         except Exception as e:
             logging.error(f"Error starting playback: {str(e)}", exc_info=True)
             self._safe_cleanup()
@@ -123,17 +176,16 @@ class TimelineModel:
         """Cleanup audio stream in a separate thread"""
         try:
             # Stop and close the audio stream
-            if self.audio_stream is not None:  # Check if stream exists
+            if self.audio_stream is not None:
                 logging.info("Stopping audio stream...")
                 try:
-                    if hasattr(self.audio_stream, 'active') and self.audio_stream.active:
-                         self.audio_stream.stop()
-                    if hasattr(self.audio_stream, 'close'):  # Check if close method exists
-                        self.audio_stream.close()
+                    if self.audio_stream.active:
+                        self.audio_stream.stop()
+                    self.audio_stream.close()
                 except Exception as e:
                     logging.error(f"Error stopping audio stream: {str(e)}")
                 finally:
-                     self.audio_stream = None
+                    self.audio_stream = None
 
             with self.state_lock:
                 self.is_stopping = False

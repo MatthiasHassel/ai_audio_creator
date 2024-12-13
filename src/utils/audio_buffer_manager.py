@@ -14,6 +14,8 @@ class AudioBufferManager:
         self.is_playing = False
         self.error_count = 0
         self.max_errors = 3
+        self.last_error_time = 0
+        self.error_reset_interval = 5.0  # Reset error count after 5 seconds
 
     def reset(self):
         """Reset buffer state without blocking"""
@@ -27,6 +29,7 @@ class AudioBufferManager:
                 self.playhead_position = 0
                 self.buffer_position = 0
                 self.error_count = 0
+                self.last_error_time = 0
                 
         except Exception as e:
             logging.error(f"Error in buffer reset: {str(e)}")
@@ -38,32 +41,52 @@ class AudioBufferManager:
             if not self.is_playing:
                 return (np.zeros((frame_count, 2), dtype=np.float32), pyaudio.paComplete)
 
-            with self.buffer_lock:
-                # Check if we need more data
-                if self.buffer_position + frame_count > self.current_buffer.shape[0]:
-                    # Prepare new data
-                    self._fill_buffer()
-                    self.buffer_position = 0
+            # Create output buffer
+            output_buffer = np.zeros((frame_count, 2), dtype=np.float32)
+            
+            try:
+                with self.buffer_lock:
+                    # Check if we need more data
+                    if self.buffer_position + frame_count > self.current_buffer.shape[0]:
+                        # Prepare new data
+                        self._fill_buffer()
+                        self.buffer_position = 0
 
-                # Get data and advance position
-                data = self.current_buffer[self.buffer_position:self.buffer_position + frame_count].copy()
-                self.buffer_position += frame_count
-                self.playhead_position += frame_count / self.timeline_model.sample_rate
-                self.error_count = 0
+                    # Get data and advance position
+                    data = self.current_buffer[self.buffer_position:self.buffer_position + frame_count]
+                    self.buffer_position += frame_count
+                    self.playhead_position += frame_count / self.timeline_model.sample_rate
+                    
+                    # Copy data to output buffer
+                    output_buffer[:len(data)] = data
 
-            return (data, pyaudio.paContinue)
+                self.error_count = 0  # Reset error count on successful operation
+                return (output_buffer, pyaudio.paContinue)
+
+            except Exception as e:
+                import time
+                current_time = time.time()
+                
+                # Reset error count if enough time has passed
+                if current_time - self.last_error_time > self.error_reset_interval:
+                    self.error_count = 0
+                
+                self.error_count += 1
+                self.last_error_time = current_time
+                
+                logging.error(f"Error in get_audio_data: {str(e)}")
+                
+                if self.error_count >= self.max_errors:
+                    logging.error("Too many consecutive errors, stopping playback")
+                    self.is_playing = False
+                    return (output_buffer, pyaudio.paComplete)
+                
+                # Return silence but keep playing
+                return (output_buffer, pyaudio.paContinue)
 
         except Exception as e:
-            logging.error(f"Error in get_audio_data: {str(e)}")
-            self.error_count += 1
-            
-            if self.error_count >= self.max_errors:
-                logging.error("Too many consecutive errors, stopping playback")
-                self.is_playing = False
-                return (np.zeros((frame_count, 2), dtype=np.float32), pyaudio.paComplete)
-            
-            # Return silence but keep playing
-            return (np.zeros((frame_count, 2), dtype=np.float32), pyaudio.paContinue)
+            logging.error(f"Critical error in get_audio_data: {str(e)}")
+            return (np.zeros((frame_count, 2), dtype=np.float32), pyaudio.paComplete)
 
     def _fill_buffer(self):
         """Fill the current buffer with new audio data"""
@@ -110,7 +133,7 @@ class AudioBufferManager:
                             logging.error(f"Error processing clip {clip.file_path}: {str(e)}")
                             continue
 
-            # Normalize if needed
+            # Normalize if needed (prevent clipping)
             max_amplitude = np.max(np.abs(new_buffer))
             if max_amplitude > 1.0:
                 new_buffer = new_buffer / max_amplitude
@@ -134,6 +157,7 @@ class AudioBufferManager:
                 self.playhead_position = position
                 self.buffer_position = 0
                 self.error_count = 0
+                self.last_error_time = 0
                 
         except Exception as e:
             logging.error(f"Error updating playhead: {str(e)}")
