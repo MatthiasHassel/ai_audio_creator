@@ -97,195 +97,51 @@ class AudioGeneratorView(ctk.CTkFrame):
         # Create progress and status bar
         self.create_progress_and_status_bar(self.main_content)
 
-    def create_input_field(self, parent):
-        input_frame = ctk.CTkFrame(parent)
-        input_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
-        input_frame.grid_columnconfigure(0, weight=1)
-        input_frame.grid_rowconfigure(1, weight=1)
-
-        # Create a header frame for label and checkbox
-        header_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
-        header_frame.grid(row=0, column=0, sticky="ew", pady=(0, 5))
-        header_frame.grid_columnconfigure(1, weight=1)  # Make space between label and checkbox
-
-        # Input label
-        self.input_label = ctk.CTkLabel(header_frame, text="Enter your text:")
-        self.input_label.grid(row=0, column=0, sticky="w")
-
-        # S2S checkbox (only visible in speech tab)
-        self.use_s2s = ctk.BooleanVar(value=False)
-        self.s2s_checkbox = ctk.CTkCheckBox(header_frame, text="Use Speech-to-Speech Mode", 
-                                        variable=self.use_s2s,
-                                        command=self.toggle_s2s_mode)
-        self.s2s_checkbox.grid(row=0, column=1, sticky="e")
-        self.s2s_checkbox.grid_remove()  # Initially hidden
-
-        # Create container for input methods
-        self.input_container = ctk.CTkFrame(input_frame, fg_color="transparent")
-        self.input_container.grid(row=1, column=0, sticky="nsew")
-        self.input_container.grid_columnconfigure(0, weight=1)
-        self.input_container.grid_rowconfigure(0, weight=1)
-
-        # Text input
-        self.user_input = ctk.CTkTextbox(self.input_container, height=100)
-        self.user_input.grid(row=0, column=0, sticky="nsew")
-
-        # S2S controls (initially hidden)
-        self.s2s_controls = ctk.CTkFrame(self.input_container)
-        self.create_s2s_controls(self.s2s_controls)
-        return input_frame
-
-    def create_s2s_controls(self, parent):
-        """Create the S2S control buttons"""
-        parent.grid_columnconfigure(2, weight=1)  # Make space for status label
-
-        # Record button
-        self.is_recording = False
-        self.record_button = ctk.CTkButton(
-            parent, 
-            text="Start Recording",
-            command=self.toggle_recording
-        )
-        self.record_button.grid(row=0, column=0, padx=5, pady=10)
-
-        # Import button
-        self.import_button = ctk.CTkButton(
-            parent,
-            text="Import Audio File",
-            command=self.import_s2s_audio
-        )
-        self.import_button.grid(row=0, column=1, padx=5, pady=10)
-
-        # Add level meter canvas
-        self.level_meter = ctk.CTkCanvas(parent, width=150, height=20, bg='gray20', highlightthickness=0)
-        self.level_meter.grid(row=0, column=2, padx=(5, 10))
-        self.level_bar = self.level_meter.create_rectangle(0, 0, 0, 20, fill='#00ff00')
-
-        # Status label
-        self.s2s_status_label = ctk.CTkLabel(parent, text="")
-        self.s2s_status_label.grid(row=0, column=3, padx=(20, 5), sticky="w")
-
-        # Preview frame
-        self.s2s_preview_frame = ctk.CTkFrame(parent)
-        self.s2s_preview_frame.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=5, pady=5)
-        self.s2s_preview_frame.grid_columnconfigure(0, weight=1)
-        self.s2s_preview_frame.grid_rowconfigure(0, weight=1)
-        
-        # Create audio visualizer for the preview
-        visualizer_frame = ctk.CTkFrame(self.s2s_preview_frame)
-        visualizer_frame.grid(row=0, column=0, sticky="nsew", pady=5)
-        visualizer_frame.grid_columnconfigure(0, weight=1)
-        visualizer_frame.grid_rowconfigure(0, weight=1)
-        
-        self.s2s_visualizer = AudioVisualizer(visualizer_frame)
-        self.s2s_visualizer.grid(row=0, column=0, sticky="nsew")
-        
-        # Add play controls for the recorded/imported audio
-        self.preview_controls = ctk.CTkFrame(self.s2s_preview_frame)
-        self.preview_controls.grid(row=1, column=0, sticky="ew", pady=5)
-        self.preview_controls.grid_columnconfigure(2, weight=1)
-        
-        self.preview_play_button = ctk.CTkButton(
-            self.preview_controls, 
-            text="Play", 
-            width=60,
-            command=self.play_preview_recording
-        )
-        self.preview_play_button.grid(row=0, column=0, padx=5)
-        
-        self.preview_stop_button = ctk.CTkButton(
-            self.preview_controls, 
-            text="Stop", 
-            width=60,
-            command=self.stop_preview_recording
-        )
-        self.preview_stop_button.grid(row=0, column=1, padx=5)
-        
-        # Initially hide preview frame and disable buttons
-        self.s2s_preview_frame.grid_remove()
-        self.preview_play_button.configure(state="disabled")
-        self.preview_stop_button.configure(state="disabled")
-
-    def play_preview_recording(self):
-        """Play the recorded preview and start updating playhead"""
-        if self.controller:
-            self.controller.play_s2s_preview()
-            self.preview_play_button.configure(state="disabled")
-            self.preview_stop_button.configure(state="normal")
-            self.start_preview_playhead_update()
-
-    def stop_preview_recording(self):
-        """Stop the preview playback and reset playhead"""
-        if self.controller:
-            self.controller.stop_s2s_preview()
-            self.preview_play_button.configure(state="normal")
-            self.preview_stop_button.configure(state="disabled")
-            self.stop_preview_playhead_update()
-            self.s2s_visualizer.update_playhead(0)
-
-    def start_preview_playhead_update(self):
-        """Start updating the playhead position during preview playback"""
-        self.update_preview_playhead()
-
-    def stop_preview_playhead_update(self):
-        """Stop updating the playhead"""
-        if hasattr(self, 'preview_update_id'):
-            self.after_cancel(self.preview_update_id)
-            self.preview_update_id = None
-
-    def update_preview_playhead(self):
-        """Update the preview playhead position"""
-        if hasattr(self, 'controller') and hasattr(self.controller.model, 'preview_channel'):
-            if self.controller.model.preview_channel and self.controller.model.preview_channel.get_busy():
-                position = time.time() - self.controller.model.start_time
-                self.s2s_visualizer.update_playhead(position)
-                self.preview_update_id = self.after(50, self.update_preview_playhead)
-            else:
-                # Playback finished
-                self.stop_preview_recording()
-
-    def toggle_s2s_mode(self):
-        """Switch between text input and Speech-to-Speech modes"""
-        if self.use_s2s.get():
-            self.user_input.grid_remove()
-            self.s2s_controls.grid(row=0, column=0, sticky="ew")
-            self.input_label.configure(text="Reference Audio:")
-            # Clear output text when switching to S2S mode
-            self.output_text.configure(state="normal")
-            self.output_text.delete("1.0", "end")
-            self.output_text.configure(state="disabled")
-        else:
-            self.s2s_controls.grid_remove()
-            self.user_input.grid(row=0, column=0, sticky="nsew")
-            self.input_label.configure(text="Enter your text:")
-            self.output_text.configure(state="normal")
-            self.output_text.delete("1.0", "end")
-            self.output_text.configure(state="disabled")
-
     def create_action_buttons(self, parent):
+        """Create the action buttons (Generate, Clear, Improve Prompt)"""
         action_frame = ctk.CTkFrame(parent)
         action_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         action_frame.grid_columnconfigure(3, weight=1)
 
+        # Generate button
         self.generate_button = ctk.CTkButton(action_frame, text="Generate")
         self.generate_button.grid(row=0, column=0, padx=(0, 5))
 
+        # Clear button
         self.clear_button = ctk.CTkButton(action_frame, text="Clear")
         self.clear_button.grid(row=0, column=1, padx=5)
 
+        # LLM button (Improve Prompt)
         self.llm_button = ctk.CTkButton(action_frame, text="Improve Prompt")
         self.llm_button.grid(row=0, column=2, padx=5)
 
-    def create_tab_specific_options(self, parent):
-        self.tab_widgets = {
-            'Music': self.create_music_widgets(parent),
-            'SFX': self.create_sfx_widgets(parent),
-            'Speech': self.create_speech_widgets(parent)
-        }
-        self.current_tab_widget = self.tab_widgets['Music']
-        self.current_tab_widget.grid(row=2, column=0, sticky="ew", pady=(0, 10))
+    def create_audio_controls(self, parent):
+        """Create the audio playback controls"""
+        control_frame = ctk.CTkFrame(parent)
+        control_frame.grid(row=7, column=0, sticky="ew", pady=(0, 10))
+
+        # Play button
+        self.play_button = ctk.CTkButton(control_frame, text="Play", state="disabled", width=60)
+        self.play_button.grid(row=0, column=0, padx=(0, 2))
+
+        # Stop button
+        self.stop_button = ctk.CTkButton(control_frame, text="Stop", state="disabled", width=60)
+        self.stop_button.grid(row=0, column=1, padx=2)
+
+        # Restart button
+        self.restart_button = ctk.CTkButton(control_frame, text="Restart", state="disabled", width=60)
+        self.restart_button.grid(row=0, column=2, padx=2)
+
+        # Add to Timeline button
+        self.add_to_timeline_button = ctk.CTkButton(control_frame, text="Add to Timeline", state="disabled", width=120)
+        self.add_to_timeline_button.grid(row=0, column=3, padx=2)
+
+        # Add to Reaper button
+        self.add_to_reaper_button = ctk.CTkButton(control_frame, text="Add to Reaper", state="disabled", width=120)
+        self.add_to_reaper_button.grid(row=0, column=4, padx=2)
 
     def create_output_display(self, parent):
+        """Create the output display area"""
         output_frame = ctk.CTkFrame(parent)
         output_frame.grid(row=3, column=0, sticky="nsew", pady=(0, 10))
         output_frame.grid_columnconfigure(0, weight=1)
@@ -296,14 +152,17 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.output_text.grid(row=1, column=0, sticky="nsew")
 
     def create_separator(self, parent):
+        """Create a visual separator"""
         separator = ctk.CTkFrame(parent, height=2, fg_color="gray")
         separator.grid(row=4, column=0, sticky="ew", pady=(0, 10))
 
     def create_audio_file_selector(self, parent):
+        """Create the audio file selector"""
         self.audio_file_selector = AudioFileSelector(parent, self.config, self.project_model)
         self.audio_file_selector.grid(row=5, column=0, sticky="ew", pady=(0, 10))
 
     def create_audio_visualizer(self, parent):
+        """Create the audio visualizer"""
         visualizer_frame = ctk.CTkFrame(parent)
         visualizer_frame.grid(row=6, column=0, sticky="nsew", pady=(0, 10))
         visualizer_frame.grid_rowconfigure(0, weight=1)
@@ -313,26 +172,8 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.audio_visualizer.grid(row=0, column=0, sticky="nsew")
         parent.grid_rowconfigure(6, weight=1)  # Make the visualizer expandable
 
-    def create_audio_controls(self, parent):
-        control_frame = ctk.CTkFrame(parent)
-        control_frame.grid(row=7, column=0, sticky="ew", pady=(0, 10))
-
-        self.play_button = ctk.CTkButton(control_frame, text="Play", state="disabled", width=60)
-        self.play_button.grid(row=0, column=0, padx=(0, 2))
-
-        self.stop_button = ctk.CTkButton(control_frame, text="Stop", state="disabled", width=60)
-        self.stop_button.grid(row=0, column=1, padx=2)
-
-        self.restart_button = ctk.CTkButton(control_frame, text="Restart", state="disabled", width=60)
-        self.restart_button.grid(row=0, column=2, padx=2)
-
-        self.add_to_timeline_button = ctk.CTkButton(control_frame, text="Add to Timeline", state="disabled", width=120)
-        self.add_to_timeline_button.grid(row=0, column=3, padx=2)
-
-        self.add_to_reaper_button = ctk.CTkButton(control_frame, text="Add to Reaper", state="disabled", width=120)
-        self.add_to_reaper_button.grid(row=0, column=4, padx=2)
-
     def create_progress_and_status_bar(self, parent):
+        """Create the progress and status bar"""
         progress_status_frame = ctk.CTkFrame(parent)
         progress_status_frame.grid(row=8, column=0, sticky="ew")
         progress_status_frame.grid_columnconfigure(0, weight=1)
@@ -347,7 +188,18 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.status_bar = ctk.CTkLabel(progress_status_frame, textvariable=self.status_var, anchor="w")
         self.status_bar.grid(row=1, column=0, sticky="ew")
 
+    def create_tab_specific_options(self, parent):
+        """Create the tab-specific options"""
+        self.tab_widgets = {
+            'Music': self.create_music_widgets(parent),
+            'SFX': self.create_sfx_widgets(parent),
+            'Speech': self.create_speech_widgets(parent)
+        }
+        self.current_tab_widget = self.tab_widgets['Music']
+        self.current_tab_widget.grid(row=2, column=0, sticky="ew", pady=(0, 10))
+
     def create_music_widgets(self, parent):
+        """Create music-specific widgets"""
         frame = ctk.CTkFrame(parent)
         self.instrumental_var = ctk.BooleanVar(value=False)
         checkbox = ctk.CTkCheckBox(frame, text="Instrumental", variable=self.instrumental_var)
@@ -355,6 +207,7 @@ class AudioGeneratorView(ctk.CTkFrame):
         return frame
 
     def create_sfx_widgets(self, parent):
+        """Create SFX-specific widgets"""
         frame = ctk.CTkFrame(parent)
         self.duration_var = ctk.StringVar(value="0")
         label = ctk.CTkLabel(frame, text="Duration (0 = automatic, 0.5-22s):")
@@ -364,8 +217,9 @@ class AudioGeneratorView(ctk.CTkFrame):
         return frame
 
     def create_speech_widgets(self, parent):
+        """Create speech-specific widgets"""
         frame = ctk.CTkFrame(parent)
-        frame.grid_columnconfigure(1, weight=1)  # Make the second column expandable
+        frame.grid_columnconfigure(1, weight=1)
 
         # Standard voice selection
         self.selected_voice = ctk.StringVar()
@@ -493,99 +347,20 @@ class AudioGeneratorView(ctk.CTkFrame):
 
         # Create container frame for unique voice options
         self.unique_voice_frame = ctk.CTkFrame(frame)
-        self.unique_voice_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=5)
+        self.unique_voice_frame.grid(row=4, column=0, columnspan=2, sticky="ew", pady=5)
         self.unique_voice_frame.grid_columnconfigure(1, weight=1)  # Make second column expandable
         self.unique_voice_frame.grid_remove()  # Initially hidden
 
-        # Voice description
-        description_label = ctk.CTkLabel(self.unique_voice_frame, text="Voice Description:")
-        description_label.grid(row=0, column=0, padx=(0, 5), pady=2, sticky="w")
-        
-        self.voice_description = ctk.CTkTextbox(self.unique_voice_frame, height=60)
-        self.voice_description.grid(row=0, column=1, pady=2, sticky="ew")
-        self.voice_description._placeholder_text = "Example: A warm and friendly female voice with a slight British accent"
-        self.voice_description.insert("1.0", self.voice_description._placeholder_text)
-        self.voice_description.configure(text_color="gray60")
+        # Create voice description frame
+        self.create_voice_description_frame(self.unique_voice_frame)
 
-        # Example text input with character counter
-        text_label = ctk.CTkLabel(self.unique_voice_frame, text="Example Text:")
-        text_label.grid(row=1, column=0, padx=(0, 5), pady=2, sticky="w")
-        
-        text_frame = ctk.CTkFrame(self.unique_voice_frame)
-        text_frame.grid(row=1, column=1, pady=2, sticky="ew")
-        text_frame.grid_columnconfigure(0, weight=1)
-        
-        self.example_text = ctk.CTkTextbox(text_frame, height=60)
-        self.example_text.grid(row=0, column=0, sticky="ew")
-        self.example_text._placeholder_text = "Enter text for the voice sample (minimum 100 characters)"
-        self.example_text.insert("1.0", self.example_text._placeholder_text)
-        self.example_text.configure(text_color="gray60")
-        
-        self.char_counter = ctk.CTkLabel(text_frame, text="0/1000", text_color="gray60")
-        self.char_counter.grid(row=1, column=0, pady=(2, 0), sticky="e")
+        # Create voice preview frame
+        self.create_voice_preview_frame(frame)
 
-        # Preview button
-        self.preview_button = ctk.CTkButton(self.unique_voice_frame, text="Generate Preview", 
-                                        command=self.generate_voice_preview)
-        self.preview_button.grid(row=2, column=0, columnspan=2, pady=10)
-
-        # Preview controls frame (initially hidden)
-        self.preview_frame = ctk.CTkFrame(frame)
-        self.preview_frame.grid(row=3, column=0, columnspan=2, pady=5, sticky="ew")
-        self.preview_frame.grid_columnconfigure(0, weight=1)  # Make preview frame expandable
-        self.preview_frame.grid_remove()  # Hidden by default
-        
-        # Preview navigation
-        nav_frame = ctk.CTkFrame(self.preview_frame)
-        nav_frame.grid(row=0, column=0, columnspan=2, pady=5, sticky="ew")
-        nav_frame.grid_columnconfigure(2, weight=1)  # Center the preview label
-        
-        self.prev_preview_button = ctk.CTkButton(nav_frame, text="←", width=30,
-                                            command=self.previous_preview)
-        self.prev_preview_button.grid(row=0, column=0, padx=5)
-        
-        self.preview_label = ctk.CTkLabel(nav_frame, text="Preview 1/3")
-        self.preview_label.grid(row=0, column=1, padx=20)
-        
-        self.next_preview_button = ctk.CTkButton(nav_frame, text="→", width=30,
-                                            command=self.next_preview)
-        self.next_preview_button.grid(row=0, column=2, padx=5)
-        
-        # Listen button
-        self.listen_button = ctk.CTkButton(nav_frame, text="Listen", width=80,
-                                        command=self.toggle_preview_playback)
-        self.listen_button.grid(row=0, column=3, padx=20)
-        
-        # Voice name input
-        name_label = ctk.CTkLabel(self.preview_frame, text="Voice Name:")
-        name_label.grid(row=1, column=0, padx=5, pady=5)
-        self.voice_name_entry = ctk.CTkEntry(self.preview_frame, width=150)
-        self.voice_name_entry.grid(row=1, column=1, padx=5, pady=5)
-        
-        # Save/Discard buttons
-        self.save_voice_button = ctk.CTkButton(self.preview_frame, text="Save to Library",
-                                            command=self.save_voice_to_library)
-        self.save_voice_button.grid(row=2, column=0, padx=5, pady=5)
-        
-        self.discard_voice_button = ctk.CTkButton(self.preview_frame, text="Discard",
-                                                command=self.discard_voice)
-        self.discard_voice_button.grid(row=2, column=1, padx=5, pady=5)
-
-        # Bind text change events
-        self.example_text.bind("<FocusIn>", self.on_example_text_focus_in)
-        self.example_text.bind("<FocusOut>", self.on_example_text_focus_out)
-        self.example_text.bind("<KeyRelease>", self.update_char_counter)
-        
-        self.voice_description.bind("<FocusIn>", self.on_description_focus_in)
-        self.voice_description.bind("<FocusOut>", self.on_description_focus_out)
-
-        # Set initial state for text inputs
-        self.toggle_unique_voice_options()
-        
         return frame
 
     def create_tooltip(self, widget, text):
-        """Create a tooltip for a given widget."""
+        """Create a tooltip for a given widget"""
         def show_tooltip(event):
             tooltip = ctk.CTkToplevel()
             tooltip.wm_overrideredirect(True)
@@ -611,7 +386,7 @@ class AudioGeneratorView(ctk.CTkFrame):
         widget.bind("<Enter>", show_tooltip)
 
     def update_percentage_label(self, setting, value):
-        """Update the percentage label for a slider."""
+        """Update the percentage label for a slider"""
         percentage = int(float(value) * 100)
         if setting == 'stability':
             self.stability_percentage.configure(text=f"{percentage}%")
@@ -621,7 +396,7 @@ class AudioGeneratorView(ctk.CTkFrame):
             self.style_percentage.configure(text=f"{percentage}%")
 
     def reset_voice_settings(self):
-        """Reset voice settings to default values and update percentage labels."""
+        """Reset voice settings to default values"""
         self.voice_settings['stability'].set(0.5)
         self.voice_settings['similarity_boost'].set(0.75)
         self.voice_settings['style'].set(0.0)
@@ -631,69 +406,16 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.stability_percentage.configure(text="50%")
         self.similarity_percentage.configure(text="75%")
         self.style_percentage.configure(text="0%")
-       
+
     def toggle_advanced_settings(self):
-        """Toggle visibility of advanced voice settings."""
+        """Toggle visibility of advanced voice settings"""
         if self.show_advanced_settings.get():
             self.advanced_settings_frame.grid()
         else:
             self.advanced_settings_frame.grid_remove()
 
-    def get_voice_settings(self):
-        """Get current voice settings as a dictionary."""
-        return {
-            'stability': self.voice_settings['stability'].get(),
-            'similarity_boost': self.voice_settings['similarity_boost'].get(),
-            'style': self.voice_settings['style'].get(),
-            'use_speaker_boost': self.voice_settings['use_speaker_boost'].get()
-        }
-    
-    def on_example_text_focus_in(self, event):
-        """Handle focus in event for example text."""
-        if self.example_text.get("1.0", "end-1c") == self.example_text._placeholder_text:
-            self.example_text.delete("1.0", "end")
-            self.example_text.configure(text_color=("black", "white"))
-            self.update_char_counter(None)
-
-    def on_example_text_focus_out(self, event):
-        """Handle focus out event for example text."""
-        if not self.example_text.get("1.0", "end-1c").strip():
-            self.example_text.insert("1.0", self.example_text._placeholder_text)
-            self.example_text.configure(text_color="gray60")
-            self.update_char_counter(None)
-
-    def on_description_focus_in(self, event):
-        """Handle focus in event for voice description."""
-        if self.voice_description.get("1.0", "end-1c") == self.voice_description._placeholder_text:
-            self.voice_description.delete("1.0", "end")
-            self.voice_description.configure(text_color=("black", "white"))
-
-    def on_description_focus_out(self, event):
-        """Handle focus out event for voice description."""
-        if not self.voice_description.get("1.0", "end-1c").strip():
-            self.voice_description.insert("1.0", self.voice_description._placeholder_text)
-            self.voice_description.configure(text_color="gray60")
-
-    def update_char_counter(self, event):
-        """Update the character counter and its appearance."""
-        text = self.example_text.get("1.0", "end-1c")
-        if text == self.example_text._placeholder_text:
-            count = 0
-        else:
-            count = len(text)
-        
-        # Update counter text and color based on count
-        self.char_counter.configure(text=f"{count}/1000")
-        
-        if count >= 100:
-            self.char_counter.configure(text_color=("green", "light green"))
-        elif count > 0:
-            self.char_counter.configure(text_color=("red", "red"))
-        else:
-            self.char_counter.configure(text_color="gray60")
-
     def toggle_unique_voice_options(self):
-        """Toggle between standard voice selection and unique voice generation."""
+        """Toggle between standard voice selection and unique voice generation"""
         enable = self.use_unique_voice.get()
         
         if enable:
@@ -730,151 +452,268 @@ class AudioGeneratorView(ctk.CTkFrame):
             if self.preview_frame.winfo_viewable():
                 self.preview_frame.grid_remove()
 
-    def toggle_preview_playback(self):
-        """Toggle play/pause for the current preview."""
-        if not self.controller:
-            return
-            
-        if self.controller.model.is_playing:
-            self.controller.model.stop()
-            self.listen_button.configure(text="Listen")
-            self.update_button_states(False)
+
+    def create_input_field(self, parent):
+        input_frame = ctk.CTkFrame(parent)
+        input_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
+        input_frame.grid_columnconfigure(0, weight=1)
+        input_frame.grid_rowconfigure(1, weight=1)
+
+        # Create a header frame for label and checkbox
+        header_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
+        header_frame.grid(row=0, column=0, sticky="ew", pady=(0, 5))
+        header_frame.grid_columnconfigure(1, weight=1)  # Make space between label and checkbox
+
+        # Input label
+        self.input_label = ctk.CTkLabel(header_frame, text="Enter your text:")
+        self.input_label.grid(row=0, column=0, sticky="w")
+
+        # S2S checkbox (only visible in speech tab)
+        self.use_s2s = ctk.BooleanVar(value=False)
+        self.s2s_checkbox = ctk.CTkCheckBox(header_frame, text="Use Speech-to-Speech Mode", 
+                                        variable=self.use_s2s,
+                                        command=self.toggle_s2s_mode)
+        self.s2s_checkbox.grid(row=0, column=1, sticky="e")
+        self.s2s_checkbox.grid_remove()  # Initially hidden
+
+        # Create container for input methods
+        self.input_container = ctk.CTkFrame(input_frame, fg_color="transparent")
+        self.input_container.grid(row=1, column=0, sticky="nsew")
+        self.input_container.grid_columnconfigure(0, weight=1)
+        self.input_container.grid_rowconfigure(0, weight=1)
+
+        # Text input
+        self.user_input = ctk.CTkTextbox(self.input_container, height=100)
+        self.user_input.grid(row=0, column=0, sticky="nsew")
+
+        # S2S controls (initially hidden)
+        self.s2s_controls = ctk.CTkFrame(self.input_container)
+        self.create_s2s_controls(self.s2s_controls)
+        return input_frame
+
+    def create_s2s_controls(self, parent):
+        """Create the S2S control buttons"""
+        parent.grid_columnconfigure(2, weight=1)  # Make space for status label
+
+        # Record button
+        self.is_recording = False
+        self.record_button = ctk.CTkButton(
+            parent, 
+            text="Start Recording",
+            command=self.toggle_recording
+        )
+        self.record_button.grid(row=0, column=0, padx=5, pady=10)
+
+        # Import button
+        self.import_button = ctk.CTkButton(
+            parent,
+            text="Import Audio File",
+            command=self.import_s2s_audio
+        )
+        self.import_button.grid(row=0, column=1, padx=5, pady=10)
+
+        # Add level meter canvas
+        self.level_meter = ctk.CTkCanvas(parent, width=150, height=20, bg='gray20', highlightthickness=0)
+        self.level_meter.grid(row=0, column=2, padx=(5, 10))
+        self.level_bar = self.level_meter.create_rectangle(0, 0, 0, 20, fill='#00ff00')
+
+        # Status label
+        self.s2s_status_label = ctk.CTkLabel(parent, text="")
+        self.s2s_status_label.grid(row=0, column=3, padx=(20, 5), sticky="w")
+
+        # Preview frame
+        self.s2s_preview_frame = ctk.CTkFrame(parent)
+        self.s2s_preview_frame.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=5, pady=5)
+        self.s2s_preview_frame.grid_columnconfigure(0, weight=1)
+        self.s2s_preview_frame.grid_rowconfigure(0, weight=1)
+        
+        # Create audio visualizer for the preview
+        visualizer_frame = ctk.CTkFrame(self.s2s_preview_frame)
+        visualizer_frame.grid(row=0, column=0, sticky="nsew", pady=5)
+        visualizer_frame.grid_columnconfigure(0, weight=1)
+        visualizer_frame.grid_rowconfigure(0, weight=1)
+        
+        self.s2s_visualizer = AudioVisualizer(visualizer_frame)
+        self.s2s_visualizer.grid(row=0, column=0, sticky="nsew")
+        self.s2s_visualizer.set_on_click_seek(self.seek_s2s_audio)
+        
+        # Add play controls for the recorded/imported audio
+        self.preview_controls = ctk.CTkFrame(self.s2s_preview_frame)
+        self.preview_controls.grid(row=1, column=0, sticky="ew", pady=5)
+        self.preview_controls.grid_columnconfigure(3, weight=1)  # Adjusted for restart button
+        
+        # Play button
+        self.preview_play_button = ctk.CTkButton(
+            self.preview_controls, 
+            text="Play", 
+            width=60,
+            command=self.play_s2s_audio,
+            state="disabled"  # Initially disabled
+        )
+        self.preview_play_button.grid(row=0, column=0, padx=5)
+        
+        # Stop button
+        self.preview_stop_button = ctk.CTkButton(
+            self.preview_controls, 
+            text="Stop", 
+            width=60,
+            command=self.stop_s2s_audio,
+            state="disabled"  # Initially disabled
+        )
+        self.preview_stop_button.grid(row=0, column=1, padx=5)
+        
+        # Restart button (new)
+        self.preview_restart_button = ctk.CTkButton(
+            self.preview_controls,
+            text="Restart",
+            width=60,
+            command=self.restart_s2s_audio,
+            state="disabled"  # Initially disabled
+        )
+        self.preview_restart_button.grid(row=0, column=2, padx=5)
+        
+        # Initially hide preview frame
+        self.s2s_preview_frame.grid_remove()
+
+    def update_button_states(self, is_playing):
+        """Update main player button states"""
+        if is_playing:
+            self.play_button.configure(state="disabled")
+            self.stop_button.configure(state="normal")
+            self.restart_button.configure(state="normal")
         else:
+            # Only enable play if we have audio loaded
+            play_state = "normal" if self.controller and self.controller.current_audio_file else "disabled"
+            self.play_button.configure(state=play_state)
+            self.stop_button.configure(state="disabled")
+            self.restart_button.configure(state="normal")
+            
+    def update_s2s_button_states(self, is_playing):
+        """Update s2s preview player button states"""
+        if is_playing:
+            self.preview_play_button.configure(state="disabled")
+            self.preview_stop_button.configure(state="normal")
+            self.preview_restart_button.configure(state="normal")
+        else:
+            # Only enable play if we have audio loaded
+            play_state = "normal" if hasattr(self, 'current_s2s_audio') else "disabled"
+            self.preview_play_button.configure(state=play_state)
+            self.preview_stop_button.configure(state="disabled")
+            self.preview_restart_button.configure(state=play_state)  # Enable restart if we have audio
+
+    def play_s2s_audio(self):
+        """Play the s2s audio and start updating playhead"""
+        if self.controller and hasattr(self, 'current_s2s_audio'):
+            # Stop main player if it's playing
+            if self.controller.model.is_playing:
+                self.controller.stop_audio()
+            # Load and play s2s audio
+            self.controller.model.load_audio(self.current_s2s_audio)
             self.controller.model.play()
-            self.listen_button.configure(text="Stop")
-            self.update_button_states(True)
+            self.update_s2s_button_states(True)
+            self.start_s2s_playhead_update()
 
-    def update_preview_display(self, preview_file):
-        """Update the display with the current preview."""
-        self.update_preview_label()
-        # Update audio player and visualizer
+    def stop_s2s_audio(self):
+        """Stop the s2s audio playback"""
         if self.controller:
-            self.controller.model.stop()  # Stop any playing audio
-            self.listen_button.configure(text="Listen")  # Reset listen button
-            self.controller.model.load_audio(preview_file)
-            self.audio_visualizer.update_waveform(preview_file)
-            self.update_button_states(False)
+            self.controller.model.stop()
+            self.update_s2s_button_states(False)
+            self.stop_s2s_playhead_update()
+            self.s2s_visualizer.update_playhead(0)  # Reset playhead position
 
-    def on_playback_finished(self):
-        """Handle playback finished event."""
-        self.listen_button.configure(text="Listen")
-        self.update_button_states(False)
+    def restart_s2s_audio(self):
+        """Restart the s2s audio from the beginning"""
+        if self.controller and hasattr(self, 'current_s2s_audio'):
+            self.controller.model.restart()
+            self.update_s2s_button_states(True)  # Always enable stop/restart when playing
+            self.s2s_visualizer.update_playhead(0)
+            if self.controller.model.is_playing:
+                self.start_s2s_playhead_update()
 
-    def show_preview_controls(self):
-        """Show the preview controls and initialize preview navigation."""
-        self.preview_frame.grid()
-        self.current_preview_index = 0
-        self.update_preview_label()
-        self.voice_name_entry.delete(0, 'end')
-        self.voice_name_entry.insert(0, f"Custom Voice {time.strftime('%Y%m%d_%H%M%S')}")
-        self.listen_button.configure(text="Listen")  # Reset listen button state
-
-    def set_generate_preview_command(self, command):
-        """Set the command for generating voice previews."""
-        self.generate_preview_command = command
-
-    def set_save_preview_command(self, command):
-        """Set the command for saving voice previews."""
-        self.save_preview_command = command
-
-    def set_discard_preview_command(self, command):
-        """Set the command for discarding voice previews."""
-        self.discard_preview_command = command
-
-    def show_preview_controls(self):
-        """Show the preview controls and initialize preview navigation."""
-        self.preview_frame.grid()
-        self.current_preview_index = 0
-        self.update_preview_label()
-        self.voice_name_entry.delete(0, 'end')
-        self.voice_name_entry.insert(0, f"Custom Voice {time.strftime('%Y%m%d_%H%M%S')}")
-
-    def update_preview_label(self):
-        """Update the preview counter label."""
-        self.preview_label.configure(text=f"Preview {self.current_preview_index + 1}/3")
-
-    def generate_voice_preview(self):
-        """Generate previews of the unique voice."""
-        if not self.controller:
-            messagebox.showerror("Error", "Controller not initialized")
-            return
-
-        description = self.voice_description.get("1.0", "end-1c").strip()
-        text = self.example_text.get("1.0", "end-1c").strip()
-        
-        if not description or not text:
-            messagebox.showerror("Error", "Please provide both a voice description and example text.")
-            return
-            
-        if len(text) < 100:
-            messagebox.showerror("Error", "Example text must be at least 100 characters long.")
-            return
-        
-        # Show progress
-        self.show_progress_bar(determinate=False)
-        self.preview_button.configure(state="disabled")
-        
-        def preview_thread():
-            if self.controller:
-                success = self.controller.handle_voice_preview(description, text)
-                if success:
-                    self.after(0, self.show_preview_controls)
-                else:
-                    self.after(0, lambda: messagebox.showerror("Error", "Failed to generate voice previews"))
-            
-            self.after(0, self.hide_progress_bar)
-            self.after(0, lambda: self.preview_button.configure(state="normal"))
-        
-        threading.Thread(target=preview_thread, daemon=True).start()
-
-    def next_preview(self):
-        """Switch to the next voice preview."""
+    def seek_s2s_audio(self, position):
+        """Seek to a position in the s2s audio"""
         if self.controller:
-            preview_file = self.controller.speech_service.next_preview()
-            if preview_file:
-                self.current_preview_index = (self.current_preview_index + 1) % 3
-                self.update_preview_display(preview_file)
+            if self.controller.model.seek(position):
+                self.s2s_visualizer.update_playhead(position)
+                if self.controller.model.is_playing:
+                    self.start_s2s_playhead_update()
 
-    def previous_preview(self):
-        """Switch to the previous voice preview."""
-        if self.controller:
-            preview_file = self.controller.speech_service.previous_preview()
-            if preview_file:
-                self.current_preview_index = (self.current_preview_index - 1) % 3
-                self.update_preview_display(preview_file)
+    def start_s2s_playhead_update(self):
+        """Start updating the s2s preview playhead position"""
+        self.stop_s2s_playhead_update()  # Ensure no existing update is running
+        self.update_s2s_playhead()
 
-    def update_preview_display(self, preview_file):
-        """Update the display with the current preview."""
-        self.update_preview_label()
-        # Update audio player and visualizer
-        if self.controller:
-            self.controller.model.load_audio(preview_file)
-            self.audio_visualizer.update_waveform(preview_file)
-            self.update_button_states(False)
+    def stop_s2s_playhead_update(self):
+        """Stop updating the s2s preview playhead"""
+        if hasattr(self, 's2s_update_id'):
+            self.after_cancel(self.s2s_update_id)
+            self.s2s_update_id = None
 
-    def save_voice_to_library(self):
-        """Save the current preview voice to the library."""
-        if not self.controller:
-            messagebox.showerror("Error", "Controller not initialized")
-            return
-
-        voice_name = self.voice_name_entry.get().strip()
-        if not voice_name:
-            messagebox.showerror("Error", "Please provide a name for the voice")
-            return
-        
-        if self.controller.save_voice_preview(voice_name):
-            messagebox.showinfo("Success", f"Voice '{voice_name}' added to library")
-            self.preview_frame.grid_remove()
-            self.selected_voice.set(voice_name)
+    def update_s2s_playhead(self):
+        """Update the s2s preview playhead position"""
+        if self.controller and self.controller.model.is_playing:
+            current_time = self.controller.model.get_current_position()
+            self.s2s_visualizer.update_playhead(current_time)
+            self.s2s_update_id = self.after(50, self.update_s2s_playhead)  # Update every 50ms
         else:
-            messagebox.showerror("Error", "Failed to save voice to library")
-
-    def discard_voice(self):
-        """Discard all preview voices."""
-        if self.controller:
-            self.controller.discard_voice_preview()
-        self.preview_frame.grid_remove()
+            self.stop_s2s_playhead_update()
+            self.update_s2s_button_states(False)
+            
+    def import_s2s_audio(self):
+        """Import audio file for speech-to-speech conversion"""
+        try:
+            file_types = (
+                ('WAV files', '*.wav'),
+                ('MP3 files', '*.mp3'),
+                ('All files', '*.*')
+            )
+            
+            file_path = filedialog.askopenfilename(
+                title="Select Audio File",
+                filetypes=file_types
+            )
+            
+            if file_path:
+                try:
+                    # If it's an MP3 file, convert it to WAV
+                    if file_path.lower().endswith('.mp3'):
+                        import soundfile as sf
+                        import librosa
+                        
+                        # Load the audio file
+                        y, sr = librosa.load(file_path, sr=44100)
+                        
+                        # Create a temporary WAV file
+                        temp_wav = os.path.join(
+                            os.path.dirname(file_path),
+                            f"temp_{os.path.splitext(os.path.basename(file_path))[0]}.wav"
+                        )
+                        
+                        # Save as WAV
+                        sf.write(temp_wav, y, sr, format='WAV')
+                        
+                        # Update the file path to use the WAV file
+                        file_path = temp_wav
+                    
+                    self.current_s2s_audio = file_path
+                    self.s2s_preview_frame.grid()
+                    
+                    # Update the visualizer in a thread-safe way
+                    def update_visualizer():
+                        self.s2s_visualizer.update_waveform(file_path)
+                        self.s2s_status_label.configure(text="Audio file loaded")
+                        self.update_s2s_button_states(False)  # Initialize button states
+                        self.preview_play_button.configure(state="normal")  # Enable play button
+                    
+                    self.after(0, update_visualizer)
+                
+                except Exception as e:
+                    self.s2s_status_label.configure(text=f"Error loading audio: {str(e)}")
+                    messagebox.showerror("Error", f"Failed to load audio file: {str(e)}")
+        
+        except Exception as e:
+            self.s2s_status_label.configure(text=f"Error showing file dialog: {str(e)}")
+            messagebox.showerror("Error", f"Failed to show file dialog: {str(e)}")
 
     def toggle_recording(self):
         """Toggle audio recording state"""
@@ -898,6 +737,7 @@ class AudioGeneratorView(ctk.CTkFrame):
             self.level_meter.coords(self.level_bar, 0, 0, 0, 20)
             self.preview_play_button.configure(state="disabled")
             self.preview_stop_button.configure(state="disabled")
+            self.preview_restart_button.configure(state="disabled")
             
             # Create temporary file for recording
             self.temp_audio_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
@@ -991,81 +831,98 @@ class AudioGeneratorView(ctk.CTkFrame):
             color = '#00ff00'  # Green for normal levels
         self.level_meter.itemconfig(self.level_bar, fill=color)
 
-    def import_s2s_audio(self):
-        """Import audio file for speech-to-speech conversion"""
-        try:
-            file_types = (
-                ('WAV files', '*.wav'),
-                ('MP3 files', '*.mp3'),
-                ('All files', '*.*')
-            )
-            
-            file_path = filedialog.askopenfilename(
-                title="Select Audio File",
-                filetypes=file_types
-            )
-            
-            if file_path:
-                try:
-                    # If it's an MP3 file, convert it to WAV
-                    if file_path.lower().endswith('.mp3'):
-                        import soundfile as sf
-                        import librosa
-                        
-                        # Load the audio file
-                        y, sr = librosa.load(file_path, sr=44100)
-                        
-                        # Create a temporary WAV file
-                        temp_wav = os.path.join(
-                            os.path.dirname(file_path),
-                            f"temp_{os.path.splitext(os.path.basename(file_path))[0]}.wav"
-                        )
-                        
-                        # Save as WAV
-                        sf.write(temp_wav, y, sr, format='WAV')
-                        
-                        # Update the file path to use the WAV file
-                        file_path = temp_wav
-                    
-                    self.current_s2s_audio = file_path
-                    self.s2s_preview_frame.grid()
-                    
-                    # Update the visualizer in a thread-safe way
-                    def update_visualizer():
-                        self.s2s_visualizer.update_waveform(file_path)
-                        self.s2s_status_label.configure(text="Audio file loaded")
-                        self.preview_play_button.configure(state="normal")
-                        self.preview_stop_button.configure(state="disabled")
-                    
-                    self.after(0, update_visualizer)
-                
-                except Exception as e:
-                    self.s2s_status_label.configure(text=f"Error loading audio: {str(e)}")
-                    messagebox.showerror("Error", f"Failed to load audio file: {str(e)}")
-        
-        except Exception as e:
-            self.s2s_status_label.configure(text=f"Error showing file dialog: {str(e)}")
-            messagebox.showerror("Error", f"Failed to show file dialog: {str(e)}")
-
-
-    def update_button_states(self, is_playing):
-        if is_playing:
-            self.play_button.configure(state="disabled")
-            self.stop_button.configure(state="normal")
-            self.restart_button.configure(state="normal")
+    def toggle_s2s_mode(self):
+        """Switch between text input and Speech-to-Speech modes"""
+        if self.use_s2s.get():
+            self.user_input.grid_remove()
+            self.s2s_controls.grid(row=0, column=0, sticky="ew")
+            self.input_label.configure(text="Reference Audio:")
+            # Clear output text when switching to S2S mode
+            self.output_text.configure(state="normal")
+            self.output_text.delete("1.0", "end")
+            self.output_text.configure(state="disabled")
+            # Show s2s preview if audio exists
+            if hasattr(self, 'current_s2s_audio'):
+                self.s2s_preview_frame.grid()
+                self.update_s2s_button_states(False)
+                self.preview_play_button.configure(state="normal")
         else:
-            self.play_button.configure(state="normal")
-            self.stop_button.configure(state="disabled")
-            self.restart_button.configure(state="normal")
+            self.s2s_controls.grid_remove()
+            self.user_input.grid(row=0, column=0, sticky="nsew")
+            self.input_label.configure(text="Enter your text:")
+            self.output_text.configure(state="normal")
+            self.output_text.delete("1.0", "end")
+            self.output_text.configure(state="disabled")
+            # Hide s2s preview
+            self.s2s_preview_frame.grid_remove()
 
-    def update_output(self, message):
-        """Update the output text field with the given message."""
-        self.output_text.configure(state="normal")
-        # Clear existing content before adding new message
-        self.output_text.delete("1.0", "end")
-        self.output_text.insert("end", message + "\n")
-        self.output_text.see("end")
-        self.output_text.configure(state="disabled")
+    def on_playback_finished(self):
+        """Handle playback finished event."""
+        # Reset button states for both main and s2s players
+        if hasattr(self, 'current_s2s_audio'):
+            self.update_s2s_button_states(False)
+        self.update_button_states(False)
+
+    def update_playhead(self):
+        """Update the playhead position for the main player"""
+        if self.controller and self.controller.model.is_playing:
+            current_time = self.controller.model.get_current_position()
+            self.audio_visualizer.update_playhead(current_time)
+            self.playhead_update_id = self.after(50, self.update_playhead)  # Update every 50ms
+        else:
+            self.stop_playhead_update()
+            self.update_button_states(False)
+
+    def start_playhead_update(self):
+        """Start updating the playhead position"""
+        self.stop_playhead_update()  # Ensure no existing update is running
+        self.update_playhead()
+
+    def stop_playhead_update(self):
+        """Stop updating the playhead"""
+        if hasattr(self, 'playhead_update_id'):
+            self.after_cancel(self.playhead_update_id)
+            self.playhead_update_id = None
+
+    def cleanup_audio_state(self):
+        """Clean up audio state when switching modes or closing"""
+        # Stop any playing audio
+        if self.controller:
+            self.controller.model.stop()
+        
+        # Stop all playhead updates
+        self.stop_playhead_update()
+        self.stop_s2s_playhead_update()
+        
+        # Reset all button states
+        self.update_button_states(False)
+        self.update_s2s_button_states(False)
+        
+        # Reset all playheads
+        self.audio_visualizer.update_playhead(0)
+        if hasattr(self, 's2s_visualizer'):
+            self.s2s_visualizer.update_playhead(0)
+
+    def handle_error(self, error_message, title="Error"):
+        """Handle errors in a consistent way"""
+        logging.error(error_message)
+        self.update_status(f"Error: {error_message}")
+        messagebox.showerror(title, error_message)
+        
+        # Clean up state after error
+        self.cleanup_audio_state()
+
+    def on_tab_change(self):
+        """Handle tab changes"""
+        # Clean up audio state
+        self.cleanup_audio_state()
+        
+        # Update tab widgets
+        self.update_tab_widgets()
+
+    def quit(self):
+        """Clean up before quitting"""
+        self.cleanup_audio_state()
 
     def update_tab_widgets(self):
         """Update the widgets when switching tabs."""
@@ -1084,18 +941,64 @@ class AudioGeneratorView(ctk.CTkFrame):
             self.s2s_checkbox.grid_remove()  # Hide S2S checkbox
             self.use_s2s.set(False)  # Reset S2S mode
             # Clear any S2S related output
-            self.s2s_preview_frame.grid_remove()
+            if hasattr(self, 's2s_preview_frame'):
+                self.s2s_preview_frame.grid_remove()
+                # Stop any playing s2s audio
+                if self.controller and self.controller.model.is_playing:
+                    self.stop_s2s_audio()
         else:
             self.llm_button.grid_remove()
             self.s2s_checkbox.grid()  # Show S2S checkbox
+            # Show s2s preview if in s2s mode and audio exists
+            if self.use_s2s.get() and hasattr(self, 'current_s2s_audio'):
+                self.s2s_preview_frame.grid()
+                self.update_s2s_button_states(False)
             
         # Update the audio file selector
         self.audio_file_selector.update_module(current_tab.lower())
 
-    def update_status(self, message):
-        self.status_var.set(message)
+    def set_generate_command(self, command):
+        """Set the command for the Generate button"""
+        self.generate_button.configure(command=command)
+
+    def set_clear_command(self, command):
+        """Set the command for the Clear button"""
+        self.clear_button.configure(command=command)
+
+    def set_llm_command(self, command):
+        """Set the command for the Improve Prompt button"""
+        self.llm_button.configure(command=command)
+
+    def set_play_command(self, command):
+        """Set the command for the Play button"""
+        self.play_button.configure(command=command)
+
+    def set_stop_command(self, command):
+        """Set the command for the Stop button"""
+        self.stop_button.configure(command=command)
+
+    def set_restart_command(self, command):
+        """Set the command for the Restart button"""
+        self.restart_button.configure(command=command)
+
+    def set_add_to_timeline_command(self, command):
+        """Set the command for the Add to Timeline button"""
+        self.add_to_timeline_button.configure(command=command)
+
+    def set_add_to_reaper_command(self, command):
+        """Set the command for the Add to Reaper button"""
+        self.add_to_reaper_button.configure(command=command)
+
+    def set_timeline_command(self, command):
+        """Set the command for the Show Timeline button"""
+        self.timeline_button.configure(command=command)
+
+    def set_visualizer_click_command(self, command):
+        """Set the command for visualizer click events"""
+        self.audio_visualizer.set_on_click_seek(command)
 
     def show_progress_bar(self, determinate=True):
+        """Show and start the progress bar"""
         if determinate:
             self.progress_bar.configure(mode="determinate")
             self.progress_bar.set(0)
@@ -1105,50 +1008,23 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.progress_bar.start()
 
     def hide_progress_bar(self):
+        """Hide and stop the progress bar"""
         self.progress_bar.stop()
         self.progress_bar.grid_remove()
 
-    def set_add_to_timeline_command(self, command):
-        self.add_to_timeline_button.configure(command=command)
+    def update_status(self, message):
+        """Update the status bar message"""
+        self.status_var.set(message)
 
-    def on_drag_start(self, event):
-        if self.audio_file_selector.file_var.get() != "No files available":
-            self.drag_data = {'x': event.x, 'y': event.y, 'item': self.audio_file_selector.file_var.get()}
-            self.drag_icon = ctk.CTkLabel(self, text=self.drag_data['item'])
-            self.drag_icon.place(x=event.x_root - self.winfo_rootx(), y=event.y_root - self.winfo_rooty())
-
-    def on_drag_motion(self, event):
-        if hasattr(self, 'drag_icon'):
-            x = event.x_root - self.winfo_rootx()
-            y = event.y_root - self.winfo_rooty()
-            self.drag_icon.place(x=x, y=y)
-
-    def on_drag_release(self, event):
-        if hasattr(self, 'drag_icon'):
-            self.drag_icon.destroy()
-            del self.drag_icon
-
-            # Check if the release happened over the timeline window
-            timeline_view = self.master.timeline_controller.view
-            if timeline_view.winfo_containing(event.x_root, event.y_root) == timeline_view:
-                file_path = self.audio_file_selector.get_selected_file()
-                if file_path:
-                    # Determine which track to add the clip to based on the current module
-                    track_index = {"music": 1, "sfx": 2, "speech": 0}.get(self.current_module.get().lower(), 0)
-                    
-                    # Calculate the x position relative to the timeline canvas
-                    x_position = timeline_view.timeline_canvas.winfo_pointerx() - timeline_view.timeline_canvas.winfo_rootx()
-                    start_time = x_position / (timeline_view.seconds_per_pixel * timeline_view.x_zoom)
-                    
-                    # Add the clip to the timeline
-                    self.master.timeline_controller.add_audio_clip(file_path, track_index, start_time)
-                    logging.info(f"Clip added to timeline: track={track_index}, start_time={start_time}")
-                else:
-                    logging.warning("No file selected for drag and drop.")
-            else:
-                logging.info("File dropped outside the timeline window.")
+    def update_output(self, message):
+        """Update the output text area"""
+        self.output_text.configure(state="normal")
+        self.output_text.delete("1.0", "end")
+        self.output_text.insert("end", message)
+        self.output_text.configure(state="disabled")
 
     def clear_input(self):
+        """Clear the input text area"""
         self.user_input.delete("1.0", "end")
         self.output_text.configure(state="normal")
         self.output_text.delete("1.0", "end")
@@ -1156,40 +1032,282 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.duration_var.set("0")
         self.update_status("")
 
-    def set_generate_command(self, command):
-        self.generate_button.configure(command=command)
-
-    def set_clear_command(self, command):
-        self.clear_button.configure(command=command)
-
-    def set_llm_command(self, command):
-        self.llm_button.configure(command=command)
-
-    def set_play_command(self, command):
-        self.play_button.configure(command=command)
-
-    def set_stop_command(self, command):
-        self.stop_button.configure(command=command)
-
-    def set_restart_command(self, command):
-        self.restart_button.configure(command=command)
-
-    def set_file_select_command(self, command):
-        self.audio_file_selector.set_file_select_command(command)
-
-    def set_timeline_command(self, command):
-        self.timeline_button.configure(command=command)
-
-    def refresh_file_list(self, module):
-        self.audio_file_selector.refresh_files(module)
-
-    def set_visualizer_click_command(self, command):
-        self.audio_visualizer.set_on_click_seek(command)
-
     def update_voice_dropdown(self, voices):
+        """Update the voice dropdown with available voices"""
         self.voice_dropdown.configure(values=[voice[0] for voice in voices])
         if voices:
             self.selected_voice.set(voices[0][0])
-    
-    def set_add_to_reaper_command(self, command):
-        self.add_to_reaper_button.configure(command=command)
+
+    def set_file_select_command(self, command):
+        """Set the command for file selection"""
+        self.audio_file_selector.set_file_select_command(command)
+
+    def refresh_file_list(self, module):
+        """Refresh the audio file list for the given module"""
+        self.audio_file_selector.refresh_files(module)
+
+    def get_selected_file(self):
+        """Get the currently selected audio file"""
+        return self.audio_file_selector.get_selected_file()
+
+    def get_voice_settings(self):
+        """Get current voice settings as a dictionary"""
+        return {
+            'stability': self.voice_settings['stability'].get(),
+            'similarity_boost': self.voice_settings['similarity_boost'].get(),
+            'style': self.voice_settings['style'].get(),
+            'use_speaker_boost': self.voice_settings['use_speaker_boost'].get()
+        }
+
+    def set_generate_preview_command(self, command):
+        """Set the command for generating voice previews"""
+        self.generate_preview_command = command
+
+    def set_save_preview_command(self, command):
+        """Set the command for saving voice previews"""
+        self.save_preview_command = command
+
+    def set_discard_preview_command(self, command):
+        """Set the command for discarding voice previews"""
+        self.discard_preview_command = command
+
+    def show_preview_controls(self):
+        """Show the preview controls and initialize preview navigation"""
+        self.preview_frame.grid()
+        self.current_preview_index = 0
+        self.update_preview_label()
+        self.voice_name_entry.delete(0, 'end')
+        self.voice_name_entry.insert(0, f"Custom Voice {time.strftime('%Y%m%d_%H%M%S')}")
+        self.listen_button.configure(text="Listen")
+
+    def update_preview_label(self):
+        """Update the preview counter label"""
+        self.preview_label.configure(text=f"Preview {self.current_preview_index + 1}/3")
+
+    def update_preview_display(self, preview_file):
+        """Update the display with the current preview"""
+        self.update_preview_label()
+        # Update audio player and visualizer
+        if self.controller:
+            self.controller.model.stop()  # Stop any playing audio
+            self.listen_button.configure(text="Listen")  # Reset listen button
+            self.controller.model.load_audio(preview_file)
+            self.audio_visualizer.update_waveform(preview_file)
+            self.update_button_states(False)
+
+    def next_preview(self):
+        """Switch to the next voice preview"""
+        if self.controller:
+            preview_file = self.controller.speech_service.next_preview()
+            if preview_file:
+                self.current_preview_index = (self.current_preview_index + 1) % 3
+                self.update_preview_display(preview_file)
+
+    def previous_preview(self):
+        """Switch to the previous voice preview"""
+        if self.controller:
+            preview_file = self.controller.speech_service.previous_preview()
+            if preview_file:
+                self.current_preview_index = (self.current_preview_index - 1) % 3
+                self.update_preview_display(preview_file)
+
+    def generate_voice_preview(self):
+        """Generate previews of the unique voice"""
+        if not self.controller:
+            messagebox.showerror("Error", "Controller not initialized")
+            return
+
+        description = self.voice_description.get("1.0", "end-1c").strip()
+        text = self.example_text.get("1.0", "end-1c").strip()
+        
+        if not description or not text:
+            messagebox.showerror("Error", "Please provide both a voice description and example text.")
+            return
+            
+        if len(text) < 100:
+            messagebox.showerror("Error", "Example text must be at least 100 characters long.")
+            return
+        
+        # Show progress
+        self.show_progress_bar(determinate=False)
+        self.preview_button.configure(state="disabled")
+        
+        def preview_thread():
+            if self.controller:
+                success = self.controller.handle_voice_preview(description, text)
+                if success:
+                    self.after(0, self.show_preview_controls)
+                else:
+                    self.after(0, lambda: messagebox.showerror("Error", "Failed to generate voice previews"))
+            
+            self.after(0, self.hide_progress_bar)
+            self.after(0, lambda: self.preview_button.configure(state="normal"))
+        
+        threading.Thread(target=preview_thread, daemon=True).start()
+
+    def save_voice_to_library(self):
+        """Save the current preview voice to the library"""
+        if not self.controller:
+            messagebox.showerror("Error", "Controller not initialized")
+            return
+
+        voice_name = self.voice_name_entry.get().strip()
+        if not voice_name:
+            messagebox.showerror("Error", "Please provide a name for the voice")
+            return
+        
+        if self.controller.save_voice_preview(voice_name):
+            messagebox.showinfo("Success", f"Voice '{voice_name}' added to library")
+            self.preview_frame.grid_remove()
+            self.selected_voice.set(voice_name)
+        else:
+            messagebox.showerror("Error", "Failed to save voice to library")
+
+    def discard_voice(self):
+        """Discard all preview voices"""
+        if self.controller:
+            self.controller.discard_voice_preview()
+        self.preview_frame.grid_remove()
+
+    def toggle_preview_playback(self):
+        """Toggle play/pause for the current preview"""
+        if not self.controller:
+            return
+            
+        if self.controller.model.is_playing:
+            self.controller.model.stop()
+            self.listen_button.configure(text="Listen")
+            self.update_button_states(False)
+        else:
+            self.controller.model.play()
+            self.listen_button.configure(text="Stop")
+            self.update_button_states(True)
+
+    def create_voice_preview_frame(self, parent):
+        """Create the voice preview frame"""
+        self.preview_frame = ctk.CTkFrame(parent)
+        self.preview_frame.grid(row=3, column=0, columnspan=2, pady=5, sticky="ew")
+        self.preview_frame.grid_columnconfigure(0, weight=1)  # Make preview frame expandable
+        self.preview_frame.grid_remove()  # Hidden by default
+        
+        # Preview navigation
+        nav_frame = ctk.CTkFrame(self.preview_frame)
+        nav_frame.grid(row=0, column=0, columnspan=2, pady=5, sticky="ew")
+        nav_frame.grid_columnconfigure(2, weight=1)  # Center the preview label
+        
+        self.prev_preview_button = ctk.CTkButton(nav_frame, text="←", width=30,
+                                            command=self.previous_preview)
+        self.prev_preview_button.grid(row=0, column=0, padx=5)
+        
+        self.preview_label = ctk.CTkLabel(nav_frame, text="Preview 1/3")
+        self.preview_label.grid(row=0, column=1, padx=20)
+        
+        self.next_preview_button = ctk.CTkButton(nav_frame, text="→", width=30,
+                                            command=self.next_preview)
+        self.next_preview_button.grid(row=0, column=2, padx=5)
+        
+        # Listen button
+        self.listen_button = ctk.CTkButton(nav_frame, text="Listen", width=80,
+                                        command=self.toggle_preview_playback)
+        self.listen_button.grid(row=0, column=3, padx=20)
+        
+        # Voice name input
+        name_label = ctk.CTkLabel(self.preview_frame, text="Voice Name:")
+        name_label.grid(row=1, column=0, padx=5, pady=5)
+        self.voice_name_entry = ctk.CTkEntry(self.preview_frame, width=150)
+        self.voice_name_entry.grid(row=1, column=1, padx=5, pady=5)
+        
+        # Save/Discard buttons
+        self.save_voice_button = ctk.CTkButton(self.preview_frame, text="Save to Library",
+                                            command=self.save_voice_to_library)
+        self.save_voice_button.grid(row=2, column=0, padx=5, pady=5)
+        
+        self.discard_voice_button = ctk.CTkButton(self.preview_frame, text="Discard",
+                                                command=self.discard_voice)
+        self.discard_voice_button.grid(row=2, column=1, padx=5, pady=5)
+
+    def create_voice_description_frame(self, parent):
+        """Create the voice description frame"""
+        # Voice description
+        description_label = ctk.CTkLabel(parent, text="Voice Description:")
+        description_label.grid(row=0, column=0, padx=(0, 5), pady=2, sticky="w")
+        
+        self.voice_description = ctk.CTkTextbox(parent, height=60)
+        self.voice_description.grid(row=0, column=1, pady=2, sticky="ew")
+        self.voice_description._placeholder_text = "Example: A warm and friendly female voice with a slight British accent"
+        self.voice_description.insert("1.0", self.voice_description._placeholder_text)
+        self.voice_description.configure(text_color="gray60")
+
+        # Example text input with character counter
+        text_label = ctk.CTkLabel(parent, text="Example Text:")
+        text_label.grid(row=1, column=0, padx=(0, 5), pady=2, sticky="w")
+        
+        text_frame = ctk.CTkFrame(parent)
+        text_frame.grid(row=1, column=1, pady=2, sticky="ew")
+        text_frame.grid_columnconfigure(0, weight=1)
+        
+        self.example_text = ctk.CTkTextbox(text_frame, height=60)
+        self.example_text.grid(row=0, column=0, sticky="ew")
+        self.example_text._placeholder_text = "Enter text for the voice sample (minimum 100 characters)"
+        self.example_text.insert("1.0", self.example_text._placeholder_text)
+        self.example_text.configure(text_color="gray60")
+        
+        self.char_counter = ctk.CTkLabel(text_frame, text="0/1000", text_color="gray60")
+        self.char_counter.grid(row=1, column=0, pady=(2, 0), sticky="e")
+
+        # Preview button
+        self.preview_button = ctk.CTkButton(parent, text="Generate Preview", 
+                                        command=self.generate_voice_preview)
+        self.preview_button.grid(row=2, column=0, columnspan=2, pady=10)
+
+        # Bind text change events
+        self.example_text.bind("<FocusIn>", self.on_example_text_focus_in)
+        self.example_text.bind("<FocusOut>", self.on_example_text_focus_out)
+        self.example_text.bind("<KeyRelease>", self.update_char_counter)
+        
+        self.voice_description.bind("<FocusIn>", self.on_description_focus_in)
+        self.voice_description.bind("<FocusOut>", self.on_description_focus_out)
+
+    def on_example_text_focus_in(self, event):
+        """Handle focus in event for example text"""
+        if self.example_text.get("1.0", "end-1c") == self.example_text._placeholder_text:
+            self.example_text.delete("1.0", "end")
+            self.example_text.configure(text_color=("black", "white"))
+            self.update_char_counter(None)
+
+    def on_example_text_focus_out(self, event):
+        """Handle focus out event for example text"""
+        if not self.example_text.get("1.0", "end-1c").strip():
+            self.example_text.insert("1.0", self.example_text._placeholder_text)
+            self.example_text.configure(text_color="gray60")
+            self.update_char_counter(None)
+
+    def on_description_focus_in(self, event):
+        """Handle focus in event for voice description"""
+        if self.voice_description.get("1.0", "end-1c") == self.voice_description._placeholder_text:
+            self.voice_description.delete("1.0", "end")
+            self.voice_description.configure(text_color=("black", "white"))
+
+    def on_description_focus_out(self, event):
+        """Handle focus out event for voice description"""
+        if not self.voice_description.get("1.0", "end-1c").strip():
+            self.voice_description.insert("1.0", self.voice_description._placeholder_text)
+            self.voice_description.configure(text_color="gray60")
+
+    def update_char_counter(self, event):
+        """Update the character counter and its appearance"""
+        text = self.example_text.get("1.0", "end-1c")
+        if text == self.example_text._placeholder_text:
+            count = 0
+        else:
+            count = len(text)
+        
+        # Update counter text and color based on count
+        self.char_counter.configure(text=f"{count}/1000")
+        
+        if count >= 100:
+            self.char_counter.configure(text_color=("green", "light green"))
+        elif count > 0:
+            self.char_counter.configure(text_color=("red", "red"))
+        else:
+            self.char_counter.configure(text_color="gray60")

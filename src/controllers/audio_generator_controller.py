@@ -174,27 +174,15 @@ class AudioGeneratorController:
                 synchronous=False
             )
 
-    def play_s2s_preview(self):
-        """Play the S2S preview audio"""
-        if hasattr(self.view, 'current_s2s_audio'):
-            self.model.load_preview_audio(self.view.current_s2s_audio)
-            self.model.play_preview()
-            self.view.preview_play_button.configure(state="disabled")
-            self.view.preview_stop_button.configure(state="normal")
-
-    def stop_s2s_preview(self):
-        """Stop the S2S preview audio"""
-        self.model.stop_preview()
-        self.view.preview_play_button.configure(state="normal")
-        self.view.preview_stop_button.configure(state="disabled")
-
     def handle_recorded_audio(self, file_path):
         """Handle successful audio recording"""
         self.view.current_s2s_audio = file_path
         self.view.s2s_preview_frame.grid()  # Change from pack to grid
         self.view.s2s_visualizer.update_waveform(file_path)
+        self.model.load_audio(file_path)
+         # Update s2s preview button states specifically
+        self.view.update_s2s_button_states(False)
         self.view.preview_play_button.configure(state="normal")
-        self.view.preview_stop_button.configure(state="disabled")
         
     def setup_voice_preview_handlers(self):
         """Set up handlers for voice preview functionality."""
@@ -471,3 +459,60 @@ class AudioGeneratorController:
             error_msg = f"Error adding audio to Reaper: {str(e)}"
             self.view.update_status(error_msg)
             messagebox.showerror("Error", error_msg)
+
+    def handle_error(self, error_message, title="Error"):
+        """Handle errors in a consistent way"""
+        logging.error(error_message)
+        self.view.update_status(f"Error: {error_message}")
+        self.view.handle_error(error_message, title)
+        
+        # Clean up state after error
+        self.cleanup_state()
+
+    def cleanup_state(self):
+        """Clean up state when switching modes or handling errors"""
+        # Stop any playing audio
+        self.model.stop()
+        
+        # Reset view state
+        self.view.cleanup_audio_state()
+        
+        # Reset controller state
+        self.current_audio_file = None
+        self.current_preview_file = None
+        
+        # Stop any playhead updates
+        if self.playhead_update_id:
+            self.view.after_cancel(self.playhead_update_id)
+            self.playhead_update_id = None
+
+    def update_audio_device(self, device_index):
+        """Update the audio output device"""
+        try:
+            # Update model's device
+            self.model.update_audio_device(device_index)
+            
+            # Update view's button states
+            self.view.update_button_states(self.model.is_playing)
+            
+            # Start playhead update if playing
+            if self.model.is_playing:
+                self.view.start_playhead_update()
+                
+        except Exception as e:
+            self.handle_error(f"Error updating audio device: {str(e)}")
+
+    def quit(self):
+        """Clean up before quitting"""
+        try:
+            # Clean up model
+            self.model.quit()
+            
+            # Clean up view
+            self.view.cleanup_audio_state()
+            
+            # Clean up controller
+            self.cleanup_state()
+            
+        except Exception as e:
+            logging.error(f"Error cleaning up AudioGeneratorController: {str(e)}")

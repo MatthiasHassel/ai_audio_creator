@@ -33,41 +33,75 @@ class AudioGeneratorModel:
         
         logging.info(f"AudioGeneratorModel using output device index: {self.device_index}")
 
+    def handle_error(self, error_message):
+        """Handle errors in a consistent way"""
+        logging.error(error_message)
+        if self.playback_finished_callback:
+            self.playback_finished_callback()
+        self.stop()
+
     def update_audio_device(self, device_index):
         """Update the audio output device"""
-        was_playing = self.is_playing
-        current_position = self.seek_position
-        
-        # Stop current playback
-        self.stop_preview()
-        
-        # Update device index
-        self.device_index = device_index
-        self.buffer_manager.update_device(device_index, self.audio)
-        logging.info(f"Updated audio device to index: {device_index}")
-        
-        # Restart playback if it was playing
-        if was_playing and self.current_clip:
-            self.seek_position = current_position
-            self.play_preview()
+        try:
+            was_playing = self.is_playing
+            current_position = self.seek_position
+            
+            # Stop current playback
+            self.stop()
+            
+            # Update device index
+            self.device_index = device_index
+            self.buffer_manager.update_device(device_index, self.audio)
+            logging.info(f"Updated audio device to index: {device_index}")
+            
+            # Restart playback if it was playing
+            if was_playing and self.current_clip:
+                self.seek_position = current_position
+                self.play()
+                
+        except Exception as e:
+            error_msg = f"Error updating audio device: {str(e)}"
+            logging.error(error_msg)
+            self.handle_error(error_msg)
 
-    def load_preview_audio(self, file_path):
-        """Load a preview audio file for playback"""
+    def cleanup(self):
+        """Clean up resources"""
+        try:
+            self.stop()
+            if self.audio:
+                self.audio.terminate()
+            self.current_clip = None
+            self.current_audio_file = None
+            self.seek_position = 0
+            self.duration = 0
+            
+        except Exception as e:
+            error_msg = f"Error cleaning up AudioGeneratorModel: {str(e)}"
+            logging.error(error_msg)
+            self.handle_error(error_msg)
+
+    def quit(self):
+        """Clean up before quitting"""
+        self.cleanup()
+
+
+    def load_audio(self, file_path):
+        """Load an audio file for playback"""
         try:
             self.current_audio_file = file_path
             self.current_clip = AudioClip(file_path, 0)  # x position is 0 for preview
             self.duration = self.current_clip.duration
             self.seek_position = 0
-            logging.info(f"Loaded preview audio: {file_path}")
+            logging.info(f"Loaded audio: {file_path}")
             
         except Exception as e:
-            logging.error(f"Error loading preview audio: {str(e)}")
+            logging.error(f"Error loading audio: {str(e)}")
             self.current_clip = None
 
-    def play_preview(self):
-        """Play the preview audio"""
+    def play(self):
+        """Play the loaded audio"""
         if not self.current_clip:
-            logging.error("No preview audio loaded")
+            logging.error("No audio loaded")
             return
             
         try:
@@ -80,30 +114,20 @@ class AudioGeneratorModel:
             self.buffer_manager.is_playing = True
             self.buffer_manager.start_playback(self.audio)
             
-            logging.info(f"Started preview playback with device index: {self.device_index}")
+            logging.info(f"Started playback with device index: {self.device_index}")
             
         except Exception as e:
-            logging.error(f"Error playing preview: {str(e)}")
+            logging.error(f"Error playing audio: {str(e)}")
             self.is_playing = False
 
-    def stop_preview(self):
-        """Stop playing the preview audio"""
+    def stop(self):
+        """Stop playing the audio"""
         try:
             self.is_playing = False
             self.buffer_manager.stop_playback()
             
         except Exception as e:
-            logging.error(f"Error stopping preview: {str(e)}")
-
-    def load_audio(self, file_path):
-        self.load_preview_audio(file_path)
-
-    def play(self):
-        if self.current_audio_file:
-            self.play_preview()
-
-    def stop(self):
-        self.stop_preview()
+            logging.error(f"Error stopping audio: {str(e)}")
 
     def restart(self):
         """Restart playback from the beginning"""
@@ -112,7 +136,7 @@ class AudioGeneratorModel:
             
             # Stop current playback
             if was_playing:
-                self.stop_preview()
+                self.stop()
             
             # Reset positions
             self.seek_position = 0
@@ -121,7 +145,7 @@ class AudioGeneratorModel:
             
             # Restart if it was playing
             if was_playing:
-                self.play_preview()
+                self.play()
                 
         except Exception as e:
             logging.error(f"Error restarting playback: {str(e)}")
@@ -140,8 +164,8 @@ class AudioGeneratorModel:
             
             # If currently playing, restart from new position
             if self.is_playing:
-                self.stop_preview()
-                self.play_preview()
+                self.stop()
+                self.play()
                 
             return True
             
@@ -186,7 +210,7 @@ class AudioGeneratorModel:
     
     def quit(self):
         try:
-            self.stop_preview()
+            self.stop()
             if self.audio:
                 self.audio.terminate()
         except Exception as e:

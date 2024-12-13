@@ -25,6 +25,17 @@ class AudioBufferManager:
         
         logging.info(f"Initialized AudioBufferManager with output device index: {self.output_device_index}")
 
+    def handle_error(self, error_message):
+        """Handle errors in a consistent way"""
+        logging.error(error_message)
+        self.error_count += 1
+        self.last_error_time = time.time()
+        
+        # Stop playback if too many errors
+        if self.error_count >= self.max_errors:
+            logging.error("Too many consecutive errors, stopping playback")
+            self.stop_playback()
+
     def update_device(self, device_index, pa_instance):
         """Update the audio output device"""
         try:
@@ -49,8 +60,9 @@ class AudioBufferManager:
                 self.start_playback(pa_instance)
                 
         except Exception as e:
-            logging.error(f"Error updating audio device: {str(e)}")
-            self.is_playing = False
+            error_msg = f"Error updating audio device: {str(e)}"
+            logging.error(error_msg)
+            self.handle_error(error_msg)
 
     def reset(self):
         """Reset buffer state without blocking"""
@@ -67,7 +79,26 @@ class AudioBufferManager:
                 self.last_error_time = 0
                 
         except Exception as e:
-            logging.error(f"Error in buffer reset: {str(e)}")
+            error_msg = f"Error in buffer reset: {str(e)}"
+            logging.error(error_msg)
+            self.handle_error(error_msg)
+
+    def cleanup(self):
+        """Clean up resources"""
+        try:
+            self.stop_playback()
+            self.stream = None
+            self.current_buffer = None
+            self.playhead_position = 0
+            self.buffer_position = 0
+            self.error_count = 0
+            self.last_error_time = 0
+            
+        except Exception as e:
+            error_msg = f"Error cleaning up AudioBufferManager: {str(e)}"
+            logging.error(error_msg)
+            self.handle_error(error_msg)
+
 
     def get_audio_data(self, in_data, frame_count, time_info, status):
         """Get audio data for playback with minimal blocking"""
