@@ -10,9 +10,10 @@ from utils.config_manager import get_config_dir, get_base_dir
 from utils.audio_devices import get_audio_devices, find_device_by_name
 
 class PreferencesWindow(ctk.CTkToplevel):
-    def __init__(self, master, config):
+    def __init__(self, master, config, main_model=None):
         super().__init__(master)
         self.config = config
+        self.main_model = main_model  # Store reference to main_model
         self.prompts_config = self.load_prompts_config()
 
         # Initialize variables
@@ -131,7 +132,7 @@ class PreferencesWindow(ctk.CTkToplevel):
         # Note about changes
         note = ctk.CTkLabel(
             frame,
-            text="Note: Changes to audio devices will take effect after restarting the application.",
+            text="Changes to audio devices will take effect immediately.",
             wraplength=600,
             text_color="gray60"
         )
@@ -584,8 +585,12 @@ class PreferencesWindow(ctk.CTkToplevel):
             os.makedirs(os.path.join(self.projects_dir.get(), 'SFX'), exist_ok=True)
             os.makedirs(os.path.join(self.projects_dir.get(), 'Speech'), exist_ok=True)
             
+            # Update audio devices in models if main_model is available
+            if self.main_model and output_device:
+                self.main_model.update_audio_device(output_device['index'])
+            
             logging.info("Preferences saved successfully")
-            messagebox.showinfo("Success", "Settings saved successfully! Please restart the application for audio device changes to take effect.")
+            messagebox.showinfo("Success", "Settings saved successfully!")
             self.destroy()
             
         except Exception as e:

@@ -1,10 +1,19 @@
 import pyaudio
 import logging
 
+_pa_instance = None
+
+def get_pyaudio_instance():
+    """Get or create a singleton PyAudio instance"""
+    global _pa_instance
+    if _pa_instance is None:
+        _pa_instance = pyaudio.PyAudio()
+    return _pa_instance
+
 def get_audio_devices():
     """Get lists of available audio input and output devices."""
     try:
-        p = pyaudio.PyAudio()
+        p = get_pyaudio_instance()  # Use singleton instance
         input_devices = []
         output_devices = []
         
@@ -32,11 +41,10 @@ def get_audio_devices():
                 logging.error(f"Error getting info for device {i}: {str(e)}")
                 continue
         
-        p.terminate()
         return input_devices, output_devices
         
     except Exception as e:
-        logging.error(f"Error initializing PyAudio: {str(e)}")
+        logging.error(f"Error getting audio devices: {str(e)}")
         return [], []
 
 def find_device_by_name(devices, name):
@@ -45,3 +53,13 @@ def find_device_by_name(devices, name):
         if device['name'] == name:
             return device
     return None
+
+def cleanup():
+    """Clean up PyAudio instance on application exit"""
+    global _pa_instance
+    if _pa_instance is not None:
+        try:
+            _pa_instance.terminate()
+        except:
+            pass
+        _pa_instance = None

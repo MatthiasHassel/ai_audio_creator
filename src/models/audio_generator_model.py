@@ -16,10 +16,8 @@ class AudioGeneratorModel:
         self.sample_rate = 44100
         self.channels = 2
         
-        # Initialize PyAudio and buffer manager
+        # Initialize PyAudio
         self.audio = pyaudio.PyAudio()
-        self.audio_stream = None
-        self.buffer_manager = AudioBufferManager(self, buffer_size=2048)
         self.current_clip = None
         self.playback_finished_callback = None
         
@@ -30,7 +28,28 @@ class AudioGeneratorModel:
             default_device = self.audio.get_default_output_device_info()
             self.device_index = default_device['index']
         
+        # Initialize buffer manager
+        self.buffer_manager = AudioBufferManager(self, buffer_size=2048)
+        
         logging.info(f"AudioGeneratorModel using output device index: {self.device_index}")
+
+    def update_audio_device(self, device_index):
+        """Update the audio output device"""
+        was_playing = self.is_playing
+        current_position = self.seek_position
+        
+        # Stop current playback
+        self.stop_preview()
+        
+        # Update device index
+        self.device_index = device_index
+        self.buffer_manager.update_device(device_index, self.audio)
+        logging.info(f"Updated audio device to index: {device_index}")
+        
+        # Restart playback if it was playing
+        if was_playing and self.current_clip:
+            self.seek_position = current_position
+            self.play_preview()
 
     def load_preview_audio(self, file_path):
         """Load a preview audio file for playback"""
@@ -52,50 +71,14 @@ class AudioGeneratorModel:
             return
             
         try:
-            if self.audio_stream and self.audio_stream.is_active():
-                self.audio_stream.stop_stream()
-                self.audio_stream.close()
-            
-            def audio_callback(in_data, frame_count, time_info, status):
-                if status:
-                    logging.warning(f"Audio callback status: {status}")
-                
-                if not self.is_playing:
-                    return (None, pyaudio.paComplete)
-                
-                try:
-                    # Get audio data from the clip
-                    start_sample = int(self.seek_position * self.sample_rate)
-                    samples = self.current_clip.get_samples(start_sample, start_sample + frame_count)
-                    
-                    if len(samples) < frame_count:
-                        # End of file reached
-                        self.is_playing = False
-                        if self.playback_finished_callback:
-                            self.playback_finished_callback()
-                        return (samples.tobytes(), pyaudio.paComplete)
-                    
-                    self.seek_position += frame_count / self.sample_rate
-                    return (samples.tobytes(), pyaudio.paContinue)
-                    
-                except Exception as e:
-                    logging.error(f"Error in audio callback: {str(e)}")
-                    return (None, pyaudio.paComplete)
-            
-            # Create and start the stream
-            self.audio_stream = self.audio.open(
-                format=pyaudio.paFloat32,
-                channels=self.channels,
-                rate=self.sample_rate,
-                output=True,
-                output_device_index=self.device_index,
-                stream_callback=audio_callback,
-                frames_per_buffer=2048
-            )
+            # Reset buffer manager state
+            self.buffer_manager.reset()
+            self.buffer_manager.playhead_position = self.seek_position
             
             self.is_playing = True
             self.start_time = time.time() - self.seek_position
-            self.audio_stream.start_stream()
+            self.buffer_manager.is_playing = True
+            self.buffer_manager.start_playback(self.audio)
             
             logging.info(f"Started preview playback with device index: {self.device_index}")
             
@@ -107,10 +90,7 @@ class AudioGeneratorModel:
         """Stop playing the preview audio"""
         try:
             self.is_playing = False
-            if self.audio_stream:
-                self.audio_stream.stop_stream()
-                self.audio_stream.close()
-                self.audio_stream = None
+            self.buffer_manager.stop_playback()
             
         except Exception as e:
             logging.error(f"Error stopping preview: {str(e)}")
@@ -126,10 +106,25 @@ class AudioGeneratorModel:
         self.stop_preview()
 
     def restart(self):
-        self.seek_position = 0
-        if self.is_playing:
-            self.stop_preview()
-            self.play_preview()
+        """Restart playback from the beginning"""
+        try:
+            was_playing = self.is_playing
+            
+            # Stop current playback
+            if was_playing:
+                self.stop_preview()
+            
+            # Reset positions
+            self.seek_position = 0
+            self.buffer_manager.playhead_position = 0
+            self.buffer_manager.buffer_position = 0
+            
+            # Restart if it was playing
+            if was_playing:
+                self.play_preview()
+                
+        except Exception as e:
+            logging.error(f"Error restarting playback: {str(e)}")
 
     def seek(self, position):
         try:
@@ -138,6 +133,10 @@ class AudioGeneratorModel:
                 
             # Ensure position is within bounds
             self.seek_position = max(0, min(position, self.duration))
+            
+            # Update buffer manager position
+            self.buffer_manager.playhead_position = self.seek_position
+            self.buffer_manager.buffer_position = 0
             
             # If currently playing, restart from new position
             if self.is_playing:
@@ -158,11 +157,36 @@ class AudioGeneratorModel:
     def set_playback_finished_callback(self, callback):
         self.playback_finished_callback = callback
     
+    def get_clip_frames(self, clip, start_time, duration):
+        """Get audio frames from a clip"""
+        try:
+            start_sample = int(round(start_time * self.sample_rate))
+            num_samples = int(round(duration * self.sample_rate))
+            
+            return clip.get_samples(start_sample, start_sample + num_samples)
+            
+        except Exception as e:
+            logging.error(f"Error getting clip frames: {str(e)}")
+            return np.zeros((0, 2), dtype=np.float32)
+    
+    def get_active_tracks(self):
+        """Return current clip as a track for buffer manager"""
+        if self.current_clip:
+            return [{
+                'clips': [self.current_clip],
+                'volume_db': 0.0
+            }]
+        return []
+    
+    def db_to_amplitude(self, db):
+        """Convert decibels to amplitude multiplier"""
+        if db <= -70:  # Mute threshold
+            return 0.0
+        return 10 ** (db / 20.0)
+    
     def quit(self):
         try:
-            if self.audio_stream:
-                self.audio_stream.stop_stream()
-                self.audio_stream.close()
+            self.stop_preview()
             if self.audio:
                 self.audio.terminate()
         except Exception as e:

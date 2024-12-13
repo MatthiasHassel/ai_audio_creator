@@ -5,8 +5,8 @@ import logging
 import time
 
 class AudioBufferManager:
-    def __init__(self, timeline_model, buffer_size=2048):
-        self.timeline_model = timeline_model
+    def __init__(self, parent_model, buffer_size=2048):
+        self.parent_model = parent_model
         self.buffer_size = buffer_size
         self.current_buffer = np.zeros((buffer_size, 2), dtype=np.float32)
         self.buffer_lock = threading.Lock()
@@ -17,17 +17,40 @@ class AudioBufferManager:
         self.max_errors = 3
         self.last_error_time = 0
         self.error_reset_interval = 5.0  # Reset error count after 5 seconds
-        
-        # Initialize PyAudio with configured devices
-        self.pa = pyaudio.PyAudio()
         self.stream = None
         
         # Get device indices from config
-        config = self.timeline_model.config if hasattr(self.timeline_model, 'config') else {}
+        config = self.parent_model.config if hasattr(self.parent_model, 'config') else {}
         self.output_device_index = config.get('audio', {}).get('output_device_index', None)
-        self.input_device_index = config.get('audio', {}).get('input_device_index', None)
         
         logging.info(f"Initialized AudioBufferManager with output device index: {self.output_device_index}")
+
+    def update_device(self, device_index, pa_instance):
+        """Update the audio output device"""
+        try:
+            was_playing = self.is_playing
+            
+            # Stop current playback and close existing stream
+            if self.stream is not None:
+                if self.stream.is_active():
+                    self.stream.stop_stream()
+                self.stream.close()
+                self.stream = None
+            
+            # Update device index
+            self.output_device_index = device_index
+            logging.info(f"AudioBufferManager updated device index to: {device_index}")
+            
+            # Reset buffer state
+            self.reset()
+            
+            # Restart playback if it was playing
+            if was_playing:
+                self.start_playback(pa_instance)
+                
+        except Exception as e:
+            logging.error(f"Error updating audio device: {str(e)}")
+            self.is_playing = False
 
     def reset(self):
         """Reset buffer state without blocking"""
@@ -67,7 +90,7 @@ class AudioBufferManager:
                     # Get data and advance position
                     data = self.current_buffer[self.buffer_position:self.buffer_position + frame_count]
                     self.buffer_position += frame_count
-                    self.playhead_position += frame_count / self.timeline_model.sample_rate
+                    self.playhead_position += frame_count / self.parent_model.sample_rate
                     
                     # Copy data to output buffer
                     output_buffer[:len(data)] = data
@@ -104,10 +127,10 @@ class AudioBufferManager:
         try:
             # Create new buffer
             new_buffer = np.zeros((self.buffer_size, 2), dtype=np.float32)
-            end_time = self.playhead_position + self.buffer_size / self.timeline_model.sample_rate
+            end_time = self.playhead_position + self.buffer_size / self.parent_model.sample_rate
 
             # Get active tracks without holding any locks
-            active_tracks = self.timeline_model.get_active_tracks()
+            active_tracks = self.parent_model.get_active_tracks()
             
             # Process each track
             for track in active_tracks:
@@ -116,7 +139,7 @@ class AudioBufferManager:
                     
                 # Convert track volume from dB to amplitude multiplier
                 track_volume_db = track.get("volume_db", 0.0)
-                track_volume = self.timeline_model.db_to_amplitude(track_volume_db)
+                track_volume = self.parent_model.db_to_amplitude(track_volume_db)
                 
                 for clip in track['clips']:
                     if not self.is_playing:  # Check if we should stop
@@ -128,12 +151,12 @@ class AudioBufferManager:
                             clip_end = min(clip.duration, end_time - clip.x)
                             
                             # Get clip frames without holding buffer lock
-                            clip_frames = self.timeline_model.get_clip_frames(
+                            clip_frames = self.parent_model.get_clip_frames(
                                 clip, clip_start, clip_end - clip_start)
                             
                             if clip_frames is not None and clip_frames.size > 0:
                                 buffer_start = int(max(0, (clip.x - self.playhead_position) 
-                                                     * self.timeline_model.sample_rate))
+                                                     * self.parent_model.sample_rate))
                                 buffer_end = min(buffer_start + clip_frames.shape[0], self.buffer_size)
                                 
                                 if buffer_start < buffer_end:
@@ -173,18 +196,21 @@ class AudioBufferManager:
         except Exception as e:
             logging.error(f"Error updating playhead: {str(e)}")
             
-    def start_playback(self):
+    def start_playback(self, pa_instance):
         """Start audio playback using the configured output device"""
         try:
-            if self.stream is not None and self.stream.is_active():
-                self.stream.stop_stream()
+            # Close any existing stream
+            if self.stream is not None:
+                if self.stream.is_active():
+                    self.stream.stop_stream()
                 self.stream.close()
+                self.stream = None
             
             # Create new audio stream with configured output device
-            self.stream = self.pa.open(
+            self.stream = pa_instance.open(
                 format=pyaudio.paFloat32,
                 channels=2,
-                rate=self.timeline_model.sample_rate,
+                rate=self.parent_model.sample_rate,
                 output=True,
                 output_device_index=self.output_device_index,
                 stream_callback=self.get_audio_data,
@@ -204,7 +230,8 @@ class AudioBufferManager:
         try:
             self.is_playing = False
             if self.stream is not None:
-                self.stream.stop_stream()
+                if self.stream.is_active():
+                    self.stream.stop_stream()
                 self.stream.close()
                 self.stream = None
             
@@ -212,12 +239,11 @@ class AudioBufferManager:
             logging.error(f"Error stopping playback: {str(e)}")
             
     def __del__(self):
-        """Clean up PyAudio resources"""
+        """Clean up audio resources"""
         try:
             if self.stream is not None:
-                self.stream.stop_stream()
+                if self.stream.is_active():
+                    self.stream.stop_stream()
                 self.stream.close()
-            if self.pa is not None:
-                self.pa.terminate()
         except Exception as e:
             logging.error(f"Error cleaning up AudioBufferManager: {str(e)}")

@@ -5,18 +5,24 @@ import tkinter.simpledialog as simpledialog
 import os
 from views.audio_generator_view import AudioGeneratorView
 from views.script_editor_view import ScriptEditorView
+from views.preferences_view import PreferencesWindow
 
 class MainView(tk.Toplevel):
     def __init__(self, master, config, project_model):
         tk.Toplevel.__init__(self, master)
         self.config_data = config
         self.project_model = project_model
+        self.main_model = None  # Will be set by controller
         self.setup_audio_generator_window()
         self.setup_timeline_window()
         self.create_components()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.timeline_controller = None
         self.sync_to_reaper_callback = None
+
+    def set_main_model(self, main_model):
+        """Set the main model reference"""
+        self.main_model = main_model
 
     def setup_audio_generator_window(self):
         self.base_title = "Audio Creator"
@@ -166,8 +172,7 @@ class MainView(tk.Toplevel):
         self.paned_window.after(10, self.set_initial_sash_position)
 
     def show_preferences(self):
-        from views.preferences_view import PreferencesWindow
-        PreferencesWindow(self, self.config_data)
+        PreferencesWindow(self, self.config_data, self.main_model)
 
     def create_status_bar(self):
         self.status_var = tk.StringVar()

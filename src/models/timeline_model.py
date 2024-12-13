@@ -6,6 +6,7 @@ import logging
 import threading
 from utils.audio_clip import AudioClip
 from utils.audio_buffer_manager import AudioBufferManager
+from utils.audio_devices import get_audio_devices, find_device_by_name
 
 class TimelineModel:
     def __init__(self, config=None):
@@ -13,7 +14,6 @@ class TimelineModel:
         self.is_playing = False
         self.playhead_position = 0
         self.start_time = 0
-        self.audio_stream = None
         self.active_clips = []
         self.audio_cache = {}
         self.cache_lock = threading.Lock()
@@ -41,14 +41,55 @@ class TimelineModel:
                 default_device = self.audio.get_default_output_device_info()
                 self.device_index = default_device['index']
             
+            # Verify device index is valid
+            try:
+                self.audio.get_device_info_by_index(self.device_index)
+            except Exception:
+                logging.warning(f"Configured device index {self.device_index} not found, falling back to default")
+                default_device = self.audio.get_default_output_device_info()
+                self.device_index = default_device['index']
+            
             logging.info(f"Using audio device index: {self.device_index}")
             
-            # Initialize buffer manager with config
+            # Initialize buffer manager
             self.buffer_manager = AudioBufferManager(self, buffer_size=2048)
             
         except Exception as e:
             logging.error(f"Error initializing audio: {str(e)}")
             raise
+
+    def update_audio_device(self, device_index):
+        """Update the audio output device"""
+        try:
+            was_playing = self.is_playing
+            current_position = self.playhead_position
+            active_tracks = self.get_active_tracks() if was_playing else None
+            
+            # Stop current playback
+            if was_playing:
+                self.stop_timeline()
+            
+            # Verify the device index is valid
+            try:
+                device_info = self.audio.get_device_info_by_index(device_index)
+                if device_info['maxOutputChannels'] == 0:
+                    raise ValueError("Selected device has no output channels")
+            except Exception as e:
+                logging.error(f"Invalid device index {device_index}: {str(e)}")
+                return
+            
+            # Update device indices
+            self.device_index = device_index
+            self.buffer_manager.update_device(device_index, self.audio)
+            logging.info(f"Updated timeline audio device to index: {device_index}")
+            
+            # Restart playback if it was playing
+            if was_playing and active_tracks:
+                self.playhead_position = current_position
+                self.play_timeline(active_tracks)
+                
+        except Exception as e:
+            logging.error(f"Error updating audio device: {str(e)}")
 
     def add_state_change_callback(self, callback):
         self.state_change_callbacks.append(callback)
@@ -90,50 +131,25 @@ class TimelineModel:
             self.buffer_manager.reset()
             self.buffer_manager.playhead_position = self.playhead_position
             self.start_time = time.time() - self.playhead_position
-
-            def audio_callback(in_data, frame_count, time_info, status):
-                if status:
-                    logging.warning(f"Audio callback status: {status}")
-                
-                if self.stop_event.is_set():
-                    return (None, pyaudio.paComplete)
-
-                try:
-                    if not self.is_playing:
-                        return (None, pyaudio.paComplete)
-                    
-                    data, status = self.buffer_manager.get_audio_data(None, frame_count, None, None)
-                    self.update_playhead()
-                    return (data.tobytes(), pyaudio.paContinue)
-                    
-                except Exception as e:
-                    logging.error(f"Error in audio callback: {str(e)}")
-                    return (None, pyaudio.paComplete)
-
-            logging.info("Creating audio stream...")
             
-            try:
-                self.audio_stream = self.audio.open(
-                    format=pyaudio.paFloat32,
-                    channels=self.channels,
-                    rate=self.sample_rate,
-                    output=True,
-                    output_device_index=self.device_index,
-                    stream_callback=audio_callback,
-                    frames_per_buffer=2048
-                )
-                
-                self.audio_stream.start_stream()
-                logging.info(f"Audio stream started successfully with device index: {self.device_index}")
-                
-            except Exception as e:
-                logging.error(f"Failed to open audio stream: {e}")
-                self._safe_cleanup()
-                raise
+            # Start playback using buffer manager
+            self.buffer_manager.start_playback(self.audio)
+            
+            # Start playhead update thread
+            self._start_playhead_update()
                 
         except Exception as e:
             logging.error(f"Error starting playback: {str(e)}", exc_info=True)
             self._safe_cleanup()
+
+    def _start_playhead_update(self):
+        """Start a thread to update playhead position"""
+        def update_loop():
+            while self.is_playing:
+                self.update_playhead()
+                time.sleep(0.016)  # ~60fps update rate
+        
+        threading.Thread(target=update_loop, daemon=True).start()
 
     def stop_timeline(self):
         """Non-blocking stop operation"""
@@ -147,53 +163,28 @@ class TimelineModel:
 
             # Signal stop to all components
             self.stop_event.set()
-            self.buffer_manager.is_playing = False
-            
-            # Start cleanup in a separate thread
-            threading.Thread(target=self._cleanup_audio_stream, daemon=True).start()
+            self.buffer_manager.stop_playback()
             
             # Notify state change immediately
             self._notify_state_change(False, self.playhead_position)
+            
+            with self.state_lock:
+                self.is_stopping = False
             
         except Exception as e:
             logging.error(f"Error in stop_timeline: {str(e)}")
             self._safe_cleanup()
 
-    def _cleanup_audio_stream(self):
-        """Cleanup audio stream in a separate thread"""
-        try:
-            if self.audio_stream is not None:
-                logging.info("Stopping audio stream...")
-                try:
-                    if self.audio_stream.is_active():
-                        self.audio_stream.stop_stream()
-                    self.audio_stream.close()
-                except Exception as e:
-                    logging.error(f"Error stopping audio stream: {str(e)}")
-                finally:
-                    self.audio_stream = None
-
-            with self.state_lock:
-                self.is_stopping = False
-            
-            logging.info("Audio stream cleanup completed")
-            
-        except Exception as e:
-            logging.error(f"Error in cleanup_audio_stream: {str(e)}")
-            with self.state_lock:
-                self.is_stopping = False
-
     def _safe_cleanup(self):
         """Safe cleanup that can be called from any thread"""
         try:
             self.stop_event.set()
-            self.buffer_manager.is_playing = False
+            self.buffer_manager.stop_playback()
             
             with self.state_lock:
                 self.is_playing = False
                 self.is_stopping = False
             
-            threading.Thread(target=self._cleanup_audio_stream, daemon=True).start()
             self._notify_state_change(False, self.playhead_position)
             
         except Exception as e:
@@ -386,12 +377,6 @@ class TimelineModel:
         self.is_modified = False
 
     def __del__(self):
-        if hasattr(self, 'audio_stream') and self.audio_stream:
-            try:
-                self.audio_stream.stop_stream()
-                self.audio_stream.close()
-            except:
-                pass
         if hasattr(self, 'audio'):
             try:
                 self.audio.terminate()

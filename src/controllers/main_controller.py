@@ -19,6 +19,9 @@ class MainController:
         self.script_editor_controller = None
         self.timeline_controller = None
 
+        # Set main_model in view
+        self.view.set_main_model(self.model)
+
         self.setup_controllers()
         self.setup_callbacks()
         self.load_default_project()

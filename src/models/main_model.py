@@ -11,6 +11,15 @@ class MainModel:
         self.script_editor_model = ScriptEditorModel()
         self.timeline_model = TimelineModel(config)
 
+    def update_audio_device(self, device_index):
+        """Update audio device for all models"""
+        # Update config
+        self.config['audio']['output_device_index'] = device_index
+        
+        # Update models
+        self.audio_model.update_audio_device(device_index)
+        self.timeline_model.update_audio_device(device_index)
+
     def get_audio_model(self):
         return self.audio_model
 
