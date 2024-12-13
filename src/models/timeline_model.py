@@ -4,8 +4,6 @@ import numpy as np
 import time
 import logging
 import threading
-import sounddevice as sd
-from pydub import AudioSegment
 from utils.audio_clip import AudioClip
 from utils.audio_buffer_manager import AudioBufferManager
 
@@ -24,7 +22,6 @@ class TimelineModel:
         self.is_stopping = False
         self.state_change_callbacks = []
         self.sample_rate = 44100
-        self.target_sample_rate = 44100
         self.channels = 2
         self.max_playhead_position = 1800
         self.quantization_interval = 1 / 44100
@@ -33,23 +30,42 @@ class TimelineModel:
         self.redo_stack = []
         self.is_modified = False
 
-        # Initialize sounddevice settings
+        # Initialize PyAudio
         try:
-            # Get default device info
-            device_info = sd.query_devices(kind='output')
-            logging.info(f"Using audio device: {device_info['name']}")
-            
-            # Set default device settings
-            sd.default.samplerate = self.sample_rate
-            sd.default.channels = self.channels
-            sd.default.dtype = np.float32
+            self.audio = pyaudio.PyAudio()
+            # Find best output device
+            self.device_index = self._find_best_output_device()
+            logging.info(f"Using audio device index: {self.device_index}")
             
             # Initialize buffer manager
             self.buffer_manager = AudioBufferManager(self, buffer_size=2048)
             
         except Exception as e:
-            logging.error(f"Error initializing audio device: {str(e)}")
+            logging.error(f"Error initializing audio: {str(e)}")
             raise
+
+    def _find_best_output_device(self):
+        """Find the best available output device"""
+        try:
+            default_device = self.audio.get_default_output_device_info()
+            logging.info(f"Default output device: {default_device['name']}")
+            return default_device['index']
+        except Exception as e:
+            logging.warning(f"Could not get default device: {e}")
+            
+            # Try to find a suitable device
+            for i in range(self.audio.get_device_count()):
+                try:
+                    device_info = self.audio.get_device_info_by_index(i)
+                    if device_info['maxOutputChannels'] >= 2:
+                        logging.info(f"Using alternative device: {device_info['name']}")
+                        return i
+                except:
+                    continue
+            
+            # If no suitable device found, use system default (index 0)
+            logging.warning("No suitable audio device found, using system default")
+            return 0
 
     def add_state_change_callback(self, callback):
         self.state_change_callbacks.append(callback)
@@ -60,6 +76,22 @@ class TimelineModel:
                 callback(is_playing, position)
             except Exception as e:
                 logging.error(f"Error in state change callback: {str(e)}")
+
+    def preload_audio_files(self):
+        """Preload all audio files in the timeline"""
+        try:
+            logging.info("Starting audio file preload...")
+            for track in self.tracks:
+                for clip in track['clips']:
+                    try:
+                        # Get a small portion of audio to ensure it's loaded and cached
+                        self.get_clip_frames(clip, 0, 0.1)
+                        logging.info(f"Preloaded audio file: {clip.file_path}")
+                    except Exception as e:
+                        logging.error(f"Error preloading audio file {clip.file_path}: {str(e)}")
+            logging.info("Audio file preload completed")
+        except Exception as e:
+            logging.error(f"Error in preload_audio_files: {str(e)}")
 
     def play_timeline(self, active_tracks):
         logging.info("Starting timeline playback...")
@@ -76,74 +108,46 @@ class TimelineModel:
             self.buffer_manager.playhead_position = self.playhead_position
             self.start_time = time.time() - self.playhead_position
 
-            def audio_callback(outdata, frames, time, status):
+            def audio_callback(in_data, frame_count, time_info, status):
                 if status:
                     logging.warning(f"Audio callback status: {status}")
                 
-                # Check stop event first
                 if self.stop_event.is_set():
-                    raise sd.CallbackStop
+                    return (None, pyaudio.paComplete)
 
                 try:
-                    # Don't acquire any locks in the callback
                     if not self.is_playing:
-                        raise sd.CallbackStop
+                        return (None, pyaudio.paComplete)
                     
-                    data, _ = self.buffer_manager.get_audio_data(None, frames, None, None)
-                    outdata[:] = data
+                    data, status = self.buffer_manager.get_audio_data(None, frame_count, None, None)
                     self.update_playhead()
+                    return (data.tobytes(), pyaudio.paContinue)
+                    
                 except Exception as e:
                     logging.error(f"Error in audio callback: {str(e)}")
-                    raise sd.CallbackStop
+                    return (None, pyaudio.paComplete)
 
             logging.info("Creating audio stream...")
             
-            # Get list of available output devices
-            devices = sd.query_devices()
-            default_device = sd.default.device[1]  # Get default output device
-            
-            # Log available devices for debugging
-            logging.info("Available audio devices:")
-            for i, dev in enumerate(devices):
-                logging.info(f"Device {i}: {dev['name']} (Max channels: {dev['max_output_channels']})")
-            
             try:
-                # Try to use default device first
-                self.audio_stream = sd.OutputStream(
-                    device=default_device,
-                    samplerate=self.sample_rate,
-                    channels=2,
-                    callback=audio_callback,
-                    blocksize=2048,
-                    finished_callback=self.on_stream_finished
+                self.audio_stream = self.audio.open(
+                    format=pyaudio.paFloat32,
+                    channels=self.channels,
+                    rate=self.sample_rate,
+                    output=True,
+                    output_device_index=self.device_index,
+                    stream_callback=audio_callback,
+                    frames_per_buffer=2048
                 )
-            except sd.PortAudioError as e:
-                logging.error(f"Failed to open default device: {e}")
                 
-                # Try other available devices
-                for i, dev in enumerate(devices):
-                    if dev['max_output_channels'] >= 2:  # Need at least 2 channels for stereo
-                        try:
-                            logging.info(f"Trying device {i}: {dev['name']}")
-                            self.audio_stream = sd.OutputStream(
-                                device=i,
-                                samplerate=self.sample_rate,
-                                channels=2,
-                                callback=audio_callback,
-                                blocksize=2048,
-                                finished_callback=self.on_stream_finished
-                            )
-                            logging.info(f"Successfully opened device {dev['name']}")
-                            break
-                        except sd.PortAudioError:
-                            continue
+                self.audio_stream.start_stream()
+                logging.info("Audio stream started successfully")
                 
-                if self.audio_stream is None:
-                    raise Exception("No suitable audio output device found")
-            
-            self.audio_stream.start()
-            logging.info("Audio stream started successfully")
-            
+            except Exception as e:
+                logging.error(f"Failed to open audio stream: {e}")
+                self._safe_cleanup()
+                raise
+                
         except Exception as e:
             logging.error(f"Error starting playback: {str(e)}", exc_info=True)
             self._safe_cleanup()
@@ -156,7 +160,7 @@ class TimelineModel:
                 if not self.is_playing or self.is_stopping:
                     return
                 self.is_stopping = True
-                self.is_playing = False  # Set this early to stop audio callback
+                self.is_playing = False
 
             # Signal stop to all components
             self.stop_event.set()
@@ -175,12 +179,11 @@ class TimelineModel:
     def _cleanup_audio_stream(self):
         """Cleanup audio stream in a separate thread"""
         try:
-            # Stop and close the audio stream
             if self.audio_stream is not None:
                 logging.info("Stopping audio stream...")
                 try:
-                    if self.audio_stream.active:
-                        self.audio_stream.stop()
+                    if self.audio_stream.is_active():
+                        self.audio_stream.stop_stream()
                     self.audio_stream.close()
                 except Exception as e:
                     logging.error(f"Error stopping audio stream: {str(e)}")
@@ -200,7 +203,6 @@ class TimelineModel:
     def _safe_cleanup(self):
         """Safe cleanup that can be called from any thread"""
         try:
-            # Set flags first
             self.stop_event.set()
             self.buffer_manager.is_playing = False
             
@@ -208,9 +210,7 @@ class TimelineModel:
                 self.is_playing = False
                 self.is_stopping = False
             
-            # Start cleanup in background
             threading.Thread(target=self._cleanup_audio_stream, daemon=True).start()
-            
             self._notify_state_change(False, self.playhead_position)
             
         except Exception as e:
@@ -218,60 +218,23 @@ class TimelineModel:
         finally:
             self.stop_event.clear()
 
-    def on_stream_finished(self):
-        """Callback when the audio stream finishes"""
-        logging.info("Audio stream finished callback triggered")
-        self._safe_cleanup()
-
-    def preload_audio_files(self):
-        threading.Thread(target=self._preload_audio_files_thread, daemon=True).start()
-
-    def _preload_audio_files_thread(self):
-        for track in self.tracks:
-            for clip in track['clips']:
-                self._cache_audio_file(clip.file_path)
-
-    def _cache_audio_file(self, file_path):
-        if file_path not in self.audio_cache:
-            try:
-                audio = AudioSegment.from_file(file_path)
-                if audio.frame_rate != self.target_sample_rate:
-                    logging.info(f"Converting {file_path} from {audio.frame_rate}Hz to {self.target_sample_rate}Hz")
-                    audio = audio.set_frame_rate(self.target_sample_rate)
-                    audio.export(file_path, format="wav")
-                    audio = AudioSegment.from_file(file_path)  # Reload the converted file
-                
-                samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
-                samples = samples.reshape((-1, 2)) if audio.channels == 2 else np.column_stack((samples, samples))
-                
-                with self.cache_lock:
-                    self.audio_cache[file_path] = {
-                        'samples': samples / 32768.0,
-                        'duration': len(audio) / 1000.0
-                    }
-                logging.info(f"Cached audio file: {file_path}")
-            except Exception as e:
-                logging.error(f"Error caching audio file {file_path}: {str(e)}")
+    def update_playhead(self):
+        if self.is_playing:
+            self.playhead_position = time.time() - self.start_time
+            if hasattr(self, 'on_playhead_update'):
+                self.on_playhead_update(self.playhead_position)
 
     def get_clip_frames(self, clip, start_time, duration):
-        with self.cache_lock:
-            if clip.file_path not in self.audio_cache:
-                self._cache_audio_file(clip.file_path)
+        """Get audio frames from a clip"""
+        try:
+            start_sample = int(round(start_time * self.sample_rate))
+            num_samples = int(round(duration * self.sample_rate))
             
-            cached_data = self.audio_cache[clip.file_path]
-
-        start_sample = int(round(start_time * self.sample_rate))
-        end_sample = int(round((start_time + duration) * self.sample_rate))
-
-        if end_sample > len(cached_data['samples']):
-            samples = np.zeros((end_sample - start_sample, 2), dtype=np.float32)
-            available_samples = len(cached_data['samples']) - start_sample
-            if available_samples > 0:
-                samples[:available_samples] = cached_data['samples'][start_sample:start_sample + available_samples]
-        else:
-            samples = cached_data['samples'][start_sample:end_sample]
-
-        return samples
+            return clip.get_samples(start_sample, start_sample + num_samples)
+            
+        except Exception as e:
+            logging.error(f"Error getting clip frames: {str(e)}")
+            return np.zeros((0, 2), dtype=np.float32)
 
     def get_active_clips(self, active_tracks):
         active_clips = []
@@ -285,7 +248,6 @@ class TimelineModel:
             self.active_clips = self.get_active_clips(active_tracks)
 
     def add_track(self, track_data):
-        # Initialize track with volume in decibels (0 dB by default)
         if 'volume_db' not in track_data:
             track_data['volume_db'] = 0.0
         self.tracks.append(track_data)
@@ -306,18 +268,16 @@ class TimelineModel:
 
     def add_clip_to_track(self, track_index, clip):
         if track_index >= len(self.tracks):
-            # This shouldn't happen now, but keep it as a safeguard
             self.tracks.append({
                 "name": f"Track {len(self.tracks) + 1}", 
                 "clips": [],
-                "volume_db": 0.0  # Initialize with 0 dB
+                "volume_db": 0.0
             })
         
-        # Insert the clip at the correct position in the track
         track = self.tracks[track_index]
         insert_position = next((i for i, existing_clip in enumerate(track['clips']) 
-                                if getattr(existing_clip, 'index', float('inf')) > clip.index), 
-                            len(track['clips']))
+                              if getattr(existing_clip, 'index', float('inf')) > clip.index), 
+                             len(track['clips']))
         track['clips'].insert(insert_position, clip)
         self.buffer_manager.reset()
         self.set_modified(True)
@@ -337,10 +297,9 @@ class TimelineModel:
         return self.tracks
 
     def set_tracks(self, tracks_data):
-        # Ensure all tracks have volume_db
         for track in tracks_data:
             if 'volume_db' not in track:
-                track['volume_db'] = 0.0  # Default to 0 dB
+                track['volume_db'] = 0.0
         self.tracks = tracks_data
         self.is_modified = True
 
@@ -357,7 +316,6 @@ class TimelineModel:
     def update_track_volume(self, track):
         track_index = self.get_track_index(track)
         if 0 <= track_index < len(self.tracks):
-            # Update volume in decibels
             self.tracks[track_index]["volume_db"] = track.get("volume_db", 0.0)
             self.is_modified = True
 
@@ -366,13 +324,6 @@ class TimelineModel:
         if db <= -70:  # Mute threshold
             return 0.0
         return 10 ** (db / 20.0)
-
-    def update_playhead(self):
-        if self.is_playing:
-            self.playhead_position = time.time() - self.start_time
-            # Notify the view to update the playhead position
-            if hasattr(self, 'on_playhead_update'):
-                self.on_playhead_update(self.playhead_position)
 
     def quantize_position(self, position):
         return round(position / self.quantization_interval) * self.quantization_interval
@@ -399,7 +350,6 @@ class TimelineModel:
             if clip in self.tracks[track_index]['clips']:
                 self.tracks[track_index]['clips'].remove(clip)
                 self.is_modified = True
-                # Remove the clip from active_clips if it's there
                 self.active_clips = [(c, t) for c, t in self.active_clips if c != clip]
 
     def move_clip(self, clip, new_x, old_track_index, new_track_index):
@@ -433,7 +383,7 @@ class TimelineModel:
                 'clips': serializable_clips,
                 'solo': track.get('solo', False),
                 'mute': track.get('mute', False),
-                'volume_db': track.get('volume_db', 0.0)  # Store volume in dB
+                'volume_db': track.get('volume_db', 0.0)
             })
         return serializable_tracks
 
@@ -448,15 +398,20 @@ class TimelineModel:
                 'clips': clips,
                 'solo': track_data.get('solo', False),
                 'mute': track_data.get('mute', False),
-                'volume_db': track_data.get('volume_db', 0.0)  # Load volume in dB
+                'volume_db': track_data.get('volume_db', 0.0)
             })
         self.is_modified = False
 
     def __del__(self):
-        if self.audio_stream:
+        if hasattr(self, 'audio_stream') and self.audio_stream:
             try:
-                self.audio_stream.stop()
+                self.audio_stream.stop_stream()
                 self.audio_stream.close()
+            except:
+                pass
+        if hasattr(self, 'audio'):
+            try:
+                self.audio.terminate()
             except:
                 pass
 

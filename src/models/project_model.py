@@ -56,14 +56,27 @@ class ProjectModel:
         self.save_timeline_data()
 
     def load_project(self, project_name):
-        project_dir = os.path.join(self.base_projects_dir, project_name)
-        if not os.path.exists(project_dir):
-            raise ValueError(f"Project '{project_name}' does not exist")
-        
-        self.current_project = project_name
-        self.load_project_metadata()
-        self.load_timeline_data()
-        self.saved_audio_files.update(self.get_all_project_audio_files())
+        try:
+            project_dir = os.path.join(self.base_projects_dir, project_name)
+            if not os.path.exists(project_dir):
+                raise ValueError(f"Project '{project_name}' does not exist")
+            
+            self.current_project = project_name
+            self.load_project_metadata()
+            self.load_timeline_data()
+            
+            # Preload audio files after loading timeline data
+            try:
+                self.timeline_model.preload_audio_files()
+            except Exception as e:
+                logging.error(f"Error preloading audio files: {str(e)}")
+            
+            self.saved_audio_files.update(self.get_all_project_audio_files())
+            logging.info(f"Project '{project_name}' loaded successfully")
+            
+        except Exception as e:
+            logging.error(f"Error loading project '{project_name}': {str(e)}")
+            raise
 
     def save_project(self):
         if not self.current_project:
@@ -95,7 +108,7 @@ class ProjectModel:
                 with open(metadata_file, 'r') as f:
                     self.metadata = json.load(f)
             except json.JSONDecodeError as e:
-                print(f"Error parsing project metadata: {str(e)}")
+                logging.error(f"Error parsing project metadata: {str(e)}")
                 self.metadata = {}
         else:
             self.metadata = {}
@@ -113,10 +126,12 @@ class ProjectModel:
                 with open(timeline_file, 'r') as f:
                     serializable_tracks = json.load(f)
                 self.timeline_model.load_from_serializable(serializable_tracks)
+                logging.info("Timeline data loaded successfully")
             except json.JSONDecodeError as e:
-                print(f"Error parsing timeline data: {str(e)}")
+                logging.error(f"Error parsing timeline data: {str(e)}")
                 self.timeline_model.clear_tracks()
         else:
+            logging.info("No timeline data found, starting with empty timeline")
             self.timeline_model.clear_tracks()
 
     def is_file_in_output_directory(self, file_path):
@@ -175,31 +190,46 @@ class ProjectModel:
         if self.is_file_in_output_directory(file_path):
             return file_path
         
-        # Load the audio file
-        audio = AudioSegment.from_file(file_path)
-        
-        # Check if the sample rate is either 44.1kHz or 48kHz
-        if audio.frame_rate not in [44100, 48000]:
-            raise ValueError(f"Unsupported sample rate: {audio.frame_rate}Hz. Only 44.1kHz and 48kHz are supported.")
-        
-        audio_files_dir = self.get_audio_files_dir()
-        file_name = os.path.basename(file_path)
-        destination = os.path.join(audio_files_dir, file_name)
-        
-        os.makedirs(audio_files_dir, exist_ok=True)
-        
-        # Resample if necessary
-        if audio.frame_rate == 48000:
-            print(f"Resampling {file_name} from 48kHz to 44.1kHz")
-            audio = audio.set_frame_rate(44100)
-            audio.export(destination, format="wav")
-        else:
-            # If it's already 44.1kHz, just copy the file
-            shutil.copy2(file_path, destination)
-        
-        print(f"File imported to: {destination}")
-        self.new_audio_files.add(destination)
-        return destination
+        try:
+            # Load the audio file
+            audio = AudioSegment.from_file(file_path)
+            
+            # Check if the sample rate is either 44.1kHz or 48kHz
+            if audio.frame_rate not in [44100, 48000]:
+                raise ValueError(f"Unsupported sample rate: {audio.frame_rate}Hz. Only 44.1kHz and 48kHz are supported.")
+            
+            audio_files_dir = self.get_audio_files_dir()
+            file_name = os.path.basename(file_path)
+            destination = os.path.join(audio_files_dir, file_name)
+            
+            os.makedirs(audio_files_dir, exist_ok=True)
+            
+            # Convert to MP3 if not already
+            if not file_path.lower().endswith('.mp3'):
+                logging.info(f"Converting {file_name} to MP3 format")
+                # If sample rate is 48kHz, resample to 44.1kHz during conversion
+                if audio.frame_rate == 48000:
+                    logging.info(f"Resampling {file_name} from 48kHz to 44.1kHz")
+                    audio = audio.set_frame_rate(44100)
+                # Export as MP3
+                destination = os.path.splitext(destination)[0] + '.mp3'
+                audio.export(destination, format="mp3", parameters=["-q:a", "0"])  # High quality MP3
+            else:
+                # If it's already MP3, just resample if needed
+                if audio.frame_rate == 48000:
+                    logging.info(f"Resampling {file_name} from 48kHz to 44.1kHz")
+                    audio = audio.set_frame_rate(44100)
+                    audio.export(destination, format="mp3", parameters=["-q:a", "0"])
+                else:
+                    shutil.copy2(file_path, destination)
+            
+            logging.info(f"File imported to: {destination}")
+            self.new_audio_files.add(destination)
+            return destination
+            
+        except Exception as e:
+            logging.error(f"Error importing audio file: {str(e)}")
+            raise
     
     def update_saved_audio_files(self):
         self.saved_audio_files.update(self.new_audio_files)
@@ -229,9 +259,9 @@ class ProjectModel:
             if file_path.startswith(audio_files_dir) and file_path not in self.timeline_clips:
                 try:
                     os.remove(file_path)
-                    print(f"Removed unsaved audio file: {file_path}")
+                    logging.info(f"Removed unsaved audio file: {file_path}")
                 except OSError as e:
-                    print(f"Error removing file {file_path}: {e}")
+                    logging.error(f"Error removing file {file_path}: {e}")
             self.new_audio_files.remove(file_path)
             
     def get_audio_files_dir(self):

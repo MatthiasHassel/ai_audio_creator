@@ -4,6 +4,7 @@ import platform
 import subprocess
 import logging
 import sys
+import numpy as np
 from pathlib import Path
 from pydub import AudioSegment
 
@@ -207,3 +208,68 @@ def configure_pydub():
     except Exception as e:
         logger.error(f"Error configuring pydub: {str(e)}")
         return False
+
+def convert_audio_to_mp3(input_path, output_path, sample_rate=44100):
+    """
+    Convert any audio file to MP3 format with specified sample rate
+    """
+    try:
+        # Ensure ffmpeg is configured
+        configure_pydub()
+        
+        # Load the audio file
+        audio = AudioSegment.from_file(input_path)
+        
+        # Set the sample rate if different
+        if audio.frame_rate != sample_rate:
+            audio = audio.set_frame_rate(sample_rate)
+        
+        # Export as MP3
+        audio.export(output_path, format="mp3", parameters=["-q:a", "0"])  # High quality MP3
+        
+        logger.info(f"Successfully converted {input_path} to MP3: {output_path}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error converting audio to MP3: {str(e)}")
+        return False
+
+def read_audio_file(file_path, sample_rate=44100):
+    """
+    Read an audio file and return its samples as a numpy array, along with sample rate and duration
+    Returns:
+        tuple: (numpy.ndarray, int, float) - (samples, sample_rate, duration)
+    """
+    try:
+        # Ensure ffmpeg is configured
+        configure_pydub()
+        
+        # Load the audio file
+        audio = AudioSegment.from_file(file_path)
+        
+        # Convert to the desired sample rate if needed
+        if audio.frame_rate != sample_rate:
+            audio = audio.set_frame_rate(sample_rate)
+        
+        # Get samples as numpy array
+        samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
+        
+        # Convert to float32 in range [-1, 1]
+        samples = samples / 32768.0
+        
+        # Reshape to stereo if mono
+        if audio.channels == 1:
+            samples = np.column_stack((samples, samples))
+        elif audio.channels > 2:
+            # If more than 2 channels, keep only first two
+            samples = samples.reshape((-1, audio.channels))[:, :2]
+        else:
+            samples = samples.reshape((-1, 2))
+        
+        duration = len(audio) / 1000.0  # Duration in seconds
+        
+        return samples, sample_rate, duration
+        
+    except Exception as e:
+        logger.error(f"Error reading audio file: {str(e)}")
+        return np.zeros((0, 2), dtype=np.float32), sample_rate, 0.0

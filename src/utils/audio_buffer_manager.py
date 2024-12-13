@@ -2,6 +2,7 @@ import numpy as np
 import threading
 import pyaudio
 import logging
+import time
 
 class AudioBufferManager:
     def __init__(self, timeline_model, buffer_size=2048):
@@ -64,7 +65,6 @@ class AudioBufferManager:
                 return (output_buffer, pyaudio.paContinue)
 
             except Exception as e:
-                import time
                 current_time = time.time()
                 
                 # Reset error count if enough time has passed
