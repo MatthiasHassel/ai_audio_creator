@@ -5,6 +5,7 @@ import logging
 import shutil
 from models.timeline_model import TimelineModel  
 from pydub import AudioSegment
+from tkinter import messagebox
 
 class ProjectModel:
     def __init__(self, base_projects_dir):
@@ -31,8 +32,8 @@ class ProjectModel:
         # Create main project directory
         os.makedirs(project_dir)
         
-        # Create audio files directory for imported audio
-        os.makedirs(os.path.join(project_dir, "audio_files"))
+        # Create imported audio files directory for imported audio
+        os.makedirs(os.path.join(project_dir, "imported_audio_files"))
         
         # Create output directory with subdirectories
         output_dir = os.path.join(project_dir, "output")
@@ -246,6 +247,21 @@ class ProjectModel:
 
     def remove_clip_from_timeline(self, file_path):
         self.timeline_clips.discard(file_path)
+        # Only handle deletion for imported audio files
+        if not self.is_clip_in_timeline(file_path) and self.is_imported_audio_file(file_path):
+            # Show warning before deleting
+            if messagebox.askyesno("Delete Audio File", 
+                                 "This was the last instance of this imported audio clip. Delete the imported audio file as well?"):
+                try:
+                    os.remove(file_path)
+                    logging.info(f"Deleted unused imported audio file: {file_path}")
+                except OSError as e:
+                    logging.error(f"Error deleting file {file_path}: {e}")
+
+    def is_imported_audio_file(self, file_path):
+        """Check if the file is in the imported_audio_files directory"""
+        imported_audio_dir = self.get_audio_files_dir()
+        return os.path.commonpath([imported_audio_dir]) == os.path.commonpath([imported_audio_dir, file_path])
 
     def clear_timeline_clips(self):
         self.timeline_clips.clear()
@@ -267,7 +283,7 @@ class ProjectModel:
     def get_audio_files_dir(self):
         if not self.current_project:
             raise ValueError("No project is currently active")
-        return os.path.join(self.get_project_dir(), "audio_files")
+        return os.path.join(self.get_project_dir(), "imported_audio_files")
     
     def rename_project(self, new_name):
         if not self.current_project:

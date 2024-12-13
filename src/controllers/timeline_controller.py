@@ -127,11 +127,17 @@ class TimelineController:
     def remove_track(self, track):
         try:
             track_index = self.timeline_model.get_track_index(track)
-            clips_to_delete = self.timeline_model.get_tracks()[track_index]['clips']
             
-            # Delete audio files associated with the clips
-            for clip in clips_to_delete:
-                self.delete_audio_file(clip.file_path)
+            # Check if track has audio clips
+            if track['clips']:
+                if not messagebox.askyesno("Remove Track", 
+                                         "This track has active audio clips. Still remove?"):
+                    return
+                
+                # If user confirms, remove clips one by one to trigger proper cleanup
+                clips_to_delete = track['clips'].copy()  # Create a copy to avoid modification during iteration
+                for clip in clips_to_delete:
+                    self.delete_clip(clip)
             
             # Remove the track from the model
             self.timeline_model.remove_track(track_index)
@@ -157,7 +163,7 @@ class TimelineController:
                 else:
                     self.view.deselect_all_tracks()
             
-            logging.info(f"Track and associated clips removed: {track['name']}")
+            logging.info(f"Track removed: {track['name']}")
         except ValueError:
             logging.error(f"Track not found: {track}")
         except Exception as e:
