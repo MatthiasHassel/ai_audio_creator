@@ -30,6 +30,18 @@ ffprobe_path = shutil.which('ffprobe')
 if not ffmpeg_path or not ffprobe_path:
     raise Exception("ffmpeg and ffprobe must be installed. Run 'brew install ffmpeg' to install them.")
 
+# Create temp_binaries directory if it doesn't exist
+temp_binaries_dir = 'temp_binaries'
+os.makedirs(temp_binaries_dir, exist_ok=True)
+
+# Copy ffmpeg and ffprobe to temp_binaries
+temp_ffmpeg = os.path.join(temp_binaries_dir, 'ffmpeg')
+temp_ffprobe = os.path.join(temp_binaries_dir, 'ffprobe')
+shutil.copy2(ffmpeg_path, temp_ffmpeg)
+shutil.copy2(ffprobe_path, temp_ffprobe)
+os.chmod(temp_ffmpeg, 0o755)
+os.chmod(temp_ffprobe, 0o755)
+
 # Gather all necessary data files
 datas = [
     ('assets', 'assets'),
@@ -37,22 +49,20 @@ datas = [
     ('docs', 'docs'),
     # Add customtkinter theme files
     (os.path.join(ctk_path, 'assets'), 'customtkinter/assets'),
+    # Add src directory for imports
+    ('src', 'src'),
+    # Add ffmpeg binaries
+    (temp_binaries_dir, '.'),
 ]
 
 # Add tkinterdnd2 data files if found
 datas.extend(tkinterdnd2_paths)
 
-# Add ffmpeg binaries as binary files with specific filenames
-binaries = [
-    (ffmpeg_path, os.path.join('temp_binaries', 'ffmpeg')),
-    (ffprobe_path, os.path.join('temp_binaries', 'ffprobe')),
-]
-
 # Define the analysis configuration
 a = Analysis(
     ['src/main.py'],
     pathex=[src_path],  # Add src directory to Python path
-    binaries=binaries,  # Use binaries list for ffmpeg
+    binaries=[],
     datas=datas,
     hiddenimports=[
         'PySide6.QtCore',
@@ -178,7 +188,7 @@ app = BUNDLE(
         'CFBundleGetInfoString': 'Create AI-powered audio content',
         'NSHumanReadableCopyright': '© 2024 Matthias Hassel',
         'LSEnvironment': {
-            'PATH': '@executable_path/../Resources:@executable_path/../Resources/temp_binaries:@executable_path/../MacOS:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+            'PATH': '/opt/homebrew/bin:@executable_path/../Resources:@executable_path/../MacOS:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
             'PYTHONPATH': '@executable_path/../Resources:@executable_path/../Resources/src',
             'TKINTERDND2_LIBRARY': '@executable_path/../Resources/tkinterdnd2',
         },

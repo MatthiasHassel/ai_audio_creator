@@ -13,12 +13,26 @@ logger = logging.getLogger(__name__)
 
 def get_ffmpeg_path():
     """Get the path to the ffmpeg/ffprobe binaries."""
+    logger.info(f"Current working directory: {os.getcwd()}")
+    logger.info(f"sys.executable: {sys.executable}")
+    if hasattr(sys, '_MEIPASS'):
+        logger.info(f"sys._MEIPASS: {sys._MEIPASS}")
+    logger.info(f"Current PATH: {os.environ.get('PATH', '')}")
+
     # First try to use system ffmpeg
     is_installed, ffmpeg_path = check_ffmpeg_installation()
     if is_installed:
         ffprobe_path = str(os.path.join(os.path.dirname(ffmpeg_path), 'ffprobe'))
         logger.info(f"Using system ffmpeg: {ffmpeg_path}")
         logger.info(f"Using system ffprobe: {ffprobe_path}")
+        
+        # Add homebrew bin to PATH if not already there
+        brew_bin = '/opt/homebrew/bin'
+        if brew_bin not in os.environ.get('PATH', ''):
+            new_path = f"{brew_bin}:{os.environ.get('PATH', '')}"
+            os.environ['PATH'] = new_path
+            logger.info(f"Updated PATH: {new_path}")
+        
         return {
             'ffmpeg.binaries': ffmpeg_path,
             'ffprobe.binaries': ffprobe_path
@@ -28,12 +42,18 @@ def get_ffmpeg_path():
     if getattr(sys, 'frozen', False):
         # Running in a bundle
         if sys.platform == 'darwin':  # macOS
-            # Get the working directory (should be Resources directory)
-            working_dir = os.getcwd()
-            logger.info(f"Working directory: {working_dir}")
+            # Get the app bundle Resources directory
+            if hasattr(sys, '_MEIPASS'):
+                resources_dir = sys._MEIPASS
+            else:
+                # Get the path to the app bundle
+                app_bundle = os.path.abspath(os.path.join(os.path.dirname(sys.executable), '..'))
+                resources_dir = os.path.join(app_bundle, 'Resources')
             
-            # Look for binaries in temp_binaries directory within Resources
-            temp_binaries_dir = os.path.join(working_dir, 'temp_binaries')
+            logger.info(f"Resources directory: {resources_dir}")
+            
+            # Look for binaries in temp_binaries directory
+            temp_binaries_dir = os.path.join(resources_dir, 'temp_binaries')
             ffmpeg_path = os.path.join(temp_binaries_dir, 'ffmpeg')
             ffprobe_path = os.path.join(temp_binaries_dir, 'ffprobe')
             
@@ -48,15 +68,11 @@ def get_ffmpeg_path():
                     logger.info(f"Found and made executable ffmpeg at: {ffmpeg_path}")
                     logger.info(f"Found and made executable ffprobe at: {ffprobe_path}")
                     
-                    # Try to execute ffprobe to verify it works
-                    import subprocess
-                    try:
-                        result = subprocess.run([ffprobe_path, '-version'], 
-                                             capture_output=True, 
-                                             text=True)
-                        logger.info(f"ffprobe version check result: {result.stdout}")
-                    except Exception as e:
-                        logger.error(f"Error testing ffprobe: {str(e)}")
+                    # Add temp_binaries directory to PATH
+                    if temp_binaries_dir not in os.environ.get('PATH', ''):
+                        new_path = f"{temp_binaries_dir}:{os.environ.get('PATH', '')}"
+                        os.environ['PATH'] = new_path
+                        logger.info(f"Updated PATH: {new_path}")
                     
                     return {
                         'ffmpeg.binaries': ffmpeg_path,
@@ -69,6 +85,20 @@ def get_ffmpeg_path():
                     logger.warning(f"ffmpeg not found at {ffmpeg_path}")
                 if not os.path.exists(ffprobe_path):
                     logger.warning(f"ffprobe not found at {ffprobe_path}")
+                
+                # Try system binaries as fallback
+                try:
+                    import shutil
+                    system_ffmpeg = shutil.which('ffmpeg')
+                    system_ffprobe = shutil.which('ffprobe')
+                    if system_ffmpeg and system_ffprobe:
+                        logger.info(f"Using system binaries: {system_ffmpeg}, {system_ffprobe}")
+                        return {
+                            'ffmpeg.binaries': system_ffmpeg,
+                            'ffprobe.binaries': system_ffprobe
+                        }
+                except Exception as e:
+                    logger.error(f"Error finding system binaries: {str(e)}")
         else:
             base_dir = os.path.dirname(sys.executable)
             ffmpeg_path = os.path.join(base_dir, 'ffmpeg')
@@ -93,7 +123,21 @@ def get_ffmpeg_path():
                 'ffprobe.binaries': ffprobe_path
             }
     
-    # If no ffmpeg found, return default paths and let first run wizard handle installation
+    # If no ffmpeg found, try system PATH
+    try:
+        import shutil
+        system_ffmpeg = shutil.which('ffmpeg')
+        system_ffprobe = shutil.which('ffprobe')
+        if system_ffmpeg and system_ffprobe:
+            logger.info(f"Using system binaries from PATH: {system_ffmpeg}, {system_ffprobe}")
+            return {
+                'ffmpeg.binaries': system_ffmpeg,
+                'ffprobe.binaries': system_ffprobe
+            }
+    except Exception as e:
+        logger.error(f"Error finding system binaries: {str(e)}")
+    
+    # If still no ffmpeg found, return default paths and let first run wizard handle installation
     logger.warning("No ffmpeg installation found. First run wizard will guide installation.")
     return {
         'ffmpeg.binaries': 'ffmpeg',
@@ -107,6 +151,12 @@ try:
     AudioSegment.ffmpeg = ffmpeg_config['ffmpeg.binaries']
     AudioSegment.ffprobe = ffmpeg_config['ffprobe.binaries']
     logger.info(f"Configured pydub with ffmpeg paths: {ffmpeg_config}")
+    
+    # Verify pydub configuration
+    logger.info(f"Verifying pydub configuration:")
+    logger.info(f"AudioSegment.converter: {AudioSegment.converter}")
+    logger.info(f"AudioSegment.ffmpeg: {AudioSegment.ffmpeg}")
+    logger.info(f"AudioSegment.ffprobe: {AudioSegment.ffprobe}")
 except Exception as e:
     logger.error(f"Error configuring pydub: {str(e)}")
 

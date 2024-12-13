@@ -125,6 +125,7 @@ try:
     MainController = import_with_error_handling('controllers.main_controller').MainController
     first_run_wizard = import_with_error_handling('views.first_run_wizard')
     config_manager = import_with_error_handling('utils.config_manager')
+    ffmpeg_utils = import_with_error_handling('utils.ffmpeg_utils')
 
 except ImportError as e:
     logging.error(f"Error importing required modules: {e}")
@@ -176,6 +177,12 @@ def main():
         # Create root window
         root = ctk.CTk()
         root.withdraw()  # Hide the root window
+        
+        # Configure ffmpeg before anything else
+        if not ffmpeg_utils.configure_pydub():
+            logging.error("Failed to configure ffmpeg")
+            print("Failed to configure ffmpeg")
+            sys.exit(1)
         
         # Check for first run
         if check_first_run():
