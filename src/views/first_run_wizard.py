@@ -5,6 +5,8 @@ from pathlib import Path
 from dotenv import set_key
 from tkinter import filedialog
 from utils.ffmpeg_utils import check_ffmpeg_installation, get_ffmpeg_version, get_installation_instructions
+from utils.configure_reaper import configure_reaper
+from services.reaper_service import ReaperService
 
 class ConfigWizard(ctk.CTkToplevel):
     def __init__(self):
@@ -31,6 +33,7 @@ class ConfigWizard(ctk.CTkToplevel):
         self.pages = [
             WelcomePage(self),
             FFmpegCheckPage(self),
+            ReaperConfigPage(self),
             APIConfigPage(self),
             LLMProviderPage(self),
             StorageLocationPage(self),
@@ -90,9 +93,9 @@ class ConfigWizard(ctk.CTkToplevel):
             config_dir.mkdir(exist_ok=True)
             
             # Get values from pages
-            api_page = self.pages[2]  # Updated index due to new FFmpeg page
-            llm_page = self.pages[3]  # Updated index due to new FFmpeg page
-            storage_page = self.pages[4]  # Updated index due to new FFmpeg page
+            api_page = self.pages[3]  # Updated index due to new Reaper page
+            llm_page = self.pages[4]  # Updated index due to new Reaper page
+            storage_page = self.pages[5]  # Updated index due to new Reaper page
             
             elevenlabs_key = api_page.elevenlabs_var.get().strip()
             openrouter_key = api_page.openrouter_var.get().strip()
@@ -160,6 +163,7 @@ class WelcomePage(WizardPage):
             text="This wizard will help you set up the AI Audio Creator.\n\n"
                  "You'll be asked to configure:\n"
                  "- FFmpeg Installation Check\n"
+                 "- Reaper Integration\n"
                  "- API Keys (all optional, but required for specific features)\n"
                  "- Default LLM Provider\n"
                  "- Project Storage Location\n\n"
@@ -247,6 +251,147 @@ class FFmpegCheckPage(WizardPage):
                 message="FFmpeg is required for audio processing. Please install FFmpeg before continuing."
             )
             return False
+        return True
+
+class ReaperConfigPage(WizardPage):
+    def __init__(self, master):
+        super().__init__(master)
+        
+        title = ctk.CTkLabel(self, text="Reaper Integration", font=("", 20, "bold"))
+        title.pack(pady=(0, 20))
+        
+        info = ctk.CTkLabel(
+            self,
+            text="AI Audio Creator can integrate with REAPER DAW for advanced audio editing.\n"
+                 "Would you like to configure REAPER integration now?",
+            wraplength=500,
+            justify="left"
+        )
+        info.pack(pady=(0, 20))
+        
+        # Configure option
+        self.configure_var = ctk.BooleanVar(value=False)
+        self.configure_checkbox = ctk.CTkCheckBox(
+            self,
+            text="Yes, configure REAPER integration",
+            variable=self.configure_var,
+            command=self.on_checkbox_change
+        )
+        self.configure_checkbox.pack(pady=(0, 20))
+        
+        # Status frame
+        self.status_frame = ctk.CTkFrame(self)
+        self.status_frame.pack(fill="x", pady=(0, 20))
+        
+        self.status_label = ctk.CTkLabel(
+            self.status_frame,
+            text="",
+            font=("", 14)
+        )
+        self.status_label.pack(pady=10)
+        
+        # Configure button
+        self.configure_button = ctk.CTkButton(
+            self,
+            text="Configure REAPER",
+            command=self.configure_reaper,
+            state="disabled"
+        )
+        self.configure_button.pack(pady=(0, 10))
+        
+        # Instructions text
+        self.instructions_text = ctk.CTkTextbox(self, height=150)
+        self.instructions_text.pack(fill="both", expand=True, pady=(0, 10))
+        self.instructions_text.configure(state="disabled")
+        
+        # Initialize ReaperService
+        self.reaper_service = ReaperService()
+    
+    def on_checkbox_change(self):
+        if self.configure_var.get():
+            self.configure_button.configure(state="normal")
+            self.instructions_text.configure(state="normal")
+            self.instructions_text.delete("1.0", "end")
+            self.instructions_text.insert("1.0", 
+                "To configure REAPER integration:\n\n"
+                "1. Open REAPER\n"
+                "2. Make sure ReaScript is enabled:\n"
+                "   - Go to Preferences -> Plug-ins -> ReaScript\n"
+                "   - Enable 'Allow Python to access REAPER via ReaScript'\n"
+                "3. Click the 'Configure REAPER' button below"
+            )
+            self.instructions_text.configure(state="disabled")
+        else:
+            self.configure_button.configure(state="disabled")
+            self.instructions_text.configure(state="normal")
+            self.instructions_text.delete("1.0", "end")
+            self.instructions_text.configure(state="disabled")
+            self.status_label.configure(text="")
+    
+    def configure_reaper(self):
+        try:
+            # First check if Reaper is running
+            if not self.reaper_service.is_reaper_running():
+                self.status_label.configure(
+                    text="❌ REAPER is not running or ReaScript is not enabled",
+                    text_color="red"
+                )
+                self.instructions_text.configure(state="normal")
+                self.instructions_text.delete("1.0", "end")
+                self.instructions_text.insert("1.0",
+                    "ReaScript API is not enabled. Please:\n"
+                    "1. Open REAPER\n"
+                    "2. Go to Preferences -> Plug-ins -> ReaScript\n"
+                    "3. Enable 'Allow Python to access REAPER via ReaScript'"
+                )
+                self.instructions_text.configure(state="disabled")
+                return
+            
+            # Run configuration script
+            success, message = configure_reaper()
+            
+            if success:
+                self.status_label.configure(
+                    text="✅ REAPER configuration successful!",
+                    text_color="green"
+                )
+                self.configure_button.configure(state="disabled")
+                self.configure_checkbox.configure(state="disabled")
+                self.instructions_text.configure(state="normal")
+                self.instructions_text.delete("1.0", "end")
+                self.instructions_text.insert("1.0", 
+                    "REAPER has been successfully configured!\n\n"
+                    "You can now use AI Audio Creator with REAPER for advanced audio editing."
+                )
+                self.instructions_text.configure(state="disabled")
+            else:
+                self.status_label.configure(
+                    text="❌ Configuration failed",
+                    text_color="red"
+                )
+                self.instructions_text.configure(state="normal")
+                self.instructions_text.delete("1.0", "end")
+                self.instructions_text.insert("1.0", message)
+                self.instructions_text.configure(state="disabled")
+                
+        except Exception as e:
+            self.status_label.configure(
+                text=f"❌ Configuration failed: {str(e)}",
+                text_color="red"
+            )
+    
+    def validate(self):
+        if self.configure_var.get():
+            # If user wanted to configure but it failed
+            if not self.reaper_service.is_reaper_running():
+                if not ctk.CTkMessagebox(
+                    title="REAPER Configuration Failed",
+                    message="REAPER configuration was not successful. Do you want to continue anyway?",
+                    icon="warning",
+                    option_1="Yes",
+                    option_2="No"
+                ).get() == "Yes":
+                    return False
         return True
 
 class APIConfigPage(WizardPage):

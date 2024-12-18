@@ -6,11 +6,16 @@ import os
 import site
 import tkinter
 import shutil
+import reapy
 
 block_cipher = None
 
 # Get customtkinter package path
 ctk_path = os.path.dirname(customtkinter.__file__)
+
+# Get reapy package path and scripts
+reapy_path = os.path.dirname(reapy.__file__)
+reapy_scripts = os.path.join(reapy_path, 'reascripts')
 
 # Get the absolute path to the src directory
 src_path = os.path.abspath('src')
@@ -53,6 +58,8 @@ datas = [
     ('src', 'src'),
     # Add ffmpeg binaries
     (temp_binaries_dir, '.'),
+    # Add reapy scripts
+    (reapy_scripts, 'reapy/reascripts'),
 ]
 
 # Add tkinterdnd2 data files if found
@@ -94,6 +101,10 @@ a = Analysis(
         'PIL',
         'darkdetect',  # Required by customtkinter
         'tkinterdnd2',  # Add tkinterdnd2
+        'reapy',  # Add reapy
+        'reapy.core',
+        'reapy.reascript_api',
+        'reapy.config',
         # Add all local modules
         'models',
         'models.main_model',
