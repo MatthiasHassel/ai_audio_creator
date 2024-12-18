@@ -454,7 +454,6 @@ class AudioGeneratorView(ctk.CTkFrame):
             if self.preview_frame.winfo_viewable():
                 self.preview_frame.grid_remove()
 
-
     def create_input_field(self, parent):
         input_frame = ctk.CTkFrame(parent)
         input_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
@@ -530,49 +529,49 @@ class AudioGeneratorView(ctk.CTkFrame):
         self.s2s_preview_frame.grid_rowconfigure(0, weight=1)
         
         # Create audio visualizer for the preview
-        visualizer_frame = ctk.CTkFrame(self.s2s_preview_frame)
-        visualizer_frame.grid(row=0, column=0, sticky="nsew", pady=5)
-        visualizer_frame.grid_columnconfigure(0, weight=1)
-        visualizer_frame.grid_rowconfigure(0, weight=1)
+        s2s_visualizer_frame = ctk.CTkFrame(self.s2s_preview_frame)
+        s2s_visualizer_frame.grid(row=0, column=0, sticky="nsew", pady=5)
+        s2s_visualizer_frame.grid_columnconfigure(0, weight=1)
+        s2s_visualizer_frame.grid_rowconfigure(0, weight=1)
         
-        self.s2s_visualizer = AudioVisualizer(visualizer_frame)
+        self.s2s_visualizer = AudioVisualizer(s2s_visualizer_frame)
         self.s2s_visualizer.grid(row=0, column=0, sticky="nsew")
         self.s2s_visualizer.set_on_click_seek(self.seek_s2s_audio)
         
         # Add play controls for the recorded/imported audio
-        self.preview_controls = ctk.CTkFrame(self.s2s_preview_frame)
-        self.preview_controls.grid(row=1, column=0, sticky="ew", pady=5)
-        self.preview_controls.grid_columnconfigure(3, weight=1)  # Adjusted for restart button
+        self.s2s_preview_controls = ctk.CTkFrame(self.s2s_preview_frame)
+        self.s2s_preview_controls.grid(row=1, column=0, sticky="ew", pady=5)
+        self.s2s_preview_controls.grid_columnconfigure(3, weight=1)  # Adjusted for restart button
         
         # Play button
-        self.preview_play_button = ctk.CTkButton(
-            self.preview_controls, 
+        self.s2s_preview_play_button = ctk.CTkButton(
+            self.s2s_preview_controls, 
             text="Play", 
             width=60,
             command=self.play_s2s_audio,
             state="disabled"  # Initially disabled
         )
-        self.preview_play_button.grid(row=0, column=0, padx=5)
+        self.s2s_preview_play_button.grid(row=0, column=0, padx=5)
         
         # Stop button
-        self.preview_stop_button = ctk.CTkButton(
-            self.preview_controls, 
+        self.s2s_preview_stop_button = ctk.CTkButton(
+            self.s2s_preview_controls, 
             text="Stop", 
             width=60,
             command=self.stop_s2s_audio,
             state="disabled"  # Initially disabled
         )
-        self.preview_stop_button.grid(row=0, column=1, padx=5)
+        self.s2s_preview_stop_button.grid(row=0, column=1, padx=5)
         
         # Restart button (new)
-        self.preview_restart_button = ctk.CTkButton(
-            self.preview_controls,
+        self.s2s_preview_restart_button = ctk.CTkButton(
+            self.s2s_preview_controls,
             text="Restart",
             width=60,
             command=self.restart_s2s_audio,
             state="disabled"  # Initially disabled
         )
-        self.preview_restart_button.grid(row=0, column=2, padx=5)
+        self.s2s_preview_restart_button.grid(row=0, column=2, padx=5)
         
         # Initially hide preview frame
         self.s2s_preview_frame.grid_remove()
@@ -593,32 +592,32 @@ class AudioGeneratorView(ctk.CTkFrame):
     def update_s2s_button_states(self, is_playing):
         """Update s2s preview player button states"""
         if is_playing:
-            self.preview_play_button.configure(state="disabled")
-            self.preview_stop_button.configure(state="normal")
-            self.preview_restart_button.configure(state="normal")
+            self.s2s_preview_play_button.configure(state="disabled")
+            self.s2s_preview_stop_button.configure(state="normal")
+            self.s2s_preview_restart_button.configure(state="normal")
         else:
             # Only enable play if we have audio loaded
             play_state = "normal" if hasattr(self, 'current_s2s_audio') else "disabled"
-            self.preview_play_button.configure(state=play_state)
-            self.preview_stop_button.configure(state="disabled")
-            self.preview_restart_button.configure(state=play_state)  # Enable restart if we have audio
+            self.s2s_preview_play_button.configure(state=play_state)
+            self.s2s_preview_stop_button.configure(state="disabled")
+            self.s2s_preview_restart_button.configure(state=play_state)
 
     def play_s2s_audio(self):
         """Play the s2s audio and start updating playhead"""
         if self.controller and hasattr(self, 'current_s2s_audio'):
             # Stop main player if it's playing
-            if self.controller.model.is_playing:
-                self.controller.stop_audio()
-            # Load and play s2s audio
-            self.controller.model.load_audio(self.current_s2s_audio)
-            self.controller.model.play()
+            if self.controller.s2s_model.is_playing:  # Fixed: Check s2s_model instead of main model
+                self.controller.stop_s2s_audio()
+            # Load and play s2s audio using s2s_model
+            self.controller.s2s_model.load_audio(self.current_s2s_audio)
+            self.controller.s2s_model.play()
             self.update_s2s_button_states(True)
             self.start_s2s_playhead_update()
 
     def stop_s2s_audio(self):
         """Stop the s2s audio playback"""
         if self.controller:
-            self.controller.model.stop()
+            self.controller.s2s_model.stop()  # Use s2s_model
             self.update_s2s_button_states(False)
             self.stop_s2s_playhead_update()
             self.s2s_visualizer.update_playhead(0)  # Reset playhead position
@@ -626,18 +625,18 @@ class AudioGeneratorView(ctk.CTkFrame):
     def restart_s2s_audio(self):
         """Restart the s2s audio from the beginning"""
         if self.controller and hasattr(self, 'current_s2s_audio'):
-            self.controller.model.restart()
-            self.update_s2s_button_states(True)  # Always enable stop/restart when playing
+            self.controller.s2s_model.restart()  # Use s2s_model
+            self.update_s2s_button_states(True)
             self.s2s_visualizer.update_playhead(0)
-            if self.controller.model.is_playing:
+            if self.controller.s2s_model.is_playing:  # Check s2s_model state
                 self.start_s2s_playhead_update()
 
     def seek_s2s_audio(self, position):
         """Seek to a position in the s2s audio"""
         if self.controller:
-            if self.controller.model.seek(position):
+            if self.controller.s2s_model.seek(position):  # Use s2s_model
                 self.s2s_visualizer.update_playhead(position)
-                if self.controller.model.is_playing:
+                if self.controller.s2s_model.is_playing:  # Check s2s_model state
                     self.start_s2s_playhead_update()
 
     def start_s2s_playhead_update(self):
@@ -655,11 +654,11 @@ class AudioGeneratorView(ctk.CTkFrame):
             self.s2s_update_id = None
 
     def update_s2s_playhead(self):
-        """Update the s2s preview playhead position"""
-        if self.controller and self.controller.model.is_playing:
-            current_time = self.controller.model.get_current_position()
+        """Update the s2s preview playhead position using s2s_model"""
+        if self.controller and self.controller.s2s_model.is_playing:
+            current_time = self.controller.s2s_model.get_current_position()
             self.s2s_visualizer.update_playhead(current_time)
-            self.s2s_update_id = self.after(50, self.update_s2s_playhead)  # Update every 50ms
+            self.s2s_update_id = self.after(50, self.update_s2s_playhead)
         else:
             self.stop_s2s_playhead_update()
             self.update_s2s_button_states(False)
@@ -733,7 +732,7 @@ class AudioGeneratorView(ctk.CTkFrame):
                         self.s2s_visualizer.update_waveform(file_path)
                         self.s2s_status_label.configure(text="Audio file loaded")
                         self.update_s2s_button_states(False)  # Initialize button states
-                        self.preview_play_button.configure(state="normal")  # Enable play button
+                        self.s2s_preview_play_button.configure(state="normal")  # Enable play button
                     
                     self.after(0, update_visualizer)
                 
@@ -765,9 +764,9 @@ class AudioGeneratorView(ctk.CTkFrame):
             
             # Reset level meter
             self.level_meter.coords(self.level_bar, 0, 0, 0, 20)
-            self.preview_play_button.configure(state="disabled")
-            self.preview_stop_button.configure(state="disabled")
-            self.preview_restart_button.configure(state="disabled")
+            self.s2s_preview_play_button.configure(state="disabled")
+            self.s2s_preview_stop_button.configure(state="disabled")
+            self.s2s_preview_restart_button.configure(state="disabled")
             
             # Create temporary file for recording
             self.temp_audio_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
@@ -941,9 +940,10 @@ class AudioGeneratorView(ctk.CTkFrame):
 
     def cleanup_audio_state(self):
         """Clean up audio state when switching modes or closing"""
-        # Stop any playing audio
+        # Stop any playing audio in both models
         if self.controller:
             self.controller.model.stop()
+            self.controller.s2s_model.stop()  # Stop s2s model as well
         
         # Stop all playhead updates
         self.stop_playhead_update()
@@ -999,7 +999,7 @@ class AudioGeneratorView(ctk.CTkFrame):
             if hasattr(self, 's2s_preview_frame'):
                 self.s2s_preview_frame.grid_remove()
                 # Stop any playing s2s audio
-                if self.controller and self.controller.model.is_playing:
+                if self.controller and self.controller.s2s_model.is_playing:  # Fixed: Check s2s_model instead of main model
                     self.stop_s2s_audio()
         else:
             self.llm_button.grid_remove()

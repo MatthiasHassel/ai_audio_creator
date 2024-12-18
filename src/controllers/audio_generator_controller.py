@@ -11,7 +11,8 @@ from utils.file_utils import read_audio_prompt
 
 class AudioGeneratorController:
     def __init__(self, model: AudioGeneratorModel, view, config):
-        self.model = model
+        self.model = model  # Main player model
+        self.s2s_model = AudioGeneratorModel(config)  # S2S preview player model
         self.view = view
         self.config = config
         self.timeline_controller = None 
@@ -26,6 +27,7 @@ class AudioGeneratorController:
         self.setup_services()
         self.setup_view_commands()
         self.model.set_playback_finished_callback(self.on_playback_finished)
+        self.s2s_model.set_playback_finished_callback(self.on_s2s_playback_finished)
         self.current_preview_file = None
         self.setup_voice_preview_handlers()
 
@@ -177,13 +179,47 @@ class AudioGeneratorController:
     def handle_recorded_audio(self, file_path):
         """Handle successful audio recording"""
         self.view.current_s2s_audio = file_path
-        self.view.s2s_preview_frame.grid()  # Change from pack to grid
+        self.view.s2s_preview_frame.grid()
         self.view.s2s_visualizer.update_waveform(file_path)
-        self.model.load_audio(file_path)
-         # Update s2s preview button states specifically
+        self.s2s_model.load_audio(file_path)  # Use s2s_model instead of main model
         self.view.update_s2s_button_states(False)
-        self.view.preview_play_button.configure(state="normal")
-        
+        self.view.s2s_preview_play_button.configure(state="normal")
+
+    def play_s2s_audio(self):
+        """Play the s2s audio using the dedicated s2s model"""
+        if hasattr(self.view, 'current_s2s_audio'):
+            # Stop main player if it's playing
+            if self.model.is_playing:
+                self.stop_audio()
+            # Play using s2s model
+            self.s2s_model.play()
+            self.view.update_s2s_button_states(True)
+            self.view.start_s2s_playhead_update()
+
+    def stop_s2s_audio(self):
+        """Stop the s2s audio using the dedicated s2s model"""
+        self.s2s_model.stop()
+        self.view.update_s2s_button_states(False)
+        self.view.stop_s2s_playhead_update()
+
+    def restart_s2s_audio(self):
+        """Restart the s2s audio using the dedicated s2s model"""
+        self.s2s_model.restart()
+        self.view.update_s2s_button_states(True)
+        if self.s2s_model.is_playing:
+            self.view.start_s2s_playhead_update()
+
+    def seek_s2s_audio(self, position):
+        """Seek in the s2s audio using the dedicated s2s model"""
+        if self.s2s_model.seek(position):
+            self.view.s2s_visualizer.update_playhead(position)
+            if self.s2s_model.is_playing:
+                self.view.start_s2s_playhead_update()
+
+    def on_s2s_playback_finished(self):
+        """Handle s2s playback finished event"""
+        self.view.after(0, lambda: self.view.update_s2s_button_states(False))
+
     def setup_voice_preview_handlers(self):
         """Set up handlers for voice preview functionality."""
         # Connect the view's preview handlers to controller methods
