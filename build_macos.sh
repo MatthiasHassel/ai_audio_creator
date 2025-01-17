@@ -108,7 +108,14 @@ echo "  ✓ tkinterdnd2 found at: $TKINTERDND2_PATH"
 
 # Build the application
 echo "🏗️  Building application..."
-python -m PyInstaller ai_audio_creator.spec
+# Set environment variable for arm64 build
+export ARCHFLAGS="-arch arm64"
+# Clean PyInstaller cache first
+rm -rf build dist
+# Force reinstall key packages with correct architecture
+pip uninstall -y numpy scipy
+pip install --no-cache-dir numpy scipy --only-binary :all:
+python -m PyInstaller ai_audio_creator.spec --clean
 
 # Verify the build
 if [ ! -d "dist/AI Audio Creator.app" ]; then
