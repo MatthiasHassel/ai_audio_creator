@@ -2,6 +2,7 @@
 
 # GUI and Application Framework
 PySide6==6.6.1
+customtkinter==5.2.2
 
 # Audio Processing
 pydub==0.25.1

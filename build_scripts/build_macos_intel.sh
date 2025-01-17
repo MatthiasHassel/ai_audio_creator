@@ -44,6 +44,9 @@ if [ -f "AI Audio Creator Intel.dmg" ]; then
     sudo rm -f "AI Audio Creator Intel.dmg"
 fi
 
+# Create and clean temp directories
+mkdir -p temp_binaries
+
 # Clean PyInstaller cache
 echo "🧹 Cleaning PyInstaller cache..."
 CACHE_DIR="$HOME/Library/Application Support/pyinstaller"
@@ -111,7 +114,7 @@ fi
 echo "  ✓ tkinterdnd2 found at: $TKINTERDND2_PATH"
 
 # Create Intel-specific spec file
-cat > ai_audio_creator_intel.spec << EOL
+cat > build_scripts/ai_audio_creator_intel.spec << EOL
 # -*- mode: python ; coding: utf-8 -*-
 import sys
 from pathlib import Path
@@ -322,7 +325,10 @@ EOL
 
 # Build the application
 echo "🏗️  Building application..."
-python -m PyInstaller ai_audio_creator_intel.spec --distpath dist_intel --workpath build_intel --clean
+python -m PyInstaller build_scripts/ai_audio_creator_intel.spec --distpath dist_intel --workpath build_intel --clean
+
+# Clean up temp directories
+rm -rf temp_binaries
 
 # Verify the build
 if [ ! -d "dist_intel/AI Audio Creator Intel.app" ]; then

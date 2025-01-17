@@ -44,6 +44,9 @@ if [ -f "AI Audio Creator.dmg" ]; then
     sudo rm -f "AI Audio Creator.dmg"
 fi
 
+# Create and clean temp directories
+mkdir -p temp_binaries
+
 # Clean PyInstaller cache
 echo "🧹 Cleaning PyInstaller cache..."
 CACHE_DIR="$HOME/Library/Application Support/pyinstaller"
@@ -115,7 +118,10 @@ rm -rf build dist
 # Force reinstall key packages with correct architecture
 pip uninstall -y numpy scipy
 pip install --no-cache-dir numpy scipy --only-binary :all:
-python -m PyInstaller ai_audio_creator.spec --clean
+python -m PyInstaller build_scripts/ai_audio_creator.spec --clean
+
+# Clean up temp directories
+rm -rf temp_binaries
 
 # Verify the build
 if [ ! -d "dist/AI Audio Creator.app" ]; then

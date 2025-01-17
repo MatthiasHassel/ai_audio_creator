@@ -43,3 +43,14 @@ api_info.txt
 /dist
 /build
 AI Audio Creator.dmg
+
+# Build directories
+build/
+dist/
+dist_intel/
+build_intel/
+venv/
+venv_intel/
+temp_binaries/
+*.dmg
+*.spec
