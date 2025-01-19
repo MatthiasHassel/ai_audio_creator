@@ -5,29 +5,86 @@ set -e
 
 echo "🚀 Building AI Audio Creator for Intel Mac..."
 
-# Check Python version
-if ! command -v python3 &> /dev/null; then
-    echo "❌ Python 3 is not installed. Please install Python 3 and try again."
+# Setup Intel Homebrew
+echo "🔧 Setting up Intel Homebrew..."
+
+# Clean up any existing Intel Homebrew installation
+if [ -d "/usr/local/Homebrew" ] || [ -L "/usr/local/Homebrew" ]; then
+    echo "🧹 Cleaning up existing Intel Homebrew..."
+    sudo rm -rf /usr/local/Homebrew
+    sudo rm -f /usr/local/bin/brew
+fi
+
+# Prepare directories for Intel Homebrew
+echo "📦 Setting up Intel Homebrew directories..."
+sudo mkdir -p /usr/local/{bin,Cellar,Homebrew,etc,include,lib,opt,sbin,share,var}
+sudo chown -R $(whoami) /usr/local/*
+
+# Install Intel Homebrew
+echo "📦 Installing Intel Homebrew..."
+arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Ensure Intel Homebrew is properly linked
+if [ ! -f "/usr/local/bin/brew" ] && [ -f "/usr/local/Homebrew/bin/brew" ]; then
+    echo "🔗 Linking Intel Homebrew..."
+    sudo ln -sf /usr/local/Homebrew/bin/brew /usr/local/bin/brew
+fi
+
+# Initialize Intel Homebrew
+eval "$(/usr/local/bin/brew shellenv)"
+
+# Add Intel Homebrew to PATH if not already present
+if [[ ":$PATH:" != *":/usr/local/bin:"* ]]; then
+    export PATH="/usr/local/bin:$PATH"
+fi
+
+# Install and setup x86_64 Python 3.11
+echo "🔍 Setting up Intel Python 3.11..."
+
+# Clean up existing Python installation if needed
+if [ -d "/usr/local/opt/python@3.11" ] || [ -L "/usr/local/opt/python@3.11" ]; then
+    echo "🧹 Cleaning up existing Python installation..."
+    arch -x86_64 /usr/local/bin/brew unlink python@3.11 || true
+    sudo rm -rf /usr/local/opt/python@3.11
+    sudo rm -f /usr/local/bin/python3.11
+    sudo rm -f /usr/local/bin/python3.11-config
+    sudo rm -f /usr/local/bin/pip3.11
+fi
+
+# Install Python 3.11
+echo "📦 Installing Intel Python 3.11..."
+arch -x86_64 /usr/local/bin/brew install python@3.11
+
+# Ensure proper linking
+echo "🔗 Linking Python 3.11..."
+arch -x86_64 /usr/local/bin/brew link --overwrite python@3.11
+
+# Verify installation
+if ! arch -x86_64 /usr/local/bin/python3.11 --version &> /dev/null; then
+    echo "❌ Failed to install Python 3.11"
     exit 1
 fi
 
-# Check pip3
-if ! command -v pip3 &> /dev/null; then
-    echo "❌ pip3 is not installed. Please install pip3 and try again."
-    exit 1
-fi
+# Use x86_64 Python 3.11 for the build
+PYTHON_CMD="arch -x86_64 /usr/local/bin/python3.11"
 
-# Check Homebrew
-if ! command -v brew &> /dev/null; then
-    echo "❌ Homebrew is not installed. Please install Homebrew first."
-    echo "   Run this command to install Homebrew:"
-    echo "   /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
-    exit 1
-fi
-
-# Install system dependencies
+# Install system dependencies using Intel Homebrew
 echo "📦 Installing system dependencies..."
-brew install portaudio create-dmg ffmpeg
+arch -x86_64 /usr/local/bin/brew install portaudio create-dmg ffmpeg tcl-tk
+
+# Ensure tcl-tk is properly linked
+echo "🔗 Linking tcl-tk..."
+arch -x86_64 /usr/local/bin/brew link --overwrite tcl-tk
+
+# Set tcl-tk environment variables
+export PATH="/usr/local/opt/tcl-tk/bin:$PATH"
+export LDFLAGS="-L/usr/local/opt/tcl-tk/lib"
+export CPPFLAGS="-I/usr/local/opt/tcl-tk/include"
+export PKG_CONFIG_PATH="/usr/local/opt/tcl-tk/lib/pkgconfig"
+export PYTHON_CONFIGURE_OPTS="--with-tcltk-includes='-I/usr/local/opt/tcl-tk/include' --with-tcltk-libs='-L/usr/local/opt/tcl-tk/lib'"
+
+# Set working directory to project root
+cd "$(dirname "$0")/.."
 
 # Clean up any existing virtual environment and build artifacts
 echo "🧹 Cleaning up old environment..."
@@ -56,43 +113,140 @@ fi
 
 # Create and activate virtual environment
 echo "🔧 Creating virtual environment..."
-python3 -m venv venv_intel
+$PYTHON_CMD -m venv venv_intel
 source venv_intel/bin/activate
 
-# Upgrade pip and install wheel
-echo "⬆️  Upgrading pip and installing wheel..."
-pip install --upgrade pip wheel
+# Ensure virtual environment Python is executable
+chmod +x venv_intel/bin/python3.11
+export PYTHON_CMD="arch -x86_64 $(pwd)/venv_intel/bin/python3.11"
+
+# Copy tkinter libraries to virtual environment
+echo "🔧 Setting up tkinter in virtual environment..."
+SYSTEM_TKINTER="/usr/local/opt/python-tk@3.11/lib/python3.11/lib-dynload/_tkinter.cpython-311-darwin.so"
+VENV_TKINTER="venv_intel/lib/python3.11/lib-dynload/_tkinter.cpython-311-darwin.so"
+if [ -f "$SYSTEM_TKINTER" ]; then
+    mkdir -p "$(dirname "$VENV_TKINTER")"
+    cp "$SYSTEM_TKINTER" "$VENV_TKINTER"
+    chmod +x "$VENV_TKINTER"
+fi
+
+# Setup tcl/tk libraries
+TCL_PATH="/usr/local/opt/tcl-tk/lib"
+if [ -d "$TCL_PATH" ]; then
+    # Find tcl/tk versions
+    TCL_VERSION=$(ls "$TCL_PATH" | grep -E '^tcl[0-9]+(\.[0-9]+)?$' | head -n 1)
+    TK_VERSION=$(ls "$TCL_PATH" | grep -E '^tk[0-9]+(\.[0-9]+)?$' | head -n 1)
+    
+    if [ -n "$TCL_VERSION" ] && [ -n "$TK_VERSION" ]; then
+        echo "  • Found Tcl/Tk versions: $TCL_VERSION, $TK_VERSION"
+        
+        # Set environment variables
+        export TCL_LIBRARY="$TCL_PATH/$TCL_VERSION"
+        export TK_LIBRARY="$TCL_PATH/$TK_VERSION"
+        
+        # Copy libraries to virtual environment
+        mkdir -p "venv_intel/lib"
+        cp -R "$TCL_PATH/$TCL_VERSION" "venv_intel/lib/" || true
+        cp -R "$TCL_PATH/$TK_VERSION" "venv_intel/lib/" || true
+        
+        # Create symbolic links with version numbers
+        ln -sf "$TCL_VERSION" "venv_intel/lib/tcl"
+        ln -sf "$TK_VERSION" "venv_intel/lib/tk"
+    fi
+fi
+
+# Upgrade pip and install required build tools
+echo "⬆️  Upgrading pip and installing build tools..."
+$PYTHON_CMD -m pip install --upgrade pip wheel setuptools
 
 # Set architecture flags for Intel
 export ARCHFLAGS="-arch x86_64"
 
 # Install Python dependencies with specific versions for Intel compatibility
 echo "📚 Installing Python dependencies..."
-pip install numpy==1.24.3  # Use older NumPy version for better compatibility
-pip install -r requirements.txt
+
+# Install and configure tkinter (required for customtkinter)
+echo "  • Setting up tkinter..."
+arch -x86_64 /usr/local/bin/brew uninstall --ignore-dependencies python-tk@3.11 || true
+arch -x86_64 /usr/local/bin/brew install python-tk@3.11
+
+# Link tkinter libraries
+echo "  • Linking tkinter..."
+if [ -d "/usr/local/opt/python-tk@3.11" ]; then
+    TKINTER_PATH="/usr/local/opt/python-tk@3.11"
+    PYTHON_FRAMEWORK="/usr/local/opt/python@3.11/Frameworks/Python.framework/Versions/3.11"
+    
+    # Create lib-dynload directory if it doesn't exist
+    sudo mkdir -p "$PYTHON_FRAMEWORK/lib/python3.11/lib-dynload"
+    
+    # Link _tkinter.cpython-311-darwin.so
+    if [ -f "$TKINTER_PATH/lib/python3.11/lib-dynload/_tkinter.cpython-311-darwin.so" ]; then
+        sudo ln -sf "$TKINTER_PATH/lib/python3.11/lib-dynload/_tkinter.cpython-311-darwin.so" \
+                   "$PYTHON_FRAMEWORK/lib/python3.11/lib-dynload/_tkinter.cpython-311-darwin.so"
+    fi
+fi
+
+# Install core dependencies with specific versions
+echo "  • Installing core dependencies..."
+$PYTHON_CMD -m pip install numpy==1.24.3  # Use older NumPy version for better compatibility
+$PYTHON_CMD -m pip install customtkinter==5.2.2  # Pin specific version
+$PYTHON_CMD -m pip install tkinterdnd2==0.3.0  # Pin specific version
+
+# Install remaining dependencies
+echo "  • Installing remaining dependencies..."
+$PYTHON_CMD -m pip install -r requirements.txt
+
+# Debug Python environment
+echo "🔍 Python environment info:"
+$PYTHON_CMD -c "import sys; print(f'Python path: {sys.executable}')"
+$PYTHON_CMD -c "import sys; print(f'Architecture: {sys.platform}')"
+$PYTHON_CMD -c "import tkinter; print(f'Tkinter version: {tkinter.TkVersion}')" || echo "❌ Tkinter not available"
 
 # Verify critical dependencies
 echo "🔍 Verifying critical dependencies..."
 
-# Verify customtkinter
-echo "  • Checking customtkinter..."
-if ! python3 -c "import customtkinter" &> /dev/null; then
-    echo "❌ customtkinter not properly installed. Attempting to reinstall..."
-    pip uninstall -y customtkinter
-    pip install customtkinter
-    if ! python3 -c "import customtkinter" &> /dev/null; then
-        echo "❌ Failed to install customtkinter. Build cannot continue."
+# Verify tkinter first
+echo "  • Checking tkinter..."
+if ! $PYTHON_CMD -c "import tkinter; root = tkinter.Tk(); root.destroy()" 2>/dev/null; then
+    echo "❌ Tkinter not working properly. Checking installation..."
+    # Check if tkinter is installed
+    $PYTHON_CMD -c "import tkinter" 2>/dev/null || {
+        echo "   Attempting to fix tkinter..."
+        arch -x86_64 /usr/local/bin/brew uninstall --ignore-dependencies python-tk@3.11
+        arch -x86_64 /usr/local/bin/brew install python-tk@3.11
+    }
+    # Verify tkinter again
+    if ! $PYTHON_CMD -c "import tkinter; root = tkinter.Tk(); root.destroy()" 2>/dev/null; then
+        echo "❌ Failed to setup tkinter. Build cannot continue."
         exit 1
     fi
 fi
+echo "  ✓ Tkinter working properly"
+
+# Verify customtkinter with detailed error reporting
+echo "  • Checking customtkinter..."
+if ! $PYTHON_CMD -c "import customtkinter" 2>/dev/null; then
+    echo "❌ customtkinter not properly installed. Attempting to reinstall..."
+    $PYTHON_CMD -m pip uninstall -y customtkinter
+    $PYTHON_CMD -m pip install --no-cache-dir customtkinter==5.2.2
+    
+    # Try importing again with error output
+    if ! $PYTHON_CMD -c "import customtkinter; print('customtkinter version:', customtkinter.__version__)" 2>&1; then
+        echo "❌ Failed to install customtkinter. Detailed error above."
+        echo "Python path: $($PYTHON_CMD -c 'import sys; print(sys.executable)')"
+        echo "Site packages: $($PYTHON_CMD -c 'import site; print("\n".join(site.getsitepackages()))')"
+        exit 1
+    fi
+fi
+echo "  ✓ customtkinter working properly"
 
 # Verify tkinterdnd2
 echo "  • Checking tkinterdnd2..."
-if ! python3 -c "import tkinterdnd2" &> /dev/null; then
+if ! $PYTHON_CMD -c "import tkinterdnd2" &> /dev/null; then
     echo "❌ tkinterdnd2 not properly installed. Attempting to reinstall..."
-    pip uninstall -y tkinterdnd2
-    pip install tkinterdnd2
-    if ! python3 -c "import tkinterdnd2" &> /dev/null; then
+    $PYTHON_CMD -m pip uninstall -y tkinterdnd2
+    $PYTHON_CMD -m pip install tkinterdnd2
+    if ! $PYTHON_CMD -c "import tkinterdnd2" &> /dev/null; then
         echo "❌ Failed to install tkinterdnd2. Build cannot continue."
         exit 1
     fi
@@ -106,7 +260,7 @@ if ! command -v ffmpeg &> /dev/null; then
 fi
 
 # Verify the tkinterdnd2 library location
-TKINTERDND2_PATH=$(python3 -c "import tkinterdnd2; print(tkinterdnd2.__file__)")
+TKINTERDND2_PATH=$($PYTHON_CMD -c "import tkinterdnd2; print(tkinterdnd2.__file__)")
 if [ -z "$TKINTERDND2_PATH" ]; then
     echo "❌ Could not find tkinterdnd2 installation path"
     exit 1
@@ -166,24 +320,39 @@ os.chmod(temp_ffprobe, 0o755)
 
 # Gather all necessary data files
 datas = [
-    ('assets', 'assets'),
-    ('config', 'config'),
-    ('docs', 'docs'),
+    ('../assets', 'assets'),
+    ('../config', 'config'),
+    ('../docs', 'docs'),
     # Add customtkinter theme files
     (os.path.join(ctk_path, 'assets'), 'customtkinter/assets'),
     # Add src directory for imports
-    ('src', 'src'),
+    ('../src', 'src'),
     # Add ffmpeg binaries
-    (temp_binaries_dir, '.'),
+    ('../temp_binaries', '.'),
     # Add reapy scripts
     (reapy_scripts, 'reapy/reascripts'),
 ]
+
+# Add tcl/tk libraries
+tcl_path = '/usr/local/opt/tcl-tk/lib'
+if os.path.exists(tcl_path):
+    # Find tcl/tk versions
+    tcl_version = next((d for d in os.listdir(tcl_path) if d.startswith('tcl8')), None)
+    tk_version = next((d for d in os.listdir(tcl_path) if d.startswith('tk8')), None)
+    
+    if tcl_version and tk_version:
+        datas.extend([
+            (os.path.join(tcl_path, tcl_version), tcl_version),
+            (os.path.join(tcl_path, tk_version), tk_version),
+            # Add tcl/tk scripts
+            (os.path.join(tcl_path, '..', 'share', 'tcltk'), 'tcltk'),
+        ])
 
 # Add tkinterdnd2 data files if found
 datas.extend(tkinterdnd2_paths)
 
 a = Analysis(
-    ['src/main.py'],
+    ['../src/main.py'],
     pathex=[src_path],
     binaries=[],
     datas=datas,
@@ -260,7 +429,10 @@ a = Analysis(
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=[
+        # Create runtime hook for tcl/tk
+        os.path.join('build_scripts', 'hook-tcl-tk.py'),
+    ],
     excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -302,7 +474,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='AI Audio Creator Intel.app',
-    icon='assets/app_icon.icns',
+    icon='../assets/app_icon.icns',
     bundle_identifier='com.matthiashassel.aiaudiocreator.intel',
     version='0.1.0',
     info_plist={
@@ -325,7 +497,7 @@ EOL
 
 # Build the application
 echo "🏗️  Building application..."
-python -m PyInstaller build_scripts/ai_audio_creator_intel.spec --distpath dist_intel --workpath build_intel --clean
+$PYTHON_CMD -m PyInstaller build_scripts/ai_audio_creator_intel.spec --distpath dist_intel --workpath build_intel --clean
 
 # Clean up temp directories
 rm -rf temp_binaries
