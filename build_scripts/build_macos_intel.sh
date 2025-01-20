@@ -5,37 +5,14 @@ set -e
 
 echo "🚀 Building AI Audio Creator for Intel Mac..."
 
-# Setup Intel Homebrew
-echo "🔧 Setting up Intel Homebrew..."
-
-# Clean up any existing Intel Homebrew installation
-if [ -d "/usr/local/Homebrew" ] || [ -L "/usr/local/Homebrew" ]; then
-    echo "🧹 Cleaning up existing Intel Homebrew..."
-    sudo rm -rf /usr/local/Homebrew
-    sudo rm -f /usr/local/bin/brew
-fi
-
-# Prepare directories for Intel Homebrew
-echo "📦 Setting up Intel Homebrew directories..."
-sudo mkdir -p /usr/local/{bin,Cellar,Homebrew,etc,include,lib,opt,sbin,share,var}
-sudo chown -R $(whoami) /usr/local/*
-
-# Install Intel Homebrew
-echo "📦 Installing Intel Homebrew..."
-arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Ensure Intel Homebrew is properly linked
-if [ ! -f "/usr/local/bin/brew" ] && [ -f "/usr/local/Homebrew/bin/brew" ]; then
-    echo "🔗 Linking Intel Homebrew..."
-    sudo ln -sf /usr/local/Homebrew/bin/brew /usr/local/bin/brew
-fi
-
-# Initialize Intel Homebrew
-eval "$(/usr/local/bin/brew shellenv)"
-
-# Add Intel Homebrew to PATH if not already present
-if [[ ":$PATH:" != *":/usr/local/bin:"* ]]; then
-    export PATH="/usr/local/bin:$PATH"
+# Check if running on Intel Mac
+if [ "$(uname -m)" = "x86_64" ]; then
+    echo "✅ Running on Intel Mac"
+    BREW_CMD="brew"
+else
+    echo "❌ This script should be run on an Intel Mac for best compatibility"
+    echo "   Current architecture: $(uname -m)"
+    exit 1
 fi
 
 # Install and setup x86_64 Python 3.11
@@ -52,8 +29,9 @@ if [ -d "/usr/local/opt/python@3.11" ] || [ -L "/usr/local/opt/python@3.11" ]; t
 fi
 
 # Install Python 3.11
-echo "📦 Installing Intel Python 3.11..."
-arch -x86_64 /usr/local/bin/brew install python@3.11
+echo "📦 Installing Python 3.11..."
+export MACOSX_DEPLOYMENT_TARGET=10.15
+$BREW_CMD install python@3.11
 
 # Ensure proper linking
 echo "🔗 Linking Python 3.11..."
@@ -65,16 +43,16 @@ if ! arch -x86_64 /usr/local/bin/python3.11 --version &> /dev/null; then
     exit 1
 fi
 
-# Use x86_64 Python 3.11 for the build
-PYTHON_CMD="arch -x86_64 /usr/local/bin/python3.11"
+# Use Python 3.11 for the build
+PYTHON_CMD="/usr/local/bin/python3.11"
 
-# Install system dependencies using Intel Homebrew
+# Install system dependencies
 echo "📦 Installing system dependencies..."
-arch -x86_64 /usr/local/bin/brew install portaudio create-dmg ffmpeg tcl-tk
+$BREW_CMD install portaudio create-dmg ffmpeg tcl-tk
 
 # Ensure tcl-tk is properly linked
 echo "🔗 Linking tcl-tk..."
-arch -x86_64 /usr/local/bin/brew link --overwrite tcl-tk
+$BREW_CMD link --overwrite tcl-tk
 
 # Set tcl-tk environment variables
 export PATH="/usr/local/opt/tcl-tk/bin:$PATH"
@@ -159,16 +137,17 @@ fi
 echo "⬆️  Upgrading pip and installing build tools..."
 $PYTHON_CMD -m pip install --upgrade pip wheel setuptools
 
-# Set architecture flags for Intel
+# Set architecture and deployment target flags
 export ARCHFLAGS="-arch x86_64"
+export MACOSX_DEPLOYMENT_TARGET=10.15
 
 # Install Python dependencies with specific versions for Intel compatibility
 echo "📚 Installing Python dependencies..."
 
 # Install and configure tkinter (required for customtkinter)
 echo "  • Setting up tkinter..."
-arch -x86_64 /usr/local/bin/brew uninstall --ignore-dependencies python-tk@3.11 || true
-arch -x86_64 /usr/local/bin/brew install python-tk@3.11
+$BREW_CMD uninstall --ignore-dependencies python-tk@3.11 || true
+$BREW_CMD install python-tk@3.11
 
 # Link tkinter libraries
 echo "  • Linking tkinter..."
