@@ -33,18 +33,25 @@ echo "📦 Installing Python 3.11..."
 export MACOSX_DEPLOYMENT_TARGET=10.15
 $BREW_CMD install python@3.11
 
-# Ensure proper linking
-echo "🔗 Linking Python 3.11..."
+# Ensure proper linking and setup
+echo "🔗 Setting up Python 3.11..."
+arch -x86_64 /usr/local/bin/brew unlink python@3.11 || true
 arch -x86_64 /usr/local/bin/brew link --overwrite python@3.11
 
-# Verify installation
-if ! arch -x86_64 /usr/local/bin/python3.11 --version &> /dev/null; then
-    echo "❌ Failed to install Python 3.11"
+# Verify installation and get Python path
+PYTHON_CMD=$(arch -x86_64 /usr/local/bin/brew --prefix python@3.11)/bin/python3.11
+if [ ! -f "$PYTHON_CMD" ]; then
+    echo "❌ Failed to locate Python 3.11 executable at $PYTHON_CMD"
     exit 1
 fi
 
-# Use Python 3.11 for the build
-PYTHON_CMD="/usr/local/bin/python3.11"
+# Verify Python version
+if ! arch -x86_64 "$PYTHON_CMD" --version &> /dev/null; then
+    echo "❌ Failed to run Python 3.11"
+    exit 1
+fi
+
+echo "✅ Using Python at: $PYTHON_CMD"
 
 # Install system dependencies
 echo "📦 Installing system dependencies..."
